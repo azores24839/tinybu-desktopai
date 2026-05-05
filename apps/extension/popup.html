@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TinyBu Capture</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <div class="header">
+        <div class="orb"></div>
+        <div>
+          <strong>TinyBu Capture</strong>
+          <p>把真实网页内容送到 TinyBu</p>
+        </div>
+      </div>
+
+      <button data-kind="selection">
+        <span>捕捉选中文本</span>
+        <small>适合一句话、字幕、段落</small>
+      </button>
+      <button data-kind="article">
+        <span>保存整篇文章</span>
+        <small>自动提取正文并切成片段</small>
+      </button>
+      <button data-kind="youtube">
+        <span>捕捉 YouTube 字幕</span>
+        <small>打开 transcript 面板可抓整段，否则只抓当前字幕</small>
+      </button>
+
+      <p id="status">打开网页后选择一种捕捉方式。</p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

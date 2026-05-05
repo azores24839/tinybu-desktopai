@@ -1,0 +1,445 @@
+import type {
+  AppStateRecord,
+  CaptureFragment,
+  ContentItem,
+  ContentUnderstanding,
+  ExpressionRecord,
+  FragmentRecommendationOutput,
+  MemoryUpdateOutput,
+  MirrorOutput,
+  PracticeAnswer,
+  PracticeQuestionsOutput,
+  PracticeTipOutput,
+  PracticeTurnOutput,
+  RescueOutput,
+  RescueType,
+  ScreenshotRecognitionOutput,
+  TalkMessage,
+  TalkTurnOutput
+} from "../types";
+import { loadUserApiKey } from "../lib/secureKey";
+import { jsonSchemas, taskPrompts } from "./prompts";
+import {
+  expressionCardRules,
+  memoryUpdateRules,
+  mirrorRules,
+  practiceQuestionsRules,
+  practiceTipRules,
+  practiceTurnRules,
+  recommendFragmentsRules,
+  reviewRules,
+  rescueRules,
+  talkTurnRules,
+  understandContentRules
+} from "./rules";
+
+type TaskName = keyof typeof taskPrompts;
+
+function buildOpenAiInput(task: TaskName, payload: unknown) {
+  if (task !== "screenshotCapture") return JSON.stringify(payload);
+
+  const screenshotPayload = payload as { imageDataUrl?: string; [key: string]: unknown };
+  const { imageDataUrl, ...textPayload } = screenshotPayload;
+
+  return [
+    {
+      role: "user",
+      content: [
+        {
+          type: "input_text",
+          text: JSON.stringify({
+            ...textPayload,
+            instruction: "Extract the useful language-learning text from the attached screenshot."
+          })
+        },
+        {
+          type: "input_image",
+          image_url: imageDataUrl
+        }
+      ]
+    }
+  ];
+}
+
+async function parseOpenAiJson(response: Response) {
+  if (!response.ok) {
+    throw new Error(`AI request failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const outputText =
+    data.output_text ??
+    data.output
+      ?.flatMap((item: { content?: Array<{ type?: string; text?: string }> }) => item.content ?? [])
+      ?.find((content: { type?: string }) => content.type === "output_text")?.text;
+
+  if (!outputText) {
+    throw new Error("AI response did not contain output text");
+  }
+
+  return JSON.parse(outputText);
+}
+
+async function callOpenAi<T>(
+  task: TaskName,
+  payload: unknown,
+  appState: AppStateRecord
+): Promise<T> {
+  const apiKey = await loadUserApiKey();
+  if (!apiKey) throw new Error("No user API key saved");
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: appState.settings.aiModel,
+      instructions: taskPrompts[task],
+      input: buildOpenAiInput(task, payload),
+      text: {
+        format: {
+          type: "json_schema",
+          ...jsonSchemas[task],
+          strict: true
+        }
+      },
+      max_output_tokens: task === "screenshotCapture" ? 1200 : 900
+    })
+  });
+
+  return parseOpenAiJson(response) as Promise<T>;
+}
+
+async function callCloudProxy<T>(
+  task: TaskName,
+  payload: unknown,
+  appState: AppStateRecord
+): Promise<T> {
+  const response = await fetch(appState.settings.cloudProxyUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      task,
+      model: appState.settings.aiModel,
+      payload
+    })
+  });
+
+  return parseOpenAiJson(response) as Promise<T>;
+}
+
+async function withFallback<T>(
+  appState: AppStateRecord,
+  aiCall: () => Promise<T>,
+  fallback: () => T
+): Promise<T> {
+  if (appState.settings.aiProviderMode === "rules") return fallback();
+
+  try {
+    return await aiCall();
+  } catch (error) {
+    console.warn("TinyBu AI fell back to local rules", error);
+    return fallback();
+  }
+}
+
+export async function understandContent(
+  content: ContentItem,
+  appState: AppStateRecord
+): Promise<ContentUnderstanding> {
+  const payload = {
+    transcript: content.transcript.map((line) => line.text).join("\n"),
+    level: appState.profile.level,
+    targetLanguage: appState.profile.targetLanguage,
+    nativeLanguage: appState.profile.nativeLanguage
+  };
+
+  return withFallback(
+    appState,
+    () =>
+      appState.settings.aiProviderMode === "cloud-proxy"
+        ? callCloudProxy("contentUnderstanding", payload, appState)
+        : callOpenAi("contentUnderstanding", payload, appState),
+    () => understandContentRules(content)
+  );
+}
+
+export async function recognizeScreenshotCapture(args: {
+  imageDataUrl: string;
+  width: number;
+  height: number;
+  appState: AppStateRecord;
+}): Promise<ScreenshotRecognitionOutput> {
+  if (args.appState.settings.aiProviderMode === "rules") {
+    throw new Error("截图识别需要启用 API 模式。");
+  }
+
+  const payload = {
+    imageDataUrl: args.imageDataUrl,
+    width: args.width,
+    height: args.height,
+    level: args.appState.profile.level,
+    targetLanguage: args.appState.profile.targetLanguage,
+    nativeLanguage: args.appState.profile.nativeLanguage
+  };
+
+  return args.appState.settings.aiProviderMode === "cloud-proxy"
+    ? callCloudProxy("screenshotCapture", payload, args.appState)
+    : callOpenAi("screenshotCapture", payload, args.appState);
+}
+
+export async function generateExpressionCard(
+  sentence: string,
+  content: ContentItem,
+  appState: AppStateRecord
+) {
+  const payload = {
+    sentence,
+    context: content.summary,
+    level: appState.profile.level,
+    targetLanguage: appState.profile.targetLanguage,
+    nativeLanguage: appState.profile.nativeLanguage
+  };
+
+  const base = await withFallback(
+    appState,
+    async () => {
+      const output = await (appState.settings.aiProviderMode === "cloud-proxy"
+        ? callCloudProxy<Omit<ExpressionRecord, "id">>("expressionCard", payload, appState)
+        : callOpenAi<Omit<ExpressionRecord, "id">>("expressionCard", payload, appState));
+      return {
+        original: sentence,
+        meaning: output.meaning,
+        keywords: output.keywords,
+        pattern: output.pattern,
+        scene: output.scene,
+        practiceStem: output.practiceStem,
+        sourceTitle: content.title,
+        sourceContentId: content.id
+      };
+    },
+    () => expressionCardRules(sentence, content, appState)
+  );
+
+  return base;
+}
+
+export async function generateTalkTurn(args: {
+  answer: string;
+  messages: TalkMessage[];
+  content: ContentItem;
+  expressions: ExpressionRecord[];
+  appState: AppStateRecord;
+  roundCount: number;
+}): Promise<TalkTurnOutput> {
+  const payload = {
+    answer: args.answer,
+    messages: args.messages,
+    contentSummary: args.content.summary,
+    capturedExpressions: args.expressions.map((item) => ({
+      original: item.original,
+      pattern: item.pattern
+    })),
+    level: args.appState.profile.level,
+    anxiety: args.appState.profile.anxiety,
+    supportPreference: args.appState.profile.supportPreference
+  };
+
+  return withFallback(
+    args.appState,
+    () =>
+      args.appState.settings.aiProviderMode === "cloud-proxy"
+        ? callCloudProxy("talkTurn", payload, args.appState)
+        : callOpenAi("talkTurn", payload, args.appState),
+    () => talkTurnRules(args)
+  );
+}
+
+export async function generateRescue(
+  type: RescueType,
+  currentQuestion: string,
+  appState: AppStateRecord
+): Promise<RescueOutput> {
+  const payload = {
+    rescueType: type,
+    currentQuestion,
+    level: appState.profile.level,
+    anxiety: appState.profile.anxiety
+  };
+
+  return withFallback(
+    appState,
+    () =>
+      appState.settings.aiProviderMode === "cloud-proxy"
+        ? callCloudProxy("rescue", payload, appState)
+        : callOpenAi("rescue", payload, appState),
+    () => rescueRules(type, { question: currentQuestion, appState })
+  );
+}
+
+export async function generateMirror(args: {
+  sessionTitle: string;
+  messages: TalkMessage[];
+  expressions: ExpressionRecord[];
+  appState: AppStateRecord;
+}): Promise<MirrorOutput> {
+  const payload = {
+    sessionTitle: args.sessionTitle,
+    messages: args.messages,
+    expressions: args.expressions,
+    level: args.appState.profile.level,
+    nativeLanguage: args.appState.profile.nativeLanguage,
+    targetLanguage: args.appState.profile.targetLanguage
+  };
+
+  return withFallback(
+    args.appState,
+    () =>
+      args.appState.settings.aiProviderMode === "cloud-proxy"
+        ? callCloudProxy("mirror", payload, args.appState)
+        : callOpenAi("mirror", payload, args.appState),
+    () => mirrorRules(args)
+  );
+}
+
+export async function updateMemory(args: {
+  mirror: MirrorOutput;
+  expressions: ExpressionRecord[];
+  rescueUsed?: RescueType[];
+  appState: AppStateRecord;
+}): Promise<MemoryUpdateOutput> {
+  const payload = {
+    mirror: args.mirror,
+    expressions: args.expressions,
+    rescueUsed: args.rescueUsed ?? [],
+    profile: args.appState.profile
+  };
+
+  return withFallback(
+    args.appState,
+    () =>
+      args.appState.settings.aiProviderMode === "cloud-proxy"
+        ? callCloudProxy("memory", payload, args.appState)
+        : callOpenAi("memory", payload, args.appState),
+    () => memoryUpdateRules(args)
+  );
+}
+
+export async function recommendFragments(
+  fragments: CaptureFragment[],
+  appState: AppStateRecord
+): Promise<FragmentRecommendationOutput> {
+  const payload = {
+    fragments: fragments.map((fragment) => ({ id: fragment.id, text: fragment.text })),
+    level: appState.profile.level,
+    targetLanguage: appState.profile.targetLanguage
+  };
+
+  return withFallback(
+    appState,
+    () =>
+      appState.settings.aiProviderMode === "cloud-proxy"
+        ? callCloudProxy("recommendFragments", payload, appState)
+        : callOpenAi("recommendFragments", payload, appState),
+    () => recommendFragmentsRules(fragments)
+  );
+}
+
+export async function generatePracticeQuestions(args: {
+  fragments: CaptureFragment[];
+  appState: AppStateRecord;
+}): Promise<PracticeQuestionsOutput> {
+  const payload = {
+    fragments: args.fragments.map((fragment) => ({ id: fragment.id, text: fragment.text })),
+    level: args.appState.profile.level,
+    targetLanguage: args.appState.profile.targetLanguage,
+    nativeLanguage: args.appState.profile.nativeLanguage
+  };
+
+  return withFallback(
+    args.appState,
+    () =>
+      args.appState.settings.aiProviderMode === "cloud-proxy"
+        ? callCloudProxy("practiceQuestions", payload, args.appState)
+        : callOpenAi("practiceQuestions", payload, args.appState),
+    () => practiceQuestionsRules(args)
+  );
+}
+
+export async function generatePracticeTip(args: {
+  question: string;
+  tipLevel: number;
+  outline: string;
+  example: string;
+  appState: AppStateRecord;
+}): Promise<PracticeTipOutput> {
+  const payload = {
+    question: args.question,
+    tipLevel: args.tipLevel,
+    outline: args.outline,
+    example: args.example,
+    level: args.appState.profile.level,
+    targetLanguage: args.appState.profile.targetLanguage,
+    nativeLanguage: args.appState.profile.nativeLanguage
+  };
+
+  return withFallback(
+    args.appState,
+    () =>
+      args.appState.settings.aiProviderMode === "cloud-proxy"
+        ? callCloudProxy("practiceTip", payload, args.appState)
+        : callOpenAi("practiceTip", payload, args.appState),
+    () => practiceTipRules(args)
+  );
+}
+
+export async function generatePracticeTurn(args: {
+  answer: string;
+  question: string;
+  questionIndex: number;
+  appState: AppStateRecord;
+}): Promise<PracticeTurnOutput> {
+  const payload = {
+    answer: args.answer,
+    question: args.question,
+    questionIndex: args.questionIndex,
+    level: args.appState.profile.level,
+    supportPreference: args.appState.profile.supportPreference
+  };
+
+  return withFallback(
+    args.appState,
+    () =>
+      args.appState.settings.aiProviderMode === "cloud-proxy"
+        ? callCloudProxy("practiceTurn", payload, args.appState)
+        : callOpenAi("practiceTurn", payload, args.appState),
+    () => practiceTurnRules(args)
+  );
+}
+
+export async function generateReview(args: {
+  title: string;
+  fragments: CaptureFragment[];
+  answers: PracticeAnswer[];
+  appState: AppStateRecord;
+}): Promise<MirrorOutput> {
+  const payload = {
+    title: args.title,
+    fragments: args.fragments.map((fragment) => ({ id: fragment.id, text: fragment.text })),
+    answers: args.answers,
+    level: args.appState.profile.level,
+    nativeLanguage: args.appState.profile.nativeLanguage,
+    targetLanguage: args.appState.profile.targetLanguage
+  };
+
+  return withFallback(
+    args.appState,
+    () =>
+      args.appState.settings.aiProviderMode === "cloud-proxy"
+        ? callCloudProxy("review", payload, args.appState)
+        : callOpenAi("review", payload, args.appState),
+    () => reviewRules(args)
+  );
+}

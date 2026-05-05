@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "TinyBu Capture",
+  "version": "0.1.0",
+  "description": "Send web articles, selected text, and YouTube transcript snippets to TinyBu.",
+  "action": {
+    "default_title": "TinyBu Capture",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": ["activeTab", "contextMenus", "scripting", "storage", "tabs"],
+  "host_permissions": ["<all_urls>", "http://127.0.0.1:1420/*", "http://127.0.0.1:1421/*"]
+}
