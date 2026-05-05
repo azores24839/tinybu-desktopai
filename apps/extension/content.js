@@ -27,30 +27,64 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 (() => {
   const HOST_ID = "nomi-floating-capture-host";
+  const BRIDGE_INSTALLED_KEY = "__tinybuInvisibleCaptureBridgeInstalled";
   const STORAGE_KEY = "nomiFloatingPosition";
   const CAPTURE_COUNT_KEY = "nomiCaptureCount";
   const EDGE_GAP = 24;
   const VIEWPORT_GAP = 8;
-  const BUTTON_SIZE = 80;
+  const BUTTON_SIZE = 112;
+  const ROOT_WIDTH = 128;
   const DRAG_THRESHOLD = 4;
   const COPY_SELECTION_DELAY = 60;
   const BUBBLE_GAP = 12;
   const DESKTOP_CLIPBOARD_SUPPRESS_URL = "http://127.0.0.1:1421/v1/clipboard-suppress";
+  const DESKTOP_CLIPBOARD_PROMPT_URL = "http://127.0.0.1:1421/v1/clipboard-prompt";
   const DESKTOP_PET_VISIBILITY_URL = "http://127.0.0.1:1421/v1/pet-visibility";
+  const QUICK_CHAT_PROXY_URL = "http://127.0.0.1:8787/v1/nomi/task";
+  const QUICK_CHAT_MODEL = "MiniMax-M2.7";
   const AVATAR_BASE_URL = "http://127.0.0.1:1420/avatar/states";
   const avatarStateImages = {
     idle: `${AVATAR_BASE_URL}/idle.gif`,
     dragging: `${AVATAR_BASE_URL}/dragging.gif`,
-    capturing: `${AVATAR_BASE_URL}/capturing.gif`
+    capturing: `${AVATAR_BASE_URL}/capturing.gif`,
+    thinking: `${AVATAR_BASE_URL}/thinking.png`
   };
 
-  if (!shouldShowFloatingNomi()) return;
-  if (dedupeFloatingHosts()) return;
+  if (!shouldInstallBrowserBridge()) return;
+  installInvisibleBrowserBridge();
+  return;
 
-  if (document.readyState === "loading") {
-    window.addEventListener("DOMContentLoaded", initFloatingNomi, { once: true });
-  } else {
-    initFloatingNomi();
+  function installInvisibleBrowserBridge() {
+    if (window[BRIDGE_INSTALLED_KEY]) return;
+    window[BRIDGE_INSTALLED_KEY] = true;
+    removeFloatingHosts();
+    setDesktopPetHidden(false);
+    document.addEventListener("copy", handleInvisibleCopy, true);
+  }
+
+  function handleInvisibleCopy() {
+    const text = getPromptableBrowserSelectionText();
+    if (!text) return;
+    promptDesktopClipboard(text);
+  }
+
+  function getPromptableBrowserSelectionText() {
+    const selection = window.getSelection();
+    const text = cleanText(selection?.toString() || "");
+    if (!selection || selection.isCollapsed || text.length < 2 || isBrowserSelectionInEditable(selection)) return "";
+    return text;
+  }
+
+  function isBrowserSelectionInEditable(selection) {
+    if (!selection.rangeCount) return false;
+
+    const node = selection.getRangeAt(0).commonAncestorContainer;
+    const element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    return Boolean(
+      element?.closest(
+        "input, textarea, select, [role='textbox'], [contenteditable]:not([contenteditable='false'])"
+      )
+    );
   }
 
   function initFloatingNomi() {
@@ -93,7 +127,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     status.textContent = "";
     status.hidden = true;
 
-    root.append(button, status);
+    const quickForm = document.createElement("form");
+    quickForm.className = "nomi-quick-form";
+
+    const quickInput = document.createElement("input");
+    quickInput.type = "text";
+    quickInput.placeholder = "来聊聊天吧～";
+    quickInput.maxLength = 120;
+    quickForm.append(quickInput);
+
+    root.append(button, status, quickForm);
 
     const bubble = document.createElement("div");
     bubble.className = "nomi-bubble";
@@ -116,6 +159,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     let feedbackTimer = 0;
     let ignoreSelectionCollapseUntil = 0;
     let drag = null;
+    let quickBusy = false;
     let recordedCount = 0;
 
     applyPosition();
@@ -131,6 +175,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     button.addEventListener("pointermove", handlePointerMove);
     button.addEventListener("pointerup", handlePointerUp);
     button.addEventListener("pointercancel", cancelDrag);
+    quickForm.addEventListener("submit", submitQuickChat);
 
     document.addEventListener("selectionchange", handleSelectionChange);
     document.addEventListener("copy", handleCopySelection, true);
@@ -175,6 +220,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         drag.moved = true;
         closeBubble();
         setMode("dragging");
+        updateQuickFormVisibility();
       }
 
       position = clampPosition({
@@ -275,6 +321,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       bubble.append(yesButton);
       showBubbleAtRect(rect, "above", { arrowCenter: true });
+      updateQuickFormVisibility();
     }
 
     function showActionPrompt() {
@@ -282,29 +329,34 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       clearFeedbackTimer();
       feedbackBubble.hidden = true;
       feedbackBubble.replaceChildren();
+      updateQuickFormVisibility();
       setMode("actionPrompt");
       bubble.className = "nomi-bubble actions";
       bubble.replaceChildren();
 
-      const title = document.createElement("strong");
-      title.textContent = "想捕捉什么？";
-
       const actions = document.createElement("div");
       actions.className = "menu-actions";
 
-      const articleButton = document.createElement("button");
-      articleButton.type = "button";
-      articleButton.textContent = "保存整篇文章";
-      articleButton.addEventListener("click", () => captureKind("article"));
+      const articleButton = createMenuButton("保存整篇文章", () => captureKind("article"));
+      const subtitlesButton = createMenuButton("捕捉字幕", () => captureKind("youtube"));
+      const hideButton = createMenuButton("隐藏", () => {
+        setDesktopPetHidden(false);
+        host.remove();
+      });
 
-      const subtitlesButton = document.createElement("button");
-      subtitlesButton.type = "button";
-      subtitlesButton.textContent = "捕捉字幕";
-      subtitlesButton.addEventListener("click", () => captureKind("youtube"));
+      actions.append(articleButton, subtitlesButton, hideButton);
+      bubble.append(actions);
+      showActionMenuNearPet();
+      updateQuickFormVisibility();
+    }
 
-      actions.append(articleButton, subtitlesButton);
-      bubble.append(title, actions);
-      showBubbleAtRect(getButtonRect(), "above");
+    function createMenuButton(label, onClick) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.setAttribute("role", "menuitem");
+      button.addEventListener("click", onClick);
+      return button;
     }
 
     async function captureSelection(text) {
@@ -381,6 +433,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       text.textContent = message;
       feedbackBubble.append(text);
       showFeedbackAbovePet();
+      updateQuickFormVisibility();
     }
 
     function showFeedbackAbovePet() {
@@ -431,6 +484,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       ignoreSelectionCollapseUntil = 0;
       if (mode !== "dragging" && mode !== "capturingSelection") setMode("idle");
       if (mode === "capturingSelection") setMode("idle");
+      updateQuickFormVisibility();
     }
 
     function hideSelectionBubble() {
@@ -488,11 +542,37 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       });
     }
 
+    function showActionMenuNearPet() {
+      bubble.hidden = false;
+      bubble.style.visibility = "hidden";
+      bubble.style.left = "0px";
+      bubble.style.top = "0px";
+
+      requestAnimationFrame(() => {
+        const bubbleRect = bubble.getBoundingClientRect();
+        const buttonRect = getButtonRect();
+        const placeRight = buttonRect.left + buttonRect.width + BUBBLE_GAP + bubbleRect.width <= window.innerWidth - VIEWPORT_GAP;
+        const left = placeRight
+          ? buttonRect.right + BUBBLE_GAP
+          : buttonRect.left - bubbleRect.width - BUBBLE_GAP;
+        const top = clampNumber(
+          buttonRect.top + 8,
+          VIEWPORT_GAP,
+          window.innerHeight - bubbleRect.height - VIEWPORT_GAP
+        );
+
+        bubble.style.left = `${Math.round(clampNumber(left, VIEWPORT_GAP, window.innerWidth - bubbleRect.width - VIEWPORT_GAP))}px`;
+        bubble.style.top = `${Math.round(top)}px`;
+        bubble.style.visibility = "visible";
+      });
+    }
+
     function getButtonRect() {
+      const buttonLeft = position.x + (ROOT_WIDTH - BUTTON_SIZE) / 2;
       return {
-        left: position.x,
+        left: buttonLeft,
         top: position.y,
-        right: position.x + BUTTON_SIZE,
+        right: buttonLeft + BUTTON_SIZE,
         bottom: position.y + BUTTON_SIZE,
         width: BUTTON_SIZE,
         height: BUTTON_SIZE
@@ -551,7 +631,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       applyPosition();
       saveStoredPosition(position);
       if (mode === "actionPrompt") {
-        showBubbleAtRect(getButtonRect(), "above");
+        showActionMenuNearPet();
       } else if ((mode === "saving" || mode === "saved" || mode === "error") && !feedbackBubble.hidden) {
         showFeedbackAbovePet();
       } else if ((mode === "selectionPrompt" || mode === "capturingSelection") && selectedRect) {
@@ -588,14 +668,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     function getDefaultPosition() {
       return clampPosition({
-        x: window.innerWidth - BUTTON_SIZE - EDGE_GAP,
+        x: window.innerWidth - ROOT_WIDTH - EDGE_GAP,
         y: window.innerHeight - BUTTON_SIZE - EDGE_GAP
       });
     }
 
     function clampPosition(nextPosition) {
       return {
-        x: clampNumber(nextPosition.x, VIEWPORT_GAP, window.innerWidth - BUTTON_SIZE - VIEWPORT_GAP),
+        x: clampNumber(nextPosition.x, VIEWPORT_GAP, window.innerWidth - ROOT_WIDTH - VIEWPORT_GAP),
         y: clampNumber(nextPosition.y, VIEWPORT_GAP, window.innerHeight - BUTTON_SIZE - VIEWPORT_GAP)
       };
     }
@@ -608,6 +688,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       mode = nextMode;
       root.dataset.state = nextMode;
       avatar.src = avatarStateImages[getAvatarState(nextMode)];
+      updateQuickFormVisibility();
     }
 
     function applyCaptureCount(count) {
@@ -619,11 +700,81 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     function getAvatarState(nextMode) {
       if (nextMode === "dragging") return "dragging";
       if (nextMode === "selectionPrompt" || nextMode === "capturingSelection" || nextMode === "saving" || nextMode === "saved") return "capturing";
+      if (nextMode === "thinking") return "thinking";
       return "idle";
+    }
+
+    async function submitQuickChat(event) {
+      event.preventDefault();
+      const message = quickInput.value.trim();
+      if (!message || quickBusy) return;
+
+      quickInput.value = "";
+      quickInput.disabled = true;
+      quickBusy = true;
+      setMode("thinking");
+      showFeedback("我想一下...");
+
+      try {
+        const response = await fetch(QUICK_CHAT_PROXY_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            task: "quickPetChat",
+            model: QUICK_CHAT_MODEL,
+            payload: {
+              message,
+              instruction: "Reply briefly as a desktop language-learning buddy."
+            }
+          })
+        });
+
+        if (!response.ok) throw new Error(`Quick chat failed: ${response.status}`);
+        const reply = parseQuickReply(await response.json());
+        showFeedback(reply || "我在，但刚刚没想好。");
+        feedbackTimer = window.setTimeout(closeBubble, 5000);
+      } catch (error) {
+        console.warn("TinyBu quick chat failed", error);
+        showFeedback("我现在连不上，先试试主窗口。");
+        feedbackTimer = window.setTimeout(closeBubble, 5000);
+      } finally {
+        quickBusy = false;
+        quickInput.disabled = false;
+        setMode("idle");
+      }
+    }
+
+    function parseQuickReply(data) {
+      const outputText =
+        data?.output_text ??
+        data?.output
+          ?.flatMap((item) => item.content ?? [])
+          ?.find((content) => content.type === "output_text")?.text;
+
+      if (!outputText) return "";
+
+      try {
+        return JSON.parse(outputText).reply?.trim() || "";
+      } catch {
+        return outputText.trim();
+      }
+    }
+
+    function updateQuickFormVisibility() {
+      quickForm.hidden =
+        mode === "dragging" ||
+        mode === "selectionPrompt" ||
+        mode === "capturingSelection" ||
+        mode === "saving" ||
+        mode === "saved" ||
+        mode === "error" ||
+        mode === "thinking" ||
+        !bubble.hidden ||
+        !feedbackBubble.hidden;
     }
   }
 
-  function shouldShowFloatingNomi() {
+  function shouldInstallBrowserBridge() {
     if (typeof chrome === "undefined" || !document.documentElement || !chrome.runtime?.id) return false;
     if (!/^(https?:|file:)/.test(location.protocol)) return false;
     if (/^(127\.0\.0\.1|localhost):1420$/.test(location.host)) return false;
@@ -642,6 +793,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       body: JSON.stringify({ text: cleanSelection })
     }).catch(() => {
       // The desktop app is optional for the browser selection bubble.
+    });
+  }
+
+  function promptDesktopClipboard(text) {
+    const cleanSelection = cleanText(text);
+    if (!cleanSelection) return;
+
+    fetch(DESKTOP_CLIPBOARD_PROMPT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ text: cleanSelection })
+    }).catch(() => {
+      // If the desktop bridge is unavailable, the desktop clipboard watcher may still catch the copy.
     });
   }
 
@@ -667,6 +833,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const hosts = Array.from(document.querySelectorAll(`#${HOST_ID}`));
     hosts.slice(1).forEach((node) => node.remove());
     return hosts.length > 0;
+  }
+
+  function removeFloatingHosts() {
+    if (!document.documentElement) return;
+    document.querySelectorAll(`#${HOST_ID}`).forEach((node) => node.remove());
   }
 
   function readStoredPosition() {
@@ -745,9 +916,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         top: 0;
         z-index: 2147483647;
         display: grid;
+        align-content: start;
         place-items: center;
-        width: ${BUTTON_SIZE}px;
-        height: ${BUTTON_SIZE}px;
+        width: ${ROOT_WIDTH}px;
+        height: auto;
         pointer-events: none;
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         transition: transform 80ms linear;
@@ -767,6 +939,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         cursor: grab;
         outline: none;
         padding: 0;
+        pointer-events: auto;
         user-select: none;
         touch-action: none;
         transition:
@@ -806,35 +979,33 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       .nomi-avatar {
         display: block;
-        width: ${BUTTON_SIZE}px;
-        height: ${BUTTON_SIZE}px;
+        width: 104px;
+        height: 104px;
         object-fit: contain;
         pointer-events: none;
         user-select: none;
-        filter: drop-shadow(0 14px 24px rgba(23, 32, 33, 0.16));
+        filter: none;
       }
 
       .nomi-root[data-state="selectionPrompt"] .nomi-avatar,
       .nomi-root[data-state="capturingSelection"] .nomi-avatar,
       .nomi-root[data-state="saving"] .nomi-avatar,
       .nomi-root[data-state="saved"] .nomi-avatar {
+        width: ${BUTTON_SIZE}px;
+        height: ${BUTTON_SIZE}px;
         filter: none;
-        transform: scale(1.1);
+        transform: none;
       }
 
       .nomi-status {
-        position: absolute;
-        left: 50%;
-        bottom: -18px;
         width: max-content;
-        max-width: 110px;
-        transform: translateX(-50%);
+        max-width: 120px;
         border: 1px solid rgba(223, 228, 220, 0.95);
         border-radius: 999px;
         background: #fffdf8;
         color: #967d63;
-        padding: 2px 8px;
-        font-size: 11px;
+        padding: 3px 9px;
+        font-size: 12px;
         font-weight: 800;
         line-height: 1.2;
         white-space: nowrap;
@@ -843,6 +1014,41 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       .nomi-status[hidden] {
         display: none;
+      }
+
+      .nomi-quick-form {
+        z-index: 3;
+        width: 119px;
+        margin-top: 8px;
+        pointer-events: auto;
+      }
+
+      .nomi-quick-form[hidden] {
+        display: none;
+      }
+
+      .nomi-quick-form input {
+        width: 100%;
+        min-height: 30px;
+        border: 1.6px solid #7a5642;
+        border-radius: 999px;
+        background: #fffdf8;
+        color: #6a4936;
+        padding: 0 14px;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 800;
+        outline: none;
+        box-shadow: 0 8px 20px rgba(106, 73, 54, 0.12);
+      }
+
+      .nomi-quick-form input::placeholder {
+        color: rgba(106, 73, 54, 0.62);
+      }
+
+      .nomi-quick-form input:focus {
+        border-color: #5d3f2f;
+        box-shadow: 0 0 0 3px rgba(254, 224, 141, 0.5);
       }
 
       .nomi-bubble {
@@ -863,6 +1069,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       .nomi-bubble[hidden] {
         display: none;
+      }
+
+      .nomi-bubble.actions {
+        width: max-content;
+        min-width: 112px;
+        gap: 3px;
+        border: 1px solid rgba(223, 228, 220, 0.98);
+        border-radius: 12px;
+        background: #fffdf8;
+        box-shadow: none;
+        padding: 5px;
       }
 
       .nomi-bubble.selection {
@@ -894,8 +1111,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       .bubble-actions,
       .menu-actions {
-        display: flex;
-        gap: 8px;
+        display: grid;
+        gap: 3px;
       }
 
       .menu-actions {
@@ -933,6 +1150,25 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .nomi-bubble button.primary:hover,
       .nomi-bubble button.primary:focus-visible {
         background: #1f5c4e;
+      }
+
+      .nomi-bubble.actions button {
+        min-height: 24px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: #967d63;
+        padding: 0 10px;
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1.2;
+        white-space: nowrap;
+      }
+
+      .nomi-bubble.actions button:hover,
+      .nomi-bubble.actions button:focus-visible {
+        background: #fee08d;
+        outline: none;
       }
 
       .nomi-bubble button.selection-save {
@@ -997,36 +1233,43 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .nomi-bubble.feedback {
         position: absolute;
         width: max-content;
-        max-width: min(300px, calc(100vw - 16px));
+        max-width: min(210px, calc(100vw - 16px));
+        border: 1.5px solid #7a5642;
+        border-radius: 18px;
+        background: #fffdf8;
+        color: #6a4936;
+        padding: 8px 12px;
         box-shadow: none;
-        margin-bottom: 9px;
+        overflow: hidden;
         pointer-events: none;
+        text-align: center;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
       }
 
       .nomi-bubble.feedback strong {
-        color: #967d63;
+        color: #6a4936;
         font-size: 12px;
+        font-weight: 850;
+        line-height: 1.35;
       }
 
-      .nomi-bubble.feedback::before,
       .nomi-bubble.feedback::after {
         content: "";
         position: absolute;
-        left: calc(var(--bubble-arrow-left, 28px) - 9px);
-        bottom: -9px;
-        width: 18px;
-        height: 18px;
-        clip-path: polygon(0 0, 100% 0, 0 100%);
-      }
-
-      .nomi-bubble.feedback::before {
-        bottom: -11px;
-        left: calc(var(--bubble-arrow-left, 28px) - 10px);
-        background: rgba(223, 228, 220, 0.98);
-      }
-
-      .nomi-bubble.feedback::after {
+        left: calc(var(--bubble-arrow-left, 50%) - 6px);
+        bottom: -7px;
+        width: 12px;
+        height: 12px;
+        transform: rotate(45deg);
+        border-right: 1.5px solid #7a5642;
+        border-bottom: 1.5px solid #7a5642;
         background: #fffdf8;
+      }
+
+      .nomi-bubble.feedback[hidden] {
+        display: none;
       }
 
       @keyframes nomi-pulse {

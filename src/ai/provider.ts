@@ -14,6 +14,7 @@ import type {
   RescueOutput,
   RescueType,
   ScreenshotRecognitionOutput,
+  ScreenshotQuestionOutput,
   TalkMessage,
   TalkTurnOutput
 } from "../types";
@@ -34,50 +35,164 @@ import {
 } from "./rules";
 
 type TaskName = keyof typeof taskPrompts;
+type ImageTaskPayload = { imageDataUrl?: string; [key: string]: unknown };
+
+function modelForTask(task: TaskName, appState: AppStateRecord) {
+  return task === "screenshotCapture" || task === "screenshotQuestion"
+    ? appState.settings.visionModel || appState.settings.aiModel
+    : appState.settings.aiModel;
+}
 
 function buildOpenAiInput(task: TaskName, payload: unknown) {
-  if (task !== "screenshotCapture") return JSON.stringify(payload);
+  if (task !== "screenshotCapture" && task !== "screenshotQuestion") return JSON.stringify(payload);
 
-  const screenshotPayload = payload as { imageDataUrl?: string; [key: string]: unknown };
+  const screenshotPayload = payload as ImageTaskPayload;
   const { imageDataUrl, ...textPayload } = screenshotPayload;
+  const content: Array<
+    { type: "input_text"; text: string } | { type: "input_image"; image_url?: string; detail?: "high" }
+  > = [
+    {
+      type: "input_text",
+      text: JSON.stringify({
+        ...textPayload,
+        instruction:
+          task === "screenshotCapture"
+            ? "OCR every readable text string. Do not filter by usefulness or language."
+            : "Answer the user's question about this screenshot."
+      })
+    }
+  ];
+
+  if (imageDataUrl) {
+    content.push({
+      type: "input_image",
+      image_url: imageDataUrl,
+      detail: "high"
+    });
+  }
 
   return [
     {
       role: "user",
-      content: [
-        {
-          type: "input_text",
-          text: JSON.stringify({
-            ...textPayload,
-            instruction: "Extract the useful language-learning text from the attached screenshot."
-          })
-        },
-        {
-          type: "input_image",
-          image_url: imageDataUrl
-        }
-      ]
+      content
     }
   ];
 }
 
-async function parseOpenAiJson(response: Response) {
-  if (!response.ok) {
-    throw new Error(`AI request failed: ${response.status}`);
+function buildOpenRouterMessages(task: TaskName, payload: unknown) {
+  if (task !== "screenshotCapture" && task !== "screenshotQuestion") {
+    return [
+      {
+        role: "user",
+        content: JSON.stringify(payload)
+      }
+    ];
   }
 
+  const screenshotPayload = payload as ImageTaskPayload;
+  const { imageDataUrl, ...textPayload } = screenshotPayload;
+  const content: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "high" } }> = [
+    {
+      type: "text",
+      text: JSON.stringify({
+        ...textPayload,
+        instruction:
+          task === "screenshotCapture"
+            ? "OCR every readable text string. Do not filter by usefulness or language."
+            : "Answer the user's question about this screenshot."
+      })
+    }
+  ];
+
+  if (imageDataUrl) {
+    content.push({
+      type: "image_url",
+      image_url: { url: imageDataUrl, detail: "high" }
+    });
+  }
+
+  return [
+    {
+      role: "user",
+      content
+    }
+  ];
+}
+
+function extractJsonText(text = "") {
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  const objectStart = trimmed.indexOf("{");
+  const arrayStart = trimmed.indexOf("[");
+  const starts = [objectStart, arrayStart].filter((index) => index >= 0);
+  if (!starts.length) return trimmed;
+
+  const start = Math.min(...starts);
+  const end = Math.max(trimmed.lastIndexOf("}"), trimmed.lastIndexOf("]"));
+  return end > start ? trimmed.slice(start, end + 1) : trimmed;
+}
+
+function parseJsonValue(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+
+  const parsed = JSON.parse(extractJsonText(value));
+  return typeof parsed === "string" ? parseJsonValue(parsed) : parsed;
+}
+
+async function parseOpenAiJson(response: Response) {
   const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data?.error?.message || data?.error || `AI request failed: ${response.status}`);
+  }
+
+  const messageContent = data.choices?.[0]?.message?.content;
+  const messageContentText = Array.isArray(messageContent)
+    ? messageContent.find((content: { type?: string }) => content.type === "text")?.text
+    : messageContent;
   const outputText =
     data.output_text ??
     data.output
       ?.flatMap((item: { content?: Array<{ type?: string; text?: string }> }) => item.content ?? [])
-      ?.find((content: { type?: string }) => content.type === "output_text")?.text;
+      ?.find((content: { type?: string }) => content.type === "output_text")?.text ??
+    messageContentText;
 
   if (!outputText) {
     throw new Error("AI response did not contain output text");
   }
 
-  return JSON.parse(outputText);
+  return parseJsonValue(outputText);
+}
+
+function asStringArray(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item ?? "").trim()).filter(Boolean);
+}
+
+function normalizeScreenshotRecognition(value: unknown): ScreenshotRecognitionOutput {
+  const rawRecord = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const record =
+    rawRecord.screenshot_capture && typeof rawRecord.screenshot_capture === "object"
+      ? (rawRecord.screenshot_capture as Record<string, unknown>)
+      : rawRecord;
+  const visibleText = asStringArray(record.visibleText ?? record.visible_text ?? record.ocrText ?? record.ocr_text);
+  const text =
+    String(record.text ?? record.ocrText ?? record.ocr_text ?? visibleText.join("\n") ?? "")
+      .trim();
+
+  if (!text) {
+    throw new Error("没有识别到文字。请确认截图区域包含清晰文字，或稍后重试。");
+  }
+
+  return {
+    title: String(record.title ?? "Screenshot Capture"),
+    text,
+    language: String(record.language ?? "Unknown"),
+    contextNote: String(record.contextNote ?? record.context_note ?? ""),
+    screenType: String(record.screenType ?? record.screen_type ?? "Screenshot"),
+    visibleText: visibleText.length ? visibleText : [text],
+    errorMessages: asStringArray(record.errorMessages ?? record.error_messages),
+    interactiveElements: asStringArray(record.interactiveElements ?? record.interactive_elements)
+  };
 }
 
 async function callOpenAi<T>(
@@ -95,7 +210,7 @@ async function callOpenAi<T>(
       Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: appState.settings.aiModel,
+      model: modelForTask(task, appState),
       instructions: taskPrompts[task],
       input: buildOpenAiInput(task, payload),
       text: {
@@ -105,11 +220,59 @@ async function callOpenAi<T>(
           strict: true
         }
       },
-      max_output_tokens: task === "screenshotCapture" ? 1200 : 900
+      max_output_tokens: task === "screenshotCapture" || task === "screenshotQuestion" ? 1600 : 900
     })
   });
 
   return parseOpenAiJson(response) as Promise<T>;
+}
+
+async function callOpenRouter<T>(
+  task: TaskName,
+  payload: unknown,
+  appState: AppStateRecord
+): Promise<T> {
+  const apiKey = await loadUserApiKey();
+  if (!apiKey) throw new Error("No user API key saved");
+
+  const baseUrl = (appState.settings.openRouterBaseUrl || "https://openrouter.ai/api/v1").replace(/\/+$/, "");
+  const schema = jsonSchemas[task];
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": window.location.origin,
+      "X-Title": "TinyBu Desktop"
+    },
+    body: JSON.stringify({
+      model: modelForTask(task, appState),
+      messages: [
+        { role: "system", content: `${taskPrompts[task]}\nReturn only valid JSON.` },
+        ...buildOpenRouterMessages(task, payload)
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: schema.name,
+          strict: true,
+          schema: schema.schema
+        }
+      },
+      max_tokens: task === "screenshotCapture" || task === "screenshotQuestion" ? 1600 : 900
+    })
+  });
+
+  return parseOpenAiJson(response) as Promise<T>;
+}
+
+function shouldUseOpenRouter(task: TaskName, appState: AppStateRecord) {
+  const baseUrl = appState.settings.openRouterBaseUrl;
+  return Boolean(baseUrl) && modelForTask(task, appState).includes("/");
+}
+
+function callUserKey<T>(task: TaskName, payload: unknown, appState: AppStateRecord) {
+  return shouldUseOpenRouter(task, appState) ? callOpenRouter<T>(task, payload, appState) : callOpenAi<T>(task, payload, appState);
 }
 
 async function callCloudProxy<T>(
@@ -122,7 +285,7 @@ async function callCloudProxy<T>(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       task,
-      model: appState.settings.aiModel,
+      model: modelForTask(task, appState),
       payload
     })
   });
@@ -161,7 +324,7 @@ export async function understandContent(
     () =>
       appState.settings.aiProviderMode === "cloud-proxy"
         ? callCloudProxy("contentUnderstanding", payload, appState)
-        : callOpenAi("contentUnderstanding", payload, appState),
+        : callUserKey("contentUnderstanding", payload, appState),
     () => understandContentRules(content)
   );
 }
@@ -185,9 +348,53 @@ export async function recognizeScreenshotCapture(args: {
     nativeLanguage: args.appState.profile.nativeLanguage
   };
 
-  return args.appState.settings.aiProviderMode === "cloud-proxy"
+  const recognition = await (args.appState.settings.aiProviderMode === "cloud-proxy"
     ? callCloudProxy("screenshotCapture", payload, args.appState)
-    : callOpenAi("screenshotCapture", payload, args.appState);
+    : callUserKey("screenshotCapture", payload, args.appState));
+
+  return normalizeScreenshotRecognition(recognition);
+}
+
+export async function answerScreenshotQuestion(args: {
+  question: string;
+  screenshot: {
+    imageDataUrl?: string;
+    title: string;
+    sourceText: string;
+    summary?: string;
+    screenType?: string;
+    visibleText?: string[];
+    errorMessages?: string[];
+    interactiveElements?: string[];
+  };
+  appState: AppStateRecord;
+}): Promise<ScreenshotQuestionOutput> {
+  if (args.appState.settings.aiProviderMode === "rules") {
+    return {
+      answer: `我先根据截图文字回答：${args.screenshot.sourceText.slice(0, 220)}`,
+      quotedText: args.screenshot.sourceText.slice(0, 120),
+      nextAction: "切换到 API 模式后可以得到更完整的解释。"
+    };
+  }
+
+  const visualQuestion = /右|左|上|下|按钮|图标|颜色|红色|蓝色|位置|where|button|icon|color|right|left/i.test(args.question);
+  const payload = {
+    question: args.question,
+    title: args.screenshot.title,
+    sourceText: args.screenshot.sourceText,
+    summary: args.screenshot.summary,
+    screenType: args.screenshot.screenType,
+    visibleText: args.screenshot.visibleText ?? [],
+    errorMessages: args.screenshot.errorMessages ?? [],
+    interactiveElements: args.screenshot.interactiveElements ?? [],
+    imageDataUrl: visualQuestion ? args.screenshot.imageDataUrl : undefined,
+    nativeLanguage: args.appState.profile.nativeLanguage,
+    targetLanguage: args.appState.profile.targetLanguage
+  };
+
+  return args.appState.settings.aiProviderMode === "cloud-proxy"
+    ? callCloudProxy("screenshotQuestion", payload, args.appState)
+    : callUserKey("screenshotQuestion", payload, args.appState);
 }
 
 export async function generateExpressionCard(
@@ -208,7 +415,7 @@ export async function generateExpressionCard(
     async () => {
       const output = await (appState.settings.aiProviderMode === "cloud-proxy"
         ? callCloudProxy<Omit<ExpressionRecord, "id">>("expressionCard", payload, appState)
-        : callOpenAi<Omit<ExpressionRecord, "id">>("expressionCard", payload, appState));
+        : callUserKey<Omit<ExpressionRecord, "id">>("expressionCard", payload, appState));
       return {
         original: sentence,
         meaning: output.meaning,
@@ -252,7 +459,7 @@ export async function generateTalkTurn(args: {
     () =>
       args.appState.settings.aiProviderMode === "cloud-proxy"
         ? callCloudProxy("talkTurn", payload, args.appState)
-        : callOpenAi("talkTurn", payload, args.appState),
+        : callUserKey("talkTurn", payload, args.appState),
     () => talkTurnRules(args)
   );
 }
@@ -274,7 +481,7 @@ export async function generateRescue(
     () =>
       appState.settings.aiProviderMode === "cloud-proxy"
         ? callCloudProxy("rescue", payload, appState)
-        : callOpenAi("rescue", payload, appState),
+        : callUserKey("rescue", payload, appState),
     () => rescueRules(type, { question: currentQuestion, appState })
   );
 }
@@ -299,7 +506,7 @@ export async function generateMirror(args: {
     () =>
       args.appState.settings.aiProviderMode === "cloud-proxy"
         ? callCloudProxy("mirror", payload, args.appState)
-        : callOpenAi("mirror", payload, args.appState),
+        : callUserKey("mirror", payload, args.appState),
     () => mirrorRules(args)
   );
 }
@@ -322,7 +529,7 @@ export async function updateMemory(args: {
     () =>
       args.appState.settings.aiProviderMode === "cloud-proxy"
         ? callCloudProxy("memory", payload, args.appState)
-        : callOpenAi("memory", payload, args.appState),
+        : callUserKey("memory", payload, args.appState),
     () => memoryUpdateRules(args)
   );
 }
@@ -342,7 +549,7 @@ export async function recommendFragments(
     () =>
       appState.settings.aiProviderMode === "cloud-proxy"
         ? callCloudProxy("recommendFragments", payload, appState)
-        : callOpenAi("recommendFragments", payload, appState),
+        : callUserKey("recommendFragments", payload, appState),
     () => recommendFragmentsRules(fragments)
   );
 }
@@ -363,7 +570,7 @@ export async function generatePracticeQuestions(args: {
     () =>
       args.appState.settings.aiProviderMode === "cloud-proxy"
         ? callCloudProxy("practiceQuestions", payload, args.appState)
-        : callOpenAi("practiceQuestions", payload, args.appState),
+        : callUserKey("practiceQuestions", payload, args.appState),
     () => practiceQuestionsRules(args)
   );
 }
@@ -390,7 +597,7 @@ export async function generatePracticeTip(args: {
     () =>
       args.appState.settings.aiProviderMode === "cloud-proxy"
         ? callCloudProxy("practiceTip", payload, args.appState)
-        : callOpenAi("practiceTip", payload, args.appState),
+        : callUserKey("practiceTip", payload, args.appState),
     () => practiceTipRules(args)
   );
 }
@@ -414,7 +621,7 @@ export async function generatePracticeTurn(args: {
     () =>
       args.appState.settings.aiProviderMode === "cloud-proxy"
         ? callCloudProxy("practiceTurn", payload, args.appState)
-        : callOpenAi("practiceTurn", payload, args.appState),
+        : callUserKey("practiceTurn", payload, args.appState),
     () => practiceTurnRules(args)
   );
 }
@@ -439,7 +646,7 @@ export async function generateReview(args: {
     () =>
       args.appState.settings.aiProviderMode === "cloud-proxy"
         ? callCloudProxy("review", payload, args.appState)
-        : callOpenAi("review", payload, args.appState),
+        : callUserKey("review", payload, args.appState),
     () => reviewRules(args)
   );
 }

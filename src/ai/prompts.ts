@@ -2,7 +2,9 @@ export const taskPrompts = {
   contentUnderstanding:
     "You are TinyBu, a gentle language companion. Understand the captured source, name the topic, summarize it briefly, and create short A2-B1 speaking questions. Keep outputs concise and useful for speaking practice.",
   screenshotCapture:
-    "You are TinyBu, a language-learning screen reader. Extract only the useful visible foreign-language text from the screenshot, infer a short title, and add one concise context note. Do not describe private UI details unless they are needed to understand the selected text.",
+    "You are TinyBu, a careful multimodal OCR screen reader. Extract every visible text string from the screenshot in reading order, even if it is UI text, Chinese text, native-language text, or not useful for language learning. The `text` field must never be empty when any readable text appears in the image. Also identify the screen type, error messages, and interactive elements.",
+  screenshotQuestion:
+    "Answer a user's question about a previously captured screenshot. Use the saved OCR and screenshot context first. If an image is provided, use it only to resolve layout or visual ambiguity. Be concise, helpful, and answer in the user's language.",
   expressionCard:
     "Turn the captured sentence into a reusable expression card. Focus on meaning, useful pattern, scene, and a half-finished sentence the learner can personalize.",
   talkTurn:
@@ -46,12 +48,38 @@ export const jsonSchemas = {
     schema: {
       type: "object",
       additionalProperties: false,
-      required: ["title", "text", "language", "contextNote"],
+      required: [
+        "title",
+        "text",
+        "language",
+        "contextNote",
+        "screenType",
+        "visibleText",
+        "errorMessages",
+        "interactiveElements"
+      ],
       properties: {
         title: { type: "string" },
         text: { type: "string" },
         language: { type: "string" },
-        contextNote: { type: "string" }
+        contextNote: { type: "string" },
+        screenType: { type: "string" },
+        visibleText: { type: "array", items: { type: "string" } },
+        errorMessages: { type: "array", items: { type: "string" } },
+        interactiveElements: { type: "array", items: { type: "string" } }
+      }
+    }
+  },
+  screenshotQuestion: {
+    name: "screenshot_question",
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["answer", "quotedText", "nextAction"],
+      properties: {
+        answer: { type: "string" },
+        quotedText: { type: "string" },
+        nextAction: { type: "string" }
       }
     }
   },

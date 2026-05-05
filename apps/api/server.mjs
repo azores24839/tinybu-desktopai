@@ -2,6 +2,8 @@ import http from "node:http";
 
 const port = Number(process.env.PORT ?? 8787);
 const openAiApiKey = process.env.OPENAI_API_KEY;
+const openRouterApiKey = process.env.OPENROUTER_API_KEY;
+const openRouterBaseUrl = process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1";
 const anthropicAuthToken = process.env.ANTHROPIC_AUTH_TOKEN;
 const anthropicBaseUrl = process.env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com";
 const apiTimeoutMs = Number(process.env.API_TIMEOUT_MS ?? 300000);
@@ -15,7 +17,9 @@ const taskPrompts = {
   contentUnderstanding:
     "You are TinyBu, a gentle language companion. Understand the captured source, name the topic, summarize it briefly, and create short A2-B1 speaking questions. Keep outputs concise and useful for speaking practice.",
   screenshotCapture:
-    "You are TinyBu, a language-learning screen reader. Extract only the useful visible foreign-language text from the screenshot, infer a short title, and add one concise context note. Do not describe private UI details unless they are needed to understand the selected text.",
+    "You are TinyBu, a careful multimodal OCR screen reader. Extract every visible text string from the screenshot in reading order, even if it is UI text, Chinese text, native-language text, or not useful for language learning. The `text` field must never be empty when any readable text appears in the image. Also identify the screen type, error messages, and interactive elements.",
+  screenshotQuestion:
+    "Answer a user's question about a previously captured screenshot. Use the saved OCR and screenshot context first. If an image is provided, use it only to resolve layout or visual ambiguity. Be concise, helpful, and answer in the user's language.",
   quickPetChat:
     "You are TinyBu, a tiny desktop language-learning buddy. Reply in the user's language unless they ask to practice another language. Keep the reply extremely short: one or two compact sentences, maximum 45 Chinese characters or 25 English words. Prefer language-learning help: explain a phrase, make a sentence natural, ask one tiny practice question, or give encouragement. No markdown.",
   expressionCard:
@@ -107,12 +111,38 @@ function schemaFor(task) {
       schema: {
         type: "object",
         additionalProperties: false,
-        required: ["title", "text", "language", "contextNote"],
+        required: [
+          "title",
+          "text",
+          "language",
+          "contextNote",
+          "screenType",
+          "visibleText",
+          "errorMessages",
+          "interactiveElements"
+        ],
         properties: {
           title: { type: "string" },
           text: { type: "string" },
           language: { type: "string" },
-          contextNote: { type: "string" }
+          contextNote: { type: "string" },
+          screenType: { type: "string" },
+          visibleText: commonStringArray(),
+          errorMessages: commonStringArray(),
+          interactiveElements: commonStringArray()
+        }
+      }
+    },
+    screenshotQuestion: {
+      name: "screenshot_question",
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["answer", "quotedText", "nextAction"],
+        properties: {
+          answer: { type: "string" },
+          quotedText: { type: "string" },
+          nextAction: { type: "string" }
         }
       }
     },
@@ -306,51 +336,94 @@ function stripDataUrl(dataUrl = "") {
 }
 
 function buildAnthropicContent(task, payload) {
-  if (task !== "screenshotCapture") return JSON.stringify(payload);
+  if (task !== "screenshotCapture" && task !== "screenshotQuestion") return JSON.stringify(payload);
 
   const { imageDataUrl, ...rest } = payload ?? {};
   const image = stripDataUrl(imageDataUrl);
-  return [
+  const content = [
     {
       type: "text",
       text: JSON.stringify({
         ...rest,
-        instruction: "Extract useful language-learning text from the attached screenshot."
+        instruction:
+          task === "screenshotCapture"
+            ? "OCR every readable text string. Do not filter by usefulness or language."
+            : "Answer the user's question about this screenshot."
       })
-    },
-    {
+    }
+  ];
+
+  if (imageDataUrl) {
+    content.push({
       type: "image",
       source: {
         type: "base64",
         media_type: image.mediaType,
         data: image.data
       }
+    });
+  }
+
+  return content;
+}
+
+function buildOpenAiInput(task, payload) {
+  if (task !== "screenshotCapture" && task !== "screenshotQuestion") return JSON.stringify(payload);
+
+  const { imageDataUrl, ...rest } = payload ?? {};
+  const content = [
+    {
+      type: "input_text",
+      text: JSON.stringify({
+        ...rest,
+        instruction:
+          task === "screenshotCapture"
+            ? "OCR every readable text string. Do not filter by usefulness or language."
+            : "Answer the user's question about this screenshot."
+      })
+    }
+  ];
+
+  if (imageDataUrl) {
+    content.push({
+      type: "input_image",
+      image_url: imageDataUrl,
+      detail: "high"
+    });
+  }
+
+  return [
+    {
+      role: "user",
+      content
     }
   ];
 }
 
-function buildOpenAiInput(task, payload) {
-  if (task !== "screenshotCapture") return JSON.stringify(payload);
+function buildOpenRouterMessages(task, payload) {
+  if (task !== "screenshotCapture" && task !== "screenshotQuestion") {
+    return [{ role: "user", content: JSON.stringify(payload) }];
+  }
 
   const { imageDataUrl, ...rest } = payload ?? {};
-  return [
+  const content = [
     {
-      role: "user",
-      content: [
-        {
-          type: "input_text",
-          text: JSON.stringify({
-            ...rest,
-            instruction: "Extract useful language-learning text from the attached screenshot."
-          })
-        },
-        {
-          type: "input_image",
-          image_url: imageDataUrl
-        }
-      ]
+      type: "text",
+      text: JSON.stringify({
+        ...rest,
+        instruction:
+          task === "screenshotCapture"
+            ? "OCR every readable text string. Do not filter by usefulness or language."
+            : "Answer the user's question about this screenshot."
+      })
     }
   ];
+
+  if (imageDataUrl) {
+    content.push({ type: "image_url", image_url: { url: imageDataUrl, detail: "high" } });
+  }
+
+  return [{ role: "user", content }];
 }
 
 function extractJsonText(text = "") {
@@ -483,6 +556,44 @@ async function callOpenAi(task, model, payload) {
   return { response, data: await response.json() };
 }
 
+async function callOpenRouter(task, model, payload) {
+  const schema = schemaFor(task);
+  const response = await fetchWithTimeout(`${openRouterBaseUrl.replace(/\/+$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${openRouterApiKey}`,
+      "HTTP-Referer": "http://127.0.0.1",
+      "X-Title": "TinyBu Desktop"
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: `${taskPrompts[task]}\nReturn only valid JSON.` },
+        ...buildOpenRouterMessages(task, payload)
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: schema.name,
+          strict: true,
+          schema: schema.schema
+        }
+      },
+      max_tokens: task === "screenshotCapture" || task === "screenshotQuestion" ? 1600 : 900
+    })
+  });
+  const data = await response.json();
+  if (!response.ok) return { response, data };
+  const outputText = data.choices?.[0]?.message?.content;
+  return {
+    response,
+    data: {
+      output_text: outputText
+    }
+  };
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     sendJson(res, 200, { ok: true });
@@ -510,8 +621,14 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (openRouterApiKey && model.includes("/")) {
+      const { response, data } = await callOpenRouter(task, model, payload);
+      sendJson(res, response.status, data);
+      return;
+    }
+
     if (!openAiApiKey) {
-      sendJson(res, 500, { error: "Configure ANTHROPIC_AUTH_TOKEN or OPENAI_API_KEY before using the cloud proxy." });
+      sendJson(res, 500, { error: "Configure ANTHROPIC_AUTH_TOKEN, OPENROUTER_API_KEY, or OPENAI_API_KEY before using the cloud proxy." });
       return;
     }
 
@@ -523,6 +640,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(port, "127.0.0.1", () => {
-  const provider = anthropicAuthToken ? "Anthropic-compatible" : "OpenAI";
+  const provider = anthropicAuthToken ? "Anthropic-compatible" : openRouterApiKey ? "OpenRouter/OpenAI" : "OpenAI";
   console.log(`TinyBu ${provider} proxy listening on http://127.0.0.1:${port}/v1/nomi/task`);
 });

@@ -1,24 +1,36 @@
 # TinyBu Desktop MVP
 
-TinyBu is a desktop-first AI language-learning buddy. It helps learners turn selected text, articles, video transcripts, pasted content, and screenshots into understanding-first topic practice, saved expressions, gentle review, and editable learning memory.
+TinyBu is a desktop-first AI language-learning buddy. It helps learners turn selected text, articles, video transcripts, pasted content, clipboard snippets, and screenshots into understanding-first topic practice, saved expressions, gentle review, and editable learning memory.
 
-## What is implemented
+## Current core capabilities
 
-- Tauri v2 desktop shell configuration.
+The current app implements a Capture -> Select -> Answer -> Review learning loop:
+
+- Tauri v2 desktop shell with a main window and a transparent always-on-top desktop pet window.
 - React + TypeScript + Vite frontend.
-- Chrome MV3 capture extension prototype in `apps/extension`.
-- TinyBu desktop pet prototype with Tauri transparent always-on-top window, screenshot selection, and localhost capture bridge.
-- Welcome, Onboarding, Companion Setup, Home, Watch Room, Talk Mode, Mirror Card, Notebook, Memory Log, and Settings.
-- Demo transcripts and pasted transcript flow.
-- Web capture import flow for selected text, article text, YouTube transcript/captions, and desktop screenshot OCR through the cloud proxy.
-- Expression Card generation with local fallback rules.
-- Talk Mode with six Rescue Buttons.
-- Mirror Card and Memory Log generation.
+- Chrome MV3 capture extension in `apps/extension`.
+- Localhost desktop capture bridge at `http://127.0.0.1:1421/v1/captures`.
+- Capture import from selected browser text, article body, YouTube transcript / visible captions, pasted text, clipboard copy, URL payload, demo content, and desktop screenshots.
+- Content understanding for captures: topic, summary, keywords, preview questions, and suggested expressions.
+- Fragment selection workflow: short content and subtitles default to selected; long content gets 3-6 recommended fragments.
+- Practice question generation from selected fragments.
+- Guided answer flow with one question at a time, lightweight TinyBu replies, and two-level Tips.
+- Review generation with what was discussed, what worked, more natural expressions, saved notebook expressions, and next practice.
+- Notebook for source material and saved / need-practice / learned expressions.
+- Editable TinyBu Memory for learning preferences and support notes.
+- Desktop screenshot capture with preview mode, optional AI OCR, screenshot Q&A, and diagnostic capture on OCR failure.
+- Desktop pet actions: copy capture, open practice, screenshot recognition, undo last capture, reset count, hide, and quick chat.
 - IndexedDB persistence through Dexie.
 - Mixed AI modes:
   - Local rules.
   - User API Key through Tauri keyring commands when running as desktop.
   - Cloud proxy endpoint at `apps/api/server.mjs`.
+
+For the fuller Chinese product / implementation summary, see:
+
+```text
+docs/current-core-capabilities.md
+```
 
 ## Run the web dev version
 

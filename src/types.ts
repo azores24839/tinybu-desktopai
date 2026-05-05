@@ -3,9 +3,15 @@ export type Screen =
   | "onboarding"
   | "companion"
   | "home"
+  | "inbox"
+  | "organize"
+  | "topics"
+  | "topic-detail"
+  | "study-room"
   | "practice"
+  | "practice-review"
   | "notebook"
-  | "nomi"
+  | "memory"
   | "settings";
 
 export type Level = "A1" | "A2" | "B1" | "B2";
@@ -31,6 +37,9 @@ export type AiProviderMode = "rules" | "user-key" | "cloud-proxy";
 export type ExternalCaptureKind = "selection" | "article" | "youtube" | "video" | "screenshot" | "manual";
 export type PracticeStage = "select" | "answer" | "review";
 export type PracticeQuestionType = "understanding" | "opinion" | "personal" | "expression";
+export type CaptureStatus = "unsorted" | "suggested" | "in-topic" | "studied" | "practiced" | "archived";
+export type LegacyCaptureStatus = "new" | "in-practice" | "completed";
+export type TopicStatus = "ready" | "in-progress" | "practiced";
 export type RescueType =
   | "start"
   | "continue"
@@ -63,6 +72,9 @@ export interface AppSettings {
   supportStrength: SupportPreference;
   aiProviderMode: AiProviderMode;
   aiModel: string;
+  visionModel: string;
+  screenshotRecognitionEnabled: boolean;
+  openRouterBaseUrl: string;
   cloudProxyUrl: string;
   apiKeySaved: boolean;
 }
@@ -76,6 +88,7 @@ export interface AppStateRecord {
   settings: AppSettings;
   activeContentId: string;
   activeCaptureId: string;
+  activeTopicId: string;
   activePracticeSessionId: string;
   pastedTranscript: string;
   pastedSourceTitle: string;
@@ -125,6 +138,7 @@ export interface CaptureItem {
   sourceUrl: string;
   sourceKind: ExternalCaptureKind;
   sourceText?: string;
+  screenshot?: ScreenshotCaptureRecord;
   topic?: string;
   summary?: string;
   keywords?: string[];
@@ -132,7 +146,45 @@ export interface CaptureItem {
   suggestedExpressions?: string[];
   capturedAt: string;
   fragments: CaptureFragment[];
-  status: "new" | "in-practice" | "completed" | "archived";
+  topicId?: string;
+  status: CaptureStatus | LegacyCaptureStatus;
+}
+
+export interface TopicItem {
+  id: string;
+  name: string;
+  summary: string;
+  captureIds: string[];
+  tags: string[];
+  practiceGoal: string;
+  status: TopicStatus;
+  savedExpressionCount: number;
+  createdAt: string;
+  updatedAt: string;
+  lastStudiedAt?: string;
+  lastPracticedAt?: string;
+}
+
+export interface ScreenshotCaptureRecord {
+  imageDataUrl: string;
+  width: number;
+  height: number;
+  language: string;
+  screenType: string;
+  contextNote: string;
+  visibleText: string[];
+  errorMessages: string[];
+  interactiveElements: string[];
+  questionAnswers: ScreenshotQuestionAnswer[];
+}
+
+export interface ScreenshotQuestionAnswer {
+  id: string;
+  question: string;
+  answer: string;
+  quotedText: string;
+  nextAction: string;
+  createdAt: string;
 }
 
 export interface ExpressionRecord {
@@ -213,6 +265,7 @@ export interface PracticeAnswer {
 export interface PracticeSession {
   id: string;
   captureId: string;
+  topicId?: string;
   selectedFragmentIds: string[];
   stage: PracticeStage;
   questions: PracticeQuestion[];
@@ -247,6 +300,12 @@ export interface ScreenshotCapturePayload {
   width: number;
   height: number;
   capturedAt: string;
+  captureArea?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
 }
 
 export interface ScreenshotRecognitionOutput {
@@ -254,6 +313,16 @@ export interface ScreenshotRecognitionOutput {
   text: string;
   language: string;
   contextNote: string;
+  screenType: string;
+  visibleText: string[];
+  errorMessages: string[];
+  interactiveElements: string[];
+}
+
+export interface ScreenshotQuestionOutput {
+  answer: string;
+  quotedText: string;
+  nextAction: string;
 }
 
 export interface TalkTurnOutput {

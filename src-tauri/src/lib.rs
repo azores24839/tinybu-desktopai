@@ -16,11 +16,13 @@ const SERVICE_NAME: &str = "TinyBu";
 const OPENAI_ACCOUNT: &str = "openai_api_key";
 const CAPTURE_BRIDGE_ADDR: &str = "127.0.0.1:1421";
 const CAPTURE_BRIDGE_EVENT: &str = "nomi-capture-bridge-updated";
+const CLIPBOARD_PROMPT_EVENT: &str = "nomi-clipboard-prompt";
 const CLIPBOARD_SUPPRESS_EVENT: &str = "nomi-clipboard-suppress";
 const OPEN_CAPTURES_EVENT: &str = "nomi-open-captures";
 const SCREENSHOT_CAPTURE_EVENT: &str = "tinybu-screenshot-captured";
 
 type SharedCaptureBridge = Arc<Mutex<CaptureBridgeState>>;
+type SharedScreenshotVisibility = Arc<Mutex<ScreenshotVisibilityState>>;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,7 +53,7 @@ struct PetVisibilityPayload {
   hidden: bool
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ScreenshotArea {
   x: i32,
@@ -66,7 +68,8 @@ struct ScreenshotCapturePayload {
   image_data_url: String,
   width: u32,
   height: u32,
-  captured_at: String
+  captured_at: String,
+  capture_area: Option<ScreenshotArea>
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -81,6 +84,12 @@ struct ScreenshotCaptureResult {
 struct CaptureBridgeState {
   count: u32,
   pending_captures: Vec<ExternalCapturePayload>
+}
+
+#[derive(Default)]
+struct ScreenshotVisibilityState {
+  main_was_visible: bool,
+  pet_was_visible: bool
 }
 
 impl CaptureBridgeState {
@@ -205,7 +214,10 @@ fn hide_pet_window(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn open_screenshot_capture(app: tauri::AppHandle) -> Result<bool, String> {
+fn open_screenshot_capture(
+  app: tauri::AppHandle,
+  visibility_state: tauri::State<'_, SharedScreenshotVisibility>
+) -> Result<bool, String> {
   if let Some(window) = app.get_webview_window("screenshot") {
     let _ = window.close();
   }
@@ -220,6 +232,29 @@ fn open_screenshot_capture(app: tauri::AppHandle) -> Result<bool, String> {
     })
     .or_else(|| app.primary_monitor().ok().flatten())
     .ok_or_else(|| "Unable to find a monitor for screenshot capture.".to_string())?;
+
+  let main_was_visible = app
+    .get_webview_window("main")
+    .and_then(|window| window.is_visible().ok())
+    .unwrap_or(false);
+  let pet_was_visible = app
+    .get_webview_window("pet")
+    .and_then(|window| window.is_visible().ok())
+    .unwrap_or(false);
+  {
+    let mut visibility = visibility_state.lock().map_err(|error| error.to_string())?;
+    visibility.main_was_visible = main_was_visible;
+    visibility.pet_was_visible = pet_was_visible;
+  }
+
+  if let Some(window) = app.get_webview_window("main") {
+    let _ = window.hide();
+  }
+
+  if let Some(window) = app.get_webview_window("pet") {
+    let _ = window.hide();
+  }
+
   let scale_factor = monitor.scale_factor();
   let position = monitor.position();
   let size = monitor.size();
@@ -242,9 +277,25 @@ fn open_screenshot_capture(app: tauri::AppHandle) -> Result<bool, String> {
     .skip_taskbar(true)
     .shadow(false)
     .build()
-    .map_err(|error| error.to_string())?;
+    .map_err(|error| {
+      restore_screenshot_windows(&app, visibility_state.inner(), false);
+      error.to_string()
+    })?;
 
   Ok(true)
+}
+
+#[tauri::command]
+fn cancel_screenshot_capture(
+  app: tauri::AppHandle,
+  visibility_state: tauri::State<'_, SharedScreenshotVisibility>
+) -> Result<(), String> {
+  if let Some(window) = app.get_webview_window("screenshot") {
+    let _ = window.close();
+  }
+
+  restore_screenshot_windows(&app, visibility_state.inner(), false);
+  Ok(())
 }
 
 #[tauri::command]
@@ -273,7 +324,13 @@ fn capture_screen_area(area: ScreenshotArea) -> Result<ScreenshotCaptureResult, 
 }
 
 #[tauri::command]
-fn submit_screenshot_capture(app: tauri::AppHandle, payload: ScreenshotCapturePayload) -> Result<(), String> {
+fn submit_screenshot_capture(
+  app: tauri::AppHandle,
+  visibility_state: tauri::State<'_, SharedScreenshotVisibility>,
+  payload: ScreenshotCapturePayload
+) -> Result<(), String> {
+  restore_screenshot_windows(&app, visibility_state.inner(), true);
+
   if let Some(window) = app.get_webview_window("main") {
     window.show().map_err(|error| error.to_string())?;
     window.set_focus().map_err(|error| error.to_string())?;
@@ -285,9 +342,11 @@ fn submit_screenshot_capture(app: tauri::AppHandle, payload: ScreenshotCapturePa
 
 pub fn run() {
   let capture_bridge: SharedCaptureBridge = Arc::new(Mutex::new(CaptureBridgeState::default()));
+  let screenshot_visibility: SharedScreenshotVisibility = Arc::new(Mutex::new(ScreenshotVisibilityState::default()));
 
   tauri::Builder::default()
     .manage(capture_bridge.clone())
+    .manage(screenshot_visibility)
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_global_shortcut::Builder::new().build())
     .plugin(
@@ -312,11 +371,37 @@ pub fn run() {
       open_capture_practice,
       hide_pet_window,
       open_screenshot_capture,
+      cancel_screenshot_capture,
       capture_screen_area,
       submit_screenshot_capture
     ])
     .run(tauri::generate_context!())
     .expect("error while running TinyBu");
+}
+
+fn restore_screenshot_windows(app: &tauri::AppHandle, state: &SharedScreenshotVisibility, force_main: bool) {
+  let visibility = match state.lock() {
+    Ok(visibility) => ScreenshotVisibilityState {
+      main_was_visible: visibility.main_was_visible,
+      pet_was_visible: visibility.pet_was_visible
+    },
+    Err(error) => {
+      eprintln!("TinyBu could not restore screenshot windows: {error}");
+      ScreenshotVisibilityState::default()
+    }
+  };
+
+  if (force_main || visibility.main_was_visible) && app.get_webview_window("main").is_some() {
+    if let Some(window) = app.get_webview_window("main") {
+      let _ = window.show();
+    }
+  }
+
+  if visibility.pet_was_visible && app.get_webview_window("pet").is_some() {
+    if let Some(window) = app.get_webview_window("pet") {
+      let _ = window.show();
+    }
+  }
 }
 
 fn start_capture_bridge(app: tauri::AppHandle, state: SharedCaptureBridge) {
@@ -379,6 +464,33 @@ fn handle_bridge_stream(mut stream: TcpStream, app: tauri::AppHandle, state: Sha
       if let Err(error) = result {
         eprintln!("TinyBu could not update pet visibility: {error}");
       }
+    }
+
+    let _ = write_http_json(&mut stream, 200, &serde_json::json!({ "ok": true }));
+    return;
+  }
+
+  if method == "POST" && path == "/v1/clipboard-prompt" {
+    let payload = match serde_json::from_slice::<ClipboardSuppressPayload>(&body) {
+      Ok(payload) => payload,
+      Err(error) => {
+        let _ = write_http_json(
+          &mut stream,
+          400,
+          &serde_json::json!({ "ok": false, "error": format!("Invalid clipboard prompt payload: {error}") })
+        );
+        return;
+      }
+    };
+
+    if let Some(window) = app.get_webview_window("pet") {
+      if let Err(error) = window.show() {
+        eprintln!("TinyBu could not show pet window for clipboard prompt: {error}");
+      }
+    }
+
+    if let Err(error) = app.emit_to("pet", CLIPBOARD_PROMPT_EVENT, payload) {
+      eprintln!("TinyBu could not emit clipboard prompt event: {error}");
     }
 
     let _ = write_http_json(&mut stream, 200, &serde_json::json!({ "ok": true }));

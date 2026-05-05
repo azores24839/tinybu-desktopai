@@ -14,6 +14,8 @@ type ScreenshotResult = {
   height: number;
 };
 
+const CAPTURE_PADDING = 8;
+
 export default function ScreenshotOverlay() {
   const [start, setStart] = useState<Point | null>(null);
   const [current, setCurrent] = useState<Point | null>(null);
@@ -34,7 +36,7 @@ export default function ScreenshotOverlay() {
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        void getCurrentWindow().close();
+        void invokeTauri("cancel_screenshot_capture");
       }
     };
 
@@ -71,11 +73,21 @@ export default function ScreenshotOverlay() {
     try {
       const window = getCurrentWindow();
       const [position, scaleFactor] = await Promise.all([window.outerPosition(), window.scaleFactor()]);
+      const captureRect = {
+        left: Math.max(0, rect.left - CAPTURE_PADDING),
+        top: Math.max(0, rect.top - CAPTURE_PADDING),
+        width: rect.width + CAPTURE_PADDING * 2,
+        height: rect.height + CAPTURE_PADDING * 2
+      };
+      const macLike = /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      const originX = macLike ? position.x / scaleFactor : position.x;
+      const originY = macLike ? position.y / scaleFactor : position.y;
+      const unitScale = macLike ? 1 : scaleFactor;
       const area = {
-        x: Math.round(position.x + rect.left * scaleFactor),
-        y: Math.round(position.y + rect.top * scaleFactor),
-        width: Math.round(rect.width * scaleFactor),
-        height: Math.round(rect.height * scaleFactor)
+        x: Math.round(originX + captureRect.left * unitScale),
+        y: Math.round(originY + captureRect.top * unitScale),
+        width: Math.max(12, Math.round(captureRect.width * unitScale)),
+        height: Math.max(12, Math.round(captureRect.height * unitScale))
       };
       await window.hide();
       await new Promise((resolve) => globalThis.setTimeout(resolve, 120));
@@ -86,6 +98,7 @@ export default function ScreenshotOverlay() {
       await invokeTauri("submit_screenshot_capture", {
         payload: {
           ...screenshot,
+          captureArea: area,
           capturedAt: new Date().toISOString()
         }
       });

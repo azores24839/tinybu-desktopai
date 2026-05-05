@@ -24,6 +24,9 @@ export const defaultSettings: AppSettings = {
   supportStrength: "Balanced",
   aiProviderMode: "cloud-proxy",
   aiModel: "MiniMax-M2.7",
+  visionModel: "qwen/qwen3.6-35b-a3b",
+  screenshotRecognitionEnabled: false,
+  openRouterBaseUrl: "https://openrouter.ai/api/v1",
   cloudProxyUrl: "http://127.0.0.1:8787/v1/nomi/task",
   apiKeySaved: false
 };
@@ -37,6 +40,7 @@ export const defaultAppState: AppStateRecord = {
   settings: defaultSettings,
   activeContentId: "demo-productivity",
   activeCaptureId: "",
+  activeTopicId: "",
   activePracticeSessionId: "",
   pastedTranscript: "",
   pastedSourceTitle: "",

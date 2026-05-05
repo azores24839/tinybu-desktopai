@@ -71,6 +71,7 @@ export default function PetApp() {
   useEffect(() => {
     let mounted = true;
     let unlistenBridge = () => {};
+    let unlistenPrompt = () => {};
     let unlistenSuppress = () => {};
     let unlistenMoved = () => {};
 
@@ -81,6 +82,10 @@ export default function PetApp() {
       unlistenBridge = await listenTauri<CaptureBridgeState>("nomi-capture-bridge-updated", (event) => {
         setCount(event.payload.count);
         setActivity("idle");
+      });
+
+      unlistenPrompt = await listenTauri<ClipboardSuppressEvent>("nomi-clipboard-prompt", (event) => {
+        promptClipboardText(event.payload.text);
       });
 
       unlistenSuppress = await listenTauri<ClipboardSuppressEvent>("nomi-clipboard-suppress", (event) => {
@@ -102,6 +107,7 @@ export default function PetApp() {
     return () => {
       mounted = false;
       unlistenBridge();
+      unlistenPrompt();
       unlistenSuppress();
       unlistenMoved();
       window.clearTimeout(shortcutMessageTimer.current);
@@ -158,6 +164,16 @@ export default function PetApp() {
     if (normalizeClipboardSignal(pendingClipboardTextRef.current) === clipboardText) {
       clearClipboardPrompt(pendingClipboardTextRef.current);
     }
+  }
+
+  function promptClipboardText(text: string) {
+    const clipboardText = text.trim();
+    const clipboardSignal = normalizeClipboardSignal(clipboardText);
+    if (!clipboardSignal) return;
+
+    lastClipboardText.current = clipboardSignal;
+    lastPromptedClipboardText.current = clipboardSignal;
+    showClipboardPrompt(clipboardText);
   }
 
   function clearClipboardPrompt(text = pendingClipboardText) {
