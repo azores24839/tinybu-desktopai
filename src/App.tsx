@@ -10,7 +10,6 @@ import {
   KeyRound,
   Lightbulb,
   NotebookTabs,
-  Pencil,
   Plus,
   RotateCcw,
   Send,
@@ -39,6 +38,8 @@ import { topicCaptures, topicExpressions } from "./features/topics/topicUtils";
 import { TopicsPage } from "./features/topics/TopicsPage";
 import { TopicDetailPage } from "./features/topics/TopicDetailPage";
 import { StudyRoomPage } from "./features/topics/StudyRoomPage";
+import { NotebookPage } from "./features/notebook/NotebookPage";
+import { MemoryPage } from "./features/memory/MemoryPage";
 import { useScreenshotCaptureFlow } from "./features/screenshots/useScreenshotCaptureFlow";
 import {
   generatePracticeQuestions,
@@ -1762,202 +1763,6 @@ function PracticeReviewPage({
           </div>
         </section>
       </div>
-    </section>
-  );
-}
-
-function NotebookPage({
-  expressions,
-  updateExpression,
-  deleteExpression
-}: {
-  expressions: ExpressionRecord[];
-  updateExpression: (record: ExpressionRecord) => void;
-  deleteExpression: (id: string) => void;
-}) {
-  const [filter, setFilter] = useState<"all" | "topic" | "recent" | "review">("all");
-  const [selectedId, setSelectedId] = useState(expressions[0]?.id ?? "");
-  const visible = expressions.filter((expression) => {
-    if (filter === "recent") return expression.saved;
-    if (filter === "review") return expression.useLater || expression.category === "need-practice";
-    return true;
-  });
-  const selected = expressions.find((expression) => expression.id === selectedId) ?? visible[0];
-
-  useEffect(() => {
-    if (!selectedId && expressions[0]) setSelectedId(expressions[0].id);
-  }, [expressions, selectedId]);
-
-  return (
-    <section className="page">
-      <AppHeader title="Notebook" description="Saved expressions worth taking with you." />
-      <div className="notebook-layout">
-        <aside className="filter-panel">
-          {[
-            ["all", "All Expressions"],
-            ["topic", "By Topic"],
-            ["recent", "Recently Saved"],
-            ["review", "Review Later"]
-          ].map(([value, label]) => (
-            <button key={value} className={filter === value ? "filter active" : "filter"} onClick={() => setFilter(value as typeof filter)}>
-              {label}
-            </button>
-          ))}
-        </aside>
-        <main className="expression-list">
-          {visible.length ? (
-            visible.map((expression) => (
-              <button
-                key={expression.id}
-                className={selected?.id === expression.id ? "expression-row active" : "expression-row"}
-                onClick={() => setSelectedId(expression.id)}
-              >
-                <strong>{expression.pattern}</strong>
-                <span>{expression.meaning}</span>
-                <div className="meta-row">
-                  <span>{expression.sourceTitle}</span>
-                  <span>{formatDate(expression.capturedAt)}</span>
-                  <span>{expression.learned ? "Learned" : expression.useLater ? "Review Later" : "Saved"}</span>
-                </div>
-              </button>
-            ))
-          ) : (
-            <EmptyState title="Notebook is empty" body="Save expressions from Study Room or Practice Review." />
-          )}
-        </main>
-        <aside className="detail-panel">
-          {selected ? (
-            <>
-              <p className="eyebrow">Expression Detail</p>
-              <h2>{selected.pattern}</h2>
-              <p>{selected.meaning}</p>
-              <div className="detail-stack">
-                <div>
-                  <span>When to use</span>
-                  <strong>{selected.scene}</strong>
-                </div>
-                <div>
-                  <span>Example sentence</span>
-                  <strong>{selected.original}</strong>
-                </div>
-                <div>
-                  <span>Source</span>
-                  <strong>{selected.sourceTitle}</strong>
-                </div>
-                <label>
-                  User&apos;s own version
-                  <textarea value={selected.userSentence} onChange={(event) => updateExpression({ ...selected, userSentence: event.target.value })} />
-                </label>
-              </div>
-              <div className="stack-actions">
-                <button className="secondary" onClick={() => updateExpression({ ...selected, useLater: !selected.useLater })}>
-                  Mark review
-                </button>
-                <button className="secondary" onClick={() => updateExpression({ ...selected, learned: true })}>
-                  Mark learned
-                </button>
-                <button className="danger" onClick={() => deleteExpression(selected.id)}>
-                  Delete
-                </button>
-              </div>
-            </>
-          ) : (
-            <EmptyState title="Select an expression" body="Expression details and editing controls appear here." />
-          )}
-        </aside>
-      </div>
-    </section>
-  );
-}
-
-function MemoryPage({
-  memories,
-  topics,
-  expressions,
-  updateMemoryItem,
-  deleteMemory
-}: {
-  memories: MemoryItem[];
-  topics: TopicItem[];
-  expressions: ExpressionRecord[];
-  updateMemoryItem: (item: MemoryItem) => void;
-  deleteMemory: (id: string) => void;
-}) {
-  const interests = memories.filter((memory) => memory.type === "interest");
-  const stuck = memories.filter((memory) => memory.type === "support" || memory.type === "anxiety");
-  const next = memories.filter((memory) => memory.type === "next");
-  const opinionExpressions = expressions.filter((expression) => /think|opinion|reason|compare|request/i.test(expression.pattern));
-
-  return (
-    <section className="page">
-      <AppHeader title="Bu’s Memory" description="A warm learning profile that remembers interests, patterns, and next steps." />
-      <section className="panel memory-summary">
-        <div>
-          <span>Topics you practice</span>
-          <strong>{topics.slice(0, 3).map((topic) => topic.name).join(", ") || "Not enough data yet"}</strong>
-        </div>
-        <div>
-          <span>Current interests</span>
-          <strong>{interests[0]?.title || topics[0]?.name || "Fresh captures"}</strong>
-        </div>
-        <div>
-          <span>Common stuck points</span>
-          <strong>{stuck[0]?.title || "Giving longer reasons"}</strong>
-        </div>
-        <div>
-          <span>Recent progress</span>
-          <strong>{expressions.length} expressions saved</strong>
-        </div>
-      </section>
-      <div className="memory-grid">
-        <section className="panel">
-          <div className="section-title">Topics You Care About</div>
-          <div className="mini-list">
-            {topics.slice(0, 8).map((topic) => (
-              <span key={topic.id}>{topic.name}</span>
-            ))}
-          </div>
-        </section>
-        <section className="panel">
-          <div className="section-title">Expressions You&apos;re Building</div>
-          <div className="mini-list">
-            {(opinionExpressions.length ? opinionExpressions : expressions).slice(0, 8).map((expression) => (
-              <span key={expression.id}>{expression.pattern}</span>
-            ))}
-          </div>
-        </section>
-        <section className="panel">
-          <div className="section-title">Bu&apos;s Suggestions</div>
-          <div className="mini-list">
-            {(next.length ? next : memories).slice(0, 6).map((memory) => (
-              <span key={memory.id}>{memory.title}</span>
-            ))}
-            {!memories.length && (
-              <>
-                <span>Continue Topic: {topics[0]?.name || "First Topic"}</span>
-                <span>Review expressions from yesterday</span>
-                <span>Practice giving longer reasons</span>
-              </>
-            )}
-          </div>
-        </section>
-      </div>
-      {!!memories.length && (
-        <section className="panel">
-          <div className="section-title">Editable Memory Notes</div>
-          <div className="memory-note-list">
-            {memories.map((memory) => (
-              <article className="memory-note" key={memory.id}>
-                <input value={memory.title} onChange={(event) => updateMemoryItem({ ...memory, title: event.target.value, updatedAt: nowIso() })} />
-                <textarea value={memory.body} onChange={(event) => updateMemoryItem({ ...memory, body: event.target.value, updatedAt: nowIso() })} />
-                <button className="danger" onClick={() => deleteMemory(memory.id)}>
-                  Delete
-                </button>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
     </section>
   );
 }
