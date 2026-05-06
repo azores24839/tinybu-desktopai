@@ -104,7 +104,7 @@ No network and no API key. This is useful for UI/demo testing, but it is not rea
 
 ### User API key
 
-Recommended for local testing.
+Use this when one saved key is enough for the current model routing.
 
 Settings:
 
@@ -122,6 +122,8 @@ If your key starts with `sk-or-`, TinyBu treats it as an OpenRouter key and rout
 ```text
 minimax/minimax-m2.7
 ```
+
+If you want chat / learning to use your MiniMax key while screenshot vision uses Qwen through OpenRouter, use `Cloud proxy` instead. The app's `User API key` mode stores only one key.
 
 Use `Check saved key` in Settings to confirm TinyBu can read the key.
 
@@ -149,6 +151,17 @@ ANTHROPIC_AUTH_TOKEN=your-token \
 ANTHROPIC_MODEL=MiniMax-M2.7 \
 npm run api:dev
 ```
+
+Run with MiniMax for chat / learning and OpenRouter for Qwen vision:
+
+```bash
+ANTHROPIC_BASE_URL=https://api.minimaxi.com/anthropic \
+ANTHROPIC_AUTH_TOKEN=your-minimax-key \
+OPENROUTER_API_KEY=your-openrouter-key \
+npm run api:dev
+```
+
+With both keys configured, MiniMax model names such as `MiniMax-M2.7` are sent to the Anthropic-compatible MiniMax endpoint. Provider/model IDs such as `qwen/qwen3.6-35b-a3b` are sent to OpenRouter.
 
 Run with OpenAI:
 

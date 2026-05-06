@@ -26,7 +26,30 @@ function normalizeOpenRouterModel(model = "") {
   return aliases[trimmed] ?? trimmed;
 }
 
+function normalizeAnthropicModel(model = "") {
+  const trimmed = model.trim();
+  const aliases = {
+    "minimax/minimax-m2.7": "MiniMax-M2.7",
+    "minimax-m2.7": "MiniMax-M2.7",
+    "MiniMax M2.7": "MiniMax-M2.7",
+    "minimax/minimax-m2": "MiniMax-M2",
+    "minimax-m2": "MiniMax-M2",
+    "MiniMax M2": "MiniMax-M2"
+  };
+  return aliases[trimmed] ?? trimmed;
+}
+
+function isAnthropicCompatibleModel(model = "") {
+  const trimmed = model.trim().toLowerCase();
+  return trimmed.startsWith("minimax") || trimmed.startsWith("claude") || trimmed.startsWith("anthropic/");
+}
+
 function shouldUseOpenRouterModel(model = "") {
+  const normalized = normalizeOpenRouterModel(model);
+  return normalized.includes("/") && (!anthropicAuthToken || !isAnthropicCompatibleModel(normalized));
+}
+
+function isProviderQualifiedModel(model = "") {
   return normalizeOpenRouterModel(model).includes("/");
 }
 
@@ -705,8 +728,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (task === "quickPetChat") {
-      if (anthropicAuthToken) {
-        const { response, data } = await callQuickPetChatAnthropic(model, payload);
+      if (anthropicAuthToken && isAnthropicCompatibleModel(model)) {
+        const { response, data } = await callQuickPetChatAnthropic(normalizeAnthropicModel(model), payload);
         sendJson(res, response.status, data);
         return;
       }
@@ -717,8 +740,13 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      if (!openAiApiKey) {
-        sendJson(res, 500, { error: "Configure ANTHROPIC_AUTH_TOKEN, OPENROUTER_API_KEY, or OPENAI_API_KEY before using the cloud proxy." });
+      if (shouldUseOpenRouterModel(model) && !openRouterApiKey) {
+        sendJson(res, 500, { error: `Configure OPENROUTER_API_KEY before using ${normalizeOpenRouterModel(model)}.` });
+        return;
+      }
+
+      if (!openAiApiKey || isProviderQualifiedModel(model)) {
+        sendJson(res, 500, { error: "Configure ANTHROPIC_AUTH_TOKEN for MiniMax/Anthropic-compatible models, OPENROUTER_API_KEY for provider/model IDs such as qwen/..., or OPENAI_API_KEY for OpenAI models." });
         return;
       }
 
@@ -727,8 +755,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (anthropicAuthToken) {
-      const output = await callAnthropic(task, model, payload);
+    if (anthropicAuthToken && isAnthropicCompatibleModel(model)) {
+      const output = await callAnthropic(task, normalizeAnthropicModel(model), payload);
       sendJson(res, 200, { output_text: JSON.stringify(output) });
       return;
     }
@@ -739,8 +767,13 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (!openAiApiKey) {
-      sendJson(res, 500, { error: "Configure ANTHROPIC_AUTH_TOKEN, OPENROUTER_API_KEY, or OPENAI_API_KEY before using the cloud proxy." });
+    if (shouldUseOpenRouterModel(model) && !openRouterApiKey) {
+      sendJson(res, 500, { error: `Configure OPENROUTER_API_KEY before using ${normalizeOpenRouterModel(model)}.` });
+      return;
+    }
+
+    if (!openAiApiKey || isProviderQualifiedModel(model)) {
+      sendJson(res, 500, { error: "Configure ANTHROPIC_AUTH_TOKEN for MiniMax/Anthropic-compatible models, OPENROUTER_API_KEY for provider/model IDs such as qwen/..., or OPENAI_API_KEY for OpenAI models." });
       return;
     }
 

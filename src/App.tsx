@@ -6,14 +6,13 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Crown,
   Home,
   Inbox,
   KeyRound,
   Lightbulb,
-  MessageCircle,
   NotebookTabs,
   Pencil,
-  Play,
   Plus,
   RotateCcw,
   Save,
@@ -81,6 +80,97 @@ const topicStatusLabels: Record<TopicStatus, string> = {
   "in-progress": "In progress",
   practiced: "Practiced"
 };
+
+const interfaceLanguageOptions: UserProfile["interfaceLanguage"][] = ["中文", "English"];
+
+const uiCopy = {
+  中文: {
+    nav: {
+      home: "首页",
+      inbox: "收件箱",
+      topics: "主题",
+      notebook: "表达库",
+      memory: "Bu 的记忆",
+      settings: "设置"
+    },
+    home: {
+      title: "首页",
+      upgrade: "升级",
+      suggestion: "Suggestion",
+      startPractice: "开始练习",
+      continuePractice: "继续练习",
+      openTopic: "打开主题",
+      organizeNow: "去整理",
+      tryFeatured: "试试精选练习",
+      defaultObservation: "Bu 为你准备了一道精选练习。",
+      defaultPrompt: "今天试着用一个更自然的开头回答问题。",
+      memoryPrompt: "今天试着把这个观察转化成一句目标语言回答。",
+      activePrefix: "继续上次关于",
+      activeSuffix: "的练习。",
+      activePrompt: "从还没回答的问题继续，不需要重新开始。",
+      topicPrefix: "你有一个新主题可以学习：",
+      topicPrompt: "先理解内容，再用自己的话练一次表达。",
+      queueTitle: "Learning Queue",
+      organize: "待整理",
+      study: "待学习",
+      practice: "待练习",
+      rhythm: "Practice Rhythm"
+    },
+    settings: {
+      title: "设置",
+      description: "语言、AI、数据和桌面连接设置。",
+      language: "语言",
+      interfaceLanguage: "系统语言",
+      sourceLanguage: "母语",
+      targetLanguage: "目标语言",
+      supportStrength: "支持强度",
+      save: "保存设置"
+    }
+  },
+  English: {
+    nav: {
+      home: "Home",
+      inbox: "Inbox",
+      topics: "Topics",
+      notebook: "Notebook",
+      memory: "Bu's Memory",
+      settings: "Settings"
+    },
+    home: {
+      title: "Home",
+      upgrade: "Upgrade",
+      suggestion: "Suggestion",
+      startPractice: "Start practice",
+      continuePractice: "Continue practice",
+      openTopic: "Open topic",
+      organizeNow: "Organize",
+      tryFeatured: "Try featured practice",
+      defaultObservation: "Bu picked a featured practice for you.",
+      defaultPrompt: "Today, try opening with a more natural answer starter.",
+      memoryPrompt: "Today, turn this observation into one answer in your target language.",
+      activePrefix: "Continue your practice on",
+      activeSuffix: ".",
+      activePrompt: "Pick up from the next unanswered question. No need to restart.",
+      topicPrefix: "You have a new topic ready:",
+      topicPrompt: "Understand it first, then practice saying the idea in your own words.",
+      queueTitle: "Learning Queue",
+      organize: "To organize",
+      study: "To study",
+      practice: "To practice",
+      rhythm: "Practice Rhythm"
+    },
+    settings: {
+      title: "Settings",
+      description: "Language, AI, data, and desktop connection settings.",
+      language: "Language",
+      interfaceLanguage: "System language",
+      sourceLanguage: "Source language",
+      targetLanguage: "Target language",
+      supportStrength: "Support strength",
+      save: "Save Settings"
+    }
+  }
+} satisfies Record<UserProfile["interfaceLanguage"], Record<string, unknown>>;
 
 function parseIncomingCapture(): ExternalCapturePayload | null {
   const raw = new URLSearchParams(window.location.search).get("nomiCapture");
@@ -1135,6 +1225,7 @@ export default function App() {
     "memory",
     "settings"
   ];
+  const copy = uiCopy[appState.profile.interfaceLanguage];
 
   return (
     <div className="app">
@@ -1154,26 +1245,26 @@ export default function App() {
             </button>
             <nav>
               <button className={screen === "home" ? "active" : ""} onClick={() => navigate("home")}>
-                <Home size={18} /> Home
+                <Home size={18} /> {copy.nav.home}
               </button>
               <button className={screen === "inbox" || screen === "organize" ? "active" : ""} onClick={() => navigate("inbox")}>
-                <Inbox size={18} /> Inbox
+                <Inbox size={18} /> {copy.nav.inbox}
               </button>
               <button
                 className={["topics", "topic-detail", "study-room", "practice", "practice-review"].includes(screen) ? "active" : ""}
                 onClick={() => navigate("topics")}
               >
-                <BookOpen size={18} /> Topics
+                <BookOpen size={18} /> {copy.nav.topics}
               </button>
               <button className={screen === "notebook" ? "active" : ""} onClick={() => navigate("notebook")}>
-                <NotebookTabs size={18} /> Notebook
+                <NotebookTabs size={18} /> {copy.nav.notebook}
               </button>
               <button className={screen === "memory" ? "active" : ""} onClick={() => navigate("memory")}>
-                <Brain size={18} /> Bu&apos;s Memory
+                <Brain size={18} /> {copy.nav.memory}
               </button>
             </nav>
             <button className={screen === "settings" ? "settings-link active" : "settings-link"} onClick={() => navigate("settings")}>
-              <Settings size={18} /> Settings
+              <Settings size={18} /> {copy.nav.settings}
             </button>
           </aside>
 
@@ -1184,18 +1275,7 @@ export default function App() {
                 captures={captures}
                 topics={topics}
                 sessions={practiceSessions}
-                expressions={expressions}
                 memories={memories}
-                pasteDraft={homePasteDraft}
-                setPasteDraft={setHomePasteDraft}
-                createManualCapture={() =>
-                  createAndStoreCapture({
-                    title: "Pasted Text",
-                    sourceUrl: "",
-                    sourceKind: "manual",
-                    text: homePasteDraft
-                  })
-                }
                 openInbox={() => navigate("inbox")}
                 openTopic={openTopic}
                 continuePractice={async (session) => {
@@ -1207,6 +1287,7 @@ export default function App() {
                   });
                   navigate("practice");
                 }}
+                upgrade={() => navigate("settings")}
                 tryDemo={startDemo}
               />
             )}
@@ -1580,178 +1661,170 @@ function HomePage({
   captures,
   topics,
   sessions,
-  expressions,
   memories,
-  pasteDraft,
-  setPasteDraft,
-  createManualCapture,
   openInbox,
   openTopic,
   continuePractice,
+  upgrade,
   tryDemo
 }: {
   appState: AppStateRecord;
   captures: CaptureItem[];
   topics: TopicItem[];
   sessions: PracticeSession[];
-  expressions: ExpressionRecord[];
   memories: MemoryItem[];
-  pasteDraft: string;
-  setPasteDraft: (value: string) => void;
-  createManualCapture: () => void;
   openInbox: () => void;
   openTopic: (topic: TopicItem, next?: Screen) => void;
   continuePractice: (session: PracticeSession) => void;
+  upgrade: () => void;
   tryDemo: () => void;
 }) {
-  const today = new Date().toDateString();
-  const todaysCaptures = captures.filter((capture) => new Date(capture.capturedAt).toDateString() === today);
-  const suggested = suggestedGroups(captures).slice(0, 3);
+  const copy = uiCopy[appState.profile.interfaceLanguage].home;
+  const profileSummary = `${appState.profile.targetLanguage} · ${appState.profile.level} · ${appState.profile.supportPreference}`;
   const activeSessions = sessions.filter((session) => session.status === "active");
-  const recentTopic = topics[0];
-  const recentExpressions = expressions.filter((item) => item.saved).slice(0, 5);
-  const startOfWeek = weekStart();
-  const completedThisWeek = sessions.filter((session) => session.completedAt && new Date(session.completedAt) >= startOfWeek).length;
+  const suggested = suggestedGroups(captures);
+  const waitingCaptures = captures.filter((capture) => normalizeStatus(capture.status) !== "archived" && !capture.topicId);
+  const readyTopics = topics.filter((topic) => topic.status === "ready");
+  const practiceTopics = topics.filter((topic) => topic.status === "in-progress");
+  const latestMemory = [...memories].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+  const activeSessionTopic = activeSessions[0] ? topics.find((topic) => topic.id === activeSessions[0].topicId) : undefined;
+  const suggestedTopic = suggested[0];
+
+  const suggestion = (() => {
+    if (latestMemory) {
+      return {
+        source: "memory",
+        observation: latestMemory.body || latestMemory.title,
+        prompt: copy.memoryPrompt,
+        actionLabel: activeSessions[0] ? copy.continuePractice : copy.startPractice,
+        action: () => {
+          if (activeSessions[0]) {
+            continuePractice(activeSessions[0]);
+            return;
+          }
+          const topic = practiceTopics[0] ?? readyTopics[0] ?? topics[0];
+          if (topic) openTopic(topic, topic.status === "ready" ? "study-room" : "topic-detail");
+          else tryDemo();
+        }
+      };
+    }
+    if (activeSessions[0]) {
+      const topicName = activeSessionTopic?.name ?? "your topic";
+      return {
+        source: "active",
+        observation: `${copy.activePrefix} ${topicName}${copy.activeSuffix}`,
+        prompt: copy.activePrompt,
+        actionLabel: copy.continuePractice,
+        action: () => continuePractice(activeSessions[0])
+      };
+    }
+    if (suggestedTopic) {
+      return {
+        source: "capture",
+        observation: `${copy.topicPrefix} ${suggestedTopic.name}`,
+        prompt: suggestedTopic.practiceGoal || copy.topicPrompt,
+        actionLabel: copy.organizeNow,
+        action: openInbox
+      };
+    }
+    return {
+      source: "featured",
+      observation: copy.defaultObservation,
+      prompt: copy.defaultPrompt,
+      actionLabel: copy.tryFeatured,
+      action: tryDemo
+    };
+  })();
+
+  const queueItems = [
+    { label: copy.organize, count: waitingCaptures.length, action: openInbox },
+    {
+      label: copy.study,
+      count: readyTopics.length,
+      action: () => (readyTopics[0] ? openTopic(readyTopics[0], "study-room") : openInbox())
+    },
+    {
+      label: copy.practice,
+      count: activeSessions.length + practiceTopics.length,
+      action: () => (activeSessions[0] ? continuePractice(activeSessions[0]) : practiceTopics[0] ? openTopic(practiceTopics[0]) : openInbox())
+    }
+  ];
+
+  const dayMs = 24 * 60 * 60 * 1000;
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const activity = new Map<string, number>();
+  const dateKey = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const addActivity = (value: string | undefined, weight: number) => {
+    if (!value) return;
+    const date = new Date(value);
+    date.setHours(0, 0, 0, 0);
+    const key = dateKey(date);
+    activity.set(key, Math.min(4, (activity.get(key) ?? 0) + weight));
+  };
+  topics.forEach((topic) => {
+    addActivity(topic.createdAt, 1);
+    addActivity(topic.lastStudiedAt, 2);
+  });
+  sessions.forEach((session) => addActivity(session.completedAt, 3));
+  const rhythmDays = Array.from({ length: 70 }, (_, index) => {
+    const date = new Date(todayStart.getTime() - (69 - index) * dayMs);
+    const key = dateKey(date);
+    return { key, level: activity.get(key) ?? 0 };
+  });
 
   return (
     <section className="page">
-      <AppHeader
-        title="Home"
-        description={`${appState.profile.targetLanguage} · ${appState.profile.level} · ${appState.profile.supportPreference}`}
-      >
-        <button className="secondary" onClick={openInbox}>
-          Open Inbox
+      <AppHeader title={copy.title} description={profileSummary}>
+        <button className="secondary upgrade-button" onClick={upgrade}>
+          <Crown size={16} />
+          {copy.upgrade}
         </button>
       </AppHeader>
 
-      <div className="home-layout">
-        <main className="home-main">
-          <section className="panel welcome-panel">
-            <div>
-              <p className="eyebrow">Welcome back</p>
-              <h2>You saved {todaysCaptures.length} new captures today.</h2>
-              <p>Bu found {suggested.length} suggested topics. Pick one to organize, understand, and practice.</p>
-            </div>
-            <div className="button-row">
-              <button className="primary" onClick={openInbox}>
-                Open Inbox
-              </button>
-              {recentTopic && (
-                <button className="secondary" onClick={() => openTopic(recentTopic, "study-room")}>
-                  Continue Last Topic
-                </button>
-              )}
-            </div>
-          </section>
+      <div className="home-focus-layout">
+        <section className={`panel suggestion-panel ${suggestion.source}`}>
+          <div>
+            <p className="eyebrow">{copy.suggestion}</p>
+            <h2>{suggestion.observation}</h2>
+            <p>{suggestion.prompt}</p>
+          </div>
+          <button className="primary icon-action" onClick={suggestion.action} aria-label={suggestion.actionLabel}>
+            <span>{suggestion.actionLabel}</span>
+            <ChevronRight size={20} />
+          </button>
+        </section>
 
-          <section className="panel">
-            <div className="section-title">
-              <Sparkles size={18} />
-              Suggested Topics
-            </div>
-            {suggested.length ? (
-              <div className="card-list">
-                {suggested.map((group) => (
-                  <article className="topic-card" key={group.id}>
-                    <div>
-                      <h3>{group.name}</h3>
-                      <p>{group.summary}</p>
-                    </div>
-                    <div className="meta-row">
-                      <span>{group.captures.length} captures</span>
-                      <span className="status-pill">Suggested</span>
-                    </div>
-                    <button className="primary" onClick={() => openInbox()}>
-                      Open Topic
-                    </button>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <EmptyState title="No suggested topics yet" body="Capture or paste something, then TinyBu will suggest topics here." />
-            )}
-          </section>
+        <section className="queue-grid" aria-label={copy.queueTitle}>
+          {queueItems.map((item) => (
+            <button className="queue-card" key={item.label} onClick={item.action}>
+              <span>{item.label}</span>
+              <strong>{item.count}</strong>
+            </button>
+          ))}
+        </section>
 
-          <section className="panel">
-            <div className="section-title">
-              <MessageCircle size={18} />
-              Continue Learning
-            </div>
-            {activeSessions.length ? (
-              <div className="compact-list">
-                {activeSessions.map((session) => {
-                  const topic = topics.find((item) => item.id === session.topicId);
-                  return (
-                    <button className="list-row" key={session.id} onClick={() => continuePractice(session)}>
-                      <div>
-                        <strong>{topic?.name ?? "Active Practice"}</strong>
-                        <span>
-                          Practice · {session.answers.length}/{session.questions.length} answered
-                        </span>
-                      </div>
-                      <ChevronRight size={18} />
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="stats-grid">
-                <div>
-                  <span>This week</span>
-                  <strong>{completedThisWeek} practices</strong>
-                </div>
-                <div>
-                  <span>Topics</span>
-                  <strong>{topics.length}</strong>
-                </div>
-                <div>
-                  <span>Notebook</span>
-                  <strong>{recentExpressions.length} recent</strong>
-                </div>
-              </div>
-            )}
-          </section>
-        </main>
-
-        <aside className="home-side">
-          <section className="panel">
-            <div className="section-title">New Captures</div>
-            <p>{captures.filter((capture) => normalizeStatus(capture.status) !== "archived" && !capture.topicId).length} waiting in Inbox.</p>
-            <textarea value={pasteDraft} onChange={(event) => setPasteDraft(event.target.value)} placeholder="Paste text, article excerpt, or subtitles here..." />
-            <div className="button-row">
-              <button className="primary" onClick={createManualCapture}>
-                Create Capture
-              </button>
-              <button className="secondary" onClick={tryDemo}>
-                Try Demo
-              </button>
-            </div>
-          </section>
-          <section className="panel">
-            <div className="section-title">Notebook Preview</div>
-            {recentExpressions.length ? (
-              <div className="mini-list">
-                {recentExpressions.map((expression) => (
-                  <span key={expression.id}>{expression.pattern}</span>
-                ))}
-              </div>
-            ) : (
-              <p>Saved expressions will appear after Study Room or Practice Review.</p>
-            )}
-          </section>
-          <section className="panel">
-            <div className="section-title">Bu&apos;s Memory</div>
-            {memories.length ? (
-              <div className="mini-list">
-                {memories.slice(0, 3).map((memory) => (
-                  <span key={memory.id}>{memory.title}</span>
-                ))}
-              </div>
-            ) : (
-              <p>Bu will remember interests, stuck points, and next steps after practice.</p>
-            )}
-          </section>
-        </aside>
+        <section className="panel rhythm-panel">
+          <div className="section-title">
+            <Sparkles size={18} />
+            {copy.rhythm}
+          </div>
+          <div className="rhythm-grid" aria-label={copy.rhythm}>
+            {rhythmDays.map((day) => (
+              <span className={`rhythm-cell level-${day.level}`} key={day.key} title={`${day.key}: ${day.level}`} />
+            ))}
+          </div>
+          <div className="rhythm-legend">
+            <span>Less</span>
+            <i className="rhythm-cell level-0" />
+            <i className="rhythm-cell level-1" />
+            <i className="rhythm-cell level-2" />
+            <i className="rhythm-cell level-3" />
+            <i className="rhythm-cell level-4" />
+            <span>More</span>
+          </div>
+        </section>
       </div>
     </section>
   );
@@ -2845,15 +2918,29 @@ function SettingsPage({
   const [draft, setDraft] = useState(appState);
 
   useEffect(() => setDraft(appState), [appState]);
+  const copy = uiCopy[draft.profile.interfaceLanguage].settings;
 
   return (
     <section className="page">
-      <AppHeader title="Settings" description="Language, AI, data, and desktop connection settings." />
+      <AppHeader title={copy.title} description={copy.description} />
       <div className="settings-grid">
         <section className="panel">
-          <h2>Language</h2>
+          <h2>{copy.language}</h2>
           <label>
-            Source language
+            {copy.interfaceLanguage}
+            <select
+              value={draft.profile.interfaceLanguage}
+              onChange={(event) =>
+                setDraft({ ...draft, profile: { ...draft.profile, interfaceLanguage: event.target.value as UserProfile["interfaceLanguage"] } })
+              }
+            >
+              {interfaceLanguageOptions.map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            {copy.sourceLanguage}
             <select value={draft.profile.nativeLanguage} onChange={(event) => setDraft({ ...draft, profile: { ...draft.profile, nativeLanguage: event.target.value } })}>
               {languageOptions.map((item) => (
                 <option key={item}>{item}</option>
@@ -2861,7 +2948,7 @@ function SettingsPage({
             </select>
           </label>
           <label>
-            Target language
+            {copy.targetLanguage}
             <select value={draft.profile.targetLanguage} onChange={(event) => setDraft({ ...draft, profile: { ...draft.profile, targetLanguage: event.target.value } })}>
               {targetLanguageOptions.map((item) => (
                 <option key={item}>{item}</option>
@@ -2869,7 +2956,7 @@ function SettingsPage({
             </select>
           </label>
           <label>
-            Support strength
+            {copy.supportStrength}
             <select
               value={draft.settings.supportStrength}
               onChange={(event) =>
@@ -2956,7 +3043,7 @@ function SettingsPage({
       </div>
       <div className="bottom-actions">
         <button className="primary" onClick={() => saveSettings(draft, apiKeyDraft)}>
-          Save Settings
+          {copy.save}
         </button>
       </div>
     </section>

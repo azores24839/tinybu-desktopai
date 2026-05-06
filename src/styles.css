@@ -480,6 +480,12 @@ a {
   align-items: start;
 }
 
+.home-focus-layout {
+  display: grid;
+  gap: 14px;
+  max-width: 980px;
+}
+
 .home-main,
 .home-side,
 .card-list,
@@ -499,6 +505,129 @@ a {
   align-items: center;
   min-height: 180px;
   background: linear-gradient(135deg, #ffffff 0%, #fff7dc 100%);
+}
+
+.suggestion-panel {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  min-height: 220px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 251, 240, 0.95) 100%),
+    #ffffff;
+}
+
+.suggestion-panel h2 {
+  max-width: 760px;
+  color: #5f4e3e;
+  font-size: 30px;
+  line-height: 1.16;
+}
+
+.suggestion-panel p:not(.eyebrow) {
+  max-width: 660px;
+  margin-top: 8px;
+  font-size: 17px;
+}
+
+.icon-action {
+  min-width: 170px;
+  white-space: nowrap;
+}
+
+.upgrade-button {
+  min-width: 104px;
+}
+
+.queue-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.queue-card {
+  display: grid;
+  min-height: 98px;
+  align-content: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 16px;
+  color: var(--brand);
+  text-align: left;
+  box-shadow: var(--shadow);
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease;
+}
+
+.queue-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(150, 125, 99, 0.34);
+}
+
+.queue-card span {
+  color: var(--brand-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.queue-card strong {
+  color: #5f4e3e;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.rhythm-panel {
+  gap: 18px;
+}
+
+.rhythm-grid {
+  display: grid;
+  grid-template-columns: repeat(14, 16px);
+  grid-auto-rows: 16px;
+  grid-auto-flow: column;
+  gap: 5px;
+  width: max-content;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.rhythm-cell {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: #edf0ec;
+}
+
+.rhythm-cell.level-1 {
+  background: #c7e9c0;
+}
+
+.rhythm-cell.level-2 {
+  background: #74c476;
+}
+
+.rhythm-cell.level-3 {
+  background: #31a354;
+}
+
+.rhythm-cell.level-4 {
+  background: #006d2c;
+}
+
+.rhythm-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand-muted);
+  font-size: 12px;
+}
+
+.rhythm-legend .rhythm-cell {
+  width: 14px;
+  height: 14px;
 }
 
 .topic-card,
