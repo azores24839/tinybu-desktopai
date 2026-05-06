@@ -25,6 +25,8 @@ import { clearUserApiKey, loadUserApiKey, saveUserApiKey } from "./lib/secureKey
 import { invokeTauri, listenTauri, type CaptureBridgeState } from "./lib/tauriBridge";
 import { defaultAppState, nowIso, uid } from "./lib/defaults";
 import { formatDate } from "./lib/date";
+import { goalOptions, languageOptions, targetLanguageOptions } from "./lib/appOptions";
+import { uiCopy } from "./lib/uiCopy";
 import {
   captureText,
   inferPracticeGoal,
@@ -40,6 +42,7 @@ import { TopicDetailPage } from "./features/topics/TopicDetailPage";
 import { StudyRoomPage } from "./features/topics/StudyRoomPage";
 import { NotebookPage } from "./features/notebook/NotebookPage";
 import { MemoryPage } from "./features/memory/MemoryPage";
+import { SettingsPage } from "./features/settings/SettingsPage";
 import { useScreenshotCaptureFlow } from "./features/screenshots/useScreenshotCaptureFlow";
 import {
   generatePracticeQuestions,
@@ -70,101 +73,6 @@ import type {
   TopicItem,
   UserProfile
 } from "./types";
-
-const goalOptions = ["日常聊天", "旅行交流", "学习 / 留学", "工作沟通", "观点表达", "看视频学表达", "减少开口焦虑"];
-const languageOptions = ["中文", "English", "日本語", "Español", "Français", "Deutsch", "한국어", "Other"];
-const targetLanguageOptions = ["English", "Japanese", "Spanish", "French", "German", "Chinese", "Korean", "Other"];
-
-const interfaceLanguageOptions: UserProfile["interfaceLanguage"][] = ["中文", "English"];
-
-const uiCopy = {
-  中文: {
-    nav: {
-      home: "首页",
-      inbox: "收件箱",
-      topics: "主题",
-      notebook: "表达库",
-      memory: "Bu 的记忆",
-      settings: "设置"
-    },
-    home: {
-      title: "首页",
-      upgrade: "升级",
-      suggestion: "Suggestion",
-      startPractice: "开始练习",
-      continuePractice: "继续练习",
-      openTopic: "打开主题",
-      organizeNow: "去整理",
-      tryFeatured: "试试精选练习",
-      defaultObservation: "Bu 为你准备了一道精选练习。",
-      defaultPrompt: "今天试着用一个更自然的开头回答问题。",
-      memoryPrompt: "今天试着把这个观察转化成一句目标语言回答。",
-      activePrefix: "继续上次关于",
-      activeSuffix: "的练习。",
-      activePrompt: "从还没回答的问题继续，不需要重新开始。",
-      topicPrefix: "你有一个新主题可以学习：",
-      topicPrompt: "先理解内容，再用自己的话练一次表达。",
-      queueTitle: "Learning Queue",
-      organize: "待整理",
-      study: "待学习",
-      practice: "待练习",
-      rhythm: "Practice Rhythm"
-    },
-    settings: {
-      title: "设置",
-      description: "语言、AI、数据和桌面连接设置。",
-      language: "语言",
-      interfaceLanguage: "系统语言",
-      sourceLanguage: "母语",
-      targetLanguage: "目标语言",
-      supportStrength: "支持强度",
-      save: "保存设置"
-    }
-  },
-  English: {
-    nav: {
-      home: "Home",
-      inbox: "Inbox",
-      topics: "Topics",
-      notebook: "Notebook",
-      memory: "Bu's Memory",
-      settings: "Settings"
-    },
-    home: {
-      title: "Home",
-      upgrade: "Upgrade",
-      suggestion: "Suggestion",
-      startPractice: "Start practice",
-      continuePractice: "Continue practice",
-      openTopic: "Open topic",
-      organizeNow: "Organize",
-      tryFeatured: "Try featured practice",
-      defaultObservation: "Bu picked a featured practice for you.",
-      defaultPrompt: "Today, try opening with a more natural answer starter.",
-      memoryPrompt: "Today, turn this observation into one answer in your target language.",
-      activePrefix: "Continue your practice on",
-      activeSuffix: ".",
-      activePrompt: "Pick up from the next unanswered question. No need to restart.",
-      topicPrefix: "You have a new topic ready:",
-      topicPrompt: "Understand it first, then practice saying the idea in your own words.",
-      queueTitle: "Learning Queue",
-      organize: "To organize",
-      study: "To study",
-      practice: "To practice",
-      rhythm: "Practice Rhythm"
-    },
-    settings: {
-      title: "Settings",
-      description: "Language, AI, data, and desktop connection settings.",
-      language: "Language",
-      interfaceLanguage: "System language",
-      sourceLanguage: "Source language",
-      targetLanguage: "Target language",
-      supportStrength: "Support strength",
-      save: "Save Settings"
-    }
-  }
-} satisfies Record<UserProfile["interfaceLanguage"], Record<string, unknown>>;
 
 function parseIncomingCapture(): ExternalCapturePayload | null {
   const raw = new URLSearchParams(window.location.search).get("nomiCapture");
@@ -1762,164 +1670,6 @@ function PracticeReviewPage({
             </button>
           </div>
         </section>
-      </div>
-    </section>
-  );
-}
-
-function SettingsPage({
-  appState,
-  apiKeyDraft,
-  apiKeyStatus,
-  setApiKeyDraft,
-  saveSettings,
-  checkUserKey,
-  clearUserKey,
-  clearMemory,
-  clearAllData,
-  resetOnboarding
-}: {
-  appState: AppStateRecord;
-  apiKeyDraft: string;
-  apiKeyStatus: string;
-  setApiKeyDraft: (value: string) => void;
-  saveSettings: (state: AppStateRecord, key?: string) => void;
-  checkUserKey: () => void;
-  clearUserKey: () => void;
-  clearMemory: () => void;
-  clearAllData: () => void;
-  resetOnboarding: () => void;
-}) {
-  const [draft, setDraft] = useState(appState);
-
-  useEffect(() => setDraft(appState), [appState]);
-  const copy = uiCopy[draft.profile.interfaceLanguage].settings;
-
-  return (
-    <section className="page">
-      <AppHeader title={copy.title} description={copy.description} />
-      <div className="settings-grid">
-        <section className="panel">
-          <h2>{copy.language}</h2>
-          <label>
-            {copy.interfaceLanguage}
-            <select
-              value={draft.profile.interfaceLanguage}
-              onChange={(event) =>
-                setDraft({ ...draft, profile: { ...draft.profile, interfaceLanguage: event.target.value as UserProfile["interfaceLanguage"] } })
-              }
-            >
-              {interfaceLanguageOptions.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {copy.sourceLanguage}
-            <select value={draft.profile.nativeLanguage} onChange={(event) => setDraft({ ...draft, profile: { ...draft.profile, nativeLanguage: event.target.value } })}>
-              {languageOptions.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {copy.targetLanguage}
-            <select value={draft.profile.targetLanguage} onChange={(event) => setDraft({ ...draft, profile: { ...draft.profile, targetLanguage: event.target.value } })}>
-              {targetLanguageOptions.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {copy.supportStrength}
-            <select
-              value={draft.settings.supportStrength}
-              onChange={(event) =>
-                setDraft({ ...draft, settings: { ...draft.settings, supportStrength: event.target.value as AppStateRecord["settings"]["supportStrength"] } })
-              }
-            >
-              <option>Gentle</option>
-              <option>Balanced</option>
-              <option>Direct</option>
-            </select>
-          </label>
-        </section>
-        <section className="panel">
-          <h2>API settings</h2>
-          <label>
-            Provider mode
-            <select
-              value={draft.settings.aiProviderMode}
-              onChange={(event) =>
-                setDraft({ ...draft, settings: { ...draft.settings, aiProviderMode: event.target.value as AppStateRecord["settings"]["aiProviderMode"] } })
-              }
-            >
-              <option value="rules">Rules fallback</option>
-              <option value="user-key">User API key</option>
-              <option value="cloud-proxy">Cloud proxy</option>
-            </select>
-          </label>
-          <label>
-            Chat / learning model
-            <input value={draft.settings.aiModel} onChange={(event) => setDraft({ ...draft, settings: { ...draft.settings, aiModel: event.target.value } })} />
-          </label>
-          <label>
-            Screenshot / vision model
-            <input value={draft.settings.visionModel} onChange={(event) => setDraft({ ...draft, settings: { ...draft.settings, visionModel: event.target.value } })} />
-          </label>
-          <label>
-            OpenRouter base URL
-            <input value={draft.settings.openRouterBaseUrl} onChange={(event) => setDraft({ ...draft, settings: { ...draft.settings, openRouterBaseUrl: event.target.value } })} />
-          </label>
-          <label>
-            Cloud proxy URL
-            <input value={draft.settings.cloudProxyUrl} onChange={(event) => setDraft({ ...draft, settings: { ...draft.settings, cloudProxyUrl: event.target.value } })} />
-          </label>
-          <label>
-            API key
-            <input type="password" value={apiKeyDraft} onChange={(event) => setApiKeyDraft(event.target.value)} placeholder={draft.settings.apiKeySaved ? "Saved" : "Paste key"} />
-          </label>
-          {apiKeyStatus && <p className="settings-note">{apiKeyStatus}</p>}
-          <div className="button-row">
-            <button className="secondary" onClick={checkUserKey}>
-              Check saved key
-            </button>
-            <button className="secondary" onClick={clearUserKey}>
-              Clear saved key
-            </button>
-          </div>
-        </section>
-        <section className="panel">
-          <h2>Data / local storage</h2>
-          <button className="secondary" onClick={clearMemory}>
-            Clear Bu&apos;s Memory
-          </button>
-          <button className="danger" onClick={clearAllData}>
-            Clear learning data
-          </button>
-          <button className="secondary" onClick={resetOnboarding}>
-            Reset onboarding
-          </button>
-        </section>
-        <section className="panel">
-          <h2>Desktop / extension</h2>
-          <p>Desktop capture and browser extension captures land in Inbox automatically.</p>
-          <label className="check-row">
-            <input
-              type="checkbox"
-              checked={draft.settings.screenshotRecognitionEnabled}
-              onChange={(event) =>
-                setDraft({ ...draft, settings: { ...draft.settings, screenshotRecognitionEnabled: event.target.checked } })
-              }
-            />
-            Enable screenshot recognition
-          </label>
-        </section>
-      </div>
-      <div className="bottom-actions">
-        <button className="primary" onClick={() => saveSettings(draft, apiKeyDraft)}>
-          {copy.save}
-        </button>
       </div>
     </section>
   );
