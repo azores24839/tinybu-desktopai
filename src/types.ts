@@ -375,3 +375,7 @@ export interface PracticeTurnOutput {
   encouragement: string;
   response: string;
 }
+
+export interface QuickPetChatOutput {
+  reply: string;
+}

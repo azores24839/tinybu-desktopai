@@ -3,6 +3,8 @@ import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { isRegistered, register, unregister, type ShortcutEvent } from "@tauri-apps/plugin-global-shortcut";
 import { LogicalSize, PhysicalPosition } from "@tauri-apps/api/dpi";
 import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
+import { generateQuickPetChat } from "./ai/provider";
+import { loadAppState } from "./lib/db";
 import { invokeTauri, isRunningInTauri, listenTauri, type CaptureBridgeState } from "./lib/tauriBridge";
 
 type PetActivity = "idle" | "dragging" | "capturing" | "thinking";
@@ -23,11 +25,10 @@ const CLIPBOARD_SHORTCUT = "CommandOrControl+Shift+N";
 const CLIPBOARD_SHORTCUT_STORAGE_KEY = "noriClipboardShortcutAllowed";
 const CLIPBOARD_POLL_MS = 700;
 const CLIPBOARD_PROMPT_MS = 8000;
-const QUICK_CHAT_PROXY_URL = "http://127.0.0.1:8787/v1/nomi/task";
-const QUICK_CHAT_MODEL = "MiniMax-M2.7";
 const PET_CLOSED_WIDTH = 280;
 const PET_OPEN_WIDTH = 360;
-const PET_HEIGHT = 320;
+const PET_CLOSED_HEIGHT = 320;
+const PET_REPLY_HEIGHT = 430;
 
 const avatarImages: Record<PetActivity, string> = {
   idle: "/avatar/states/idle.gif",
@@ -58,6 +59,8 @@ export default function PetApp() {
   const lastPromptedClipboardText = useRef("");
   const pendingClipboardTextRef = useRef("");
   const pointerStart = useRef<PetPointerStart | null>(null);
+  const petReply = quickReply || shortcutMessage;
+  const showQuickForm = activity !== "dragging" && !petReply && !pendingClipboardText;
 
   useEffect(() => {
     document.documentElement.classList.add("nomi-pet-html");
@@ -134,9 +137,8 @@ export default function PetApp() {
   }, []);
 
   useEffect(() => {
-    if (menuOpen) return;
-    void setPetWindowLayout(false);
-  }, [menuOpen]);
+    void setPetWindowLayout(menuOpen, menuSide, Boolean(petReply) && !menuOpen);
+  }, [menuOpen, menuSide, petReply]);
 
   function showShortcutMessage(message: string) {
     setShortcutMessage(message);
@@ -347,7 +349,7 @@ export default function PetApp() {
     await enableClipboardShortcut();
   }
 
-  async function setPetWindowLayout(open: boolean, side: MenuSide = menuSide) {
+  async function setPetWindowLayout(open: boolean, side: MenuSide = menuSide, tall = false) {
     if (!isRunningInTauri()) return;
 
     try {
@@ -359,19 +361,23 @@ export default function PetApp() {
         currentMonitor()
       ]);
       const width = open ? PET_OPEN_WIDTH : PET_CLOSED_WIDTH;
+      const height = tall ? PET_REPLY_HEIGHT : PET_CLOSED_HEIGHT;
       const currentCenterX = position.x + size.width / 2;
       const targetWidth = Math.round(width * scaleFactor);
+      const targetHeight = Math.round(height * scaleFactor);
       const workArea = monitor?.workArea;
       let targetX = Math.round(currentCenterX - targetWidth / 2);
+      let targetY = position.y + size.height - targetHeight;
 
       if (workArea) {
         const minX = workArea.position.x;
         const maxX = workArea.position.x + workArea.size.width - targetWidth;
         targetX = Math.min(Math.max(targetX, minX), Math.max(minX, maxX));
+        targetY = Math.max(workArea.position.y, targetY);
       }
 
-      await window.setSize(new LogicalSize(width, PET_HEIGHT));
-      await window.setPosition(new PhysicalPosition(targetX, position.y));
+      await window.setSize(new LogicalSize(width, height));
+      await window.setPosition(new PhysicalPosition(targetX, targetY));
       if (open) setMenuSide(side);
     } catch (error) {
       console.warn("Unable to resize pet window", error);
@@ -520,22 +526,6 @@ export default function PetApp() {
     await captureClipboardText(pendingClipboardText);
   }
 
-  function parseQuickReply(data: unknown) {
-    const outputText =
-      (data as { output_text?: string })?.output_text ??
-      (data as { output?: Array<{ content?: Array<{ type?: string; text?: string }> }> })?.output
-        ?.flatMap((item) => item.content ?? [])
-        ?.find((content) => content.type === "output_text")?.text;
-
-    if (!outputText) return "";
-
-    try {
-      return JSON.parse(outputText).reply?.trim() || "";
-    } catch {
-      return outputText.trim();
-    }
-  }
-
   async function submitQuickChat(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = quickInput.trim();
@@ -547,36 +537,26 @@ export default function PetApp() {
     showQuickReply("我想一下...");
 
     try {
-      const response = await fetch(QUICK_CHAT_PROXY_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          task: "quickPetChat",
-          model: QUICK_CHAT_MODEL,
-          payload: {
-            message,
-            instruction: "Reply briefly as a desktop language-learning buddy."
-          }
-        })
-      });
-
-      if (!response.ok) throw new Error(`Quick chat failed: ${response.status}`);
-      const reply = parseQuickReply(await response.json());
+      const appState = await loadAppState();
+      const output = await generateQuickPetChat({ message, appState });
+      const reply = output.reply?.trim();
       showQuickReply(reply || "我在，但刚刚没想好。");
     } catch (error) {
       console.warn("TinyBu quick chat failed", error);
-      showQuickReply("我现在连不上，先试试主窗口。");
+      const message = error instanceof DOMException && error.name === "AbortError"
+        ? "AI timeout after 12s"
+        : error instanceof Error
+          ? error.message
+          : String(error);
+      showQuickReply(`AI error: ${message.slice(0, 120)}`);
     } finally {
       setQuickBusy(false);
       setActivity("idle");
     }
   }
 
-  const petReply = quickReply || shortcutMessage;
-  const showQuickForm = activity !== "dragging" && !petReply && !pendingClipboardText;
-
   return (
-    <main className={`pet-shell ${activity}`}>
+    <main className={`pet-shell ${activity}${petReply ? " has-reply" : ""}`}>
       {activity !== "dragging" && petReply && (
         <div className="pet-reply-bubble" role="status">
           {petReply}

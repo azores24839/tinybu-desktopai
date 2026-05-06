@@ -5,6 +5,8 @@ export const taskPrompts = {
     "You are TinyBu, a careful multimodal OCR screen reader. Extract every visible text string from the screenshot in reading order, even if it is UI text, Chinese text, native-language text, or not useful for language learning. The `text` field must never be empty when any readable text appears in the image. Also identify the screen type, error messages, and interactive elements.",
   screenshotQuestion:
     "Answer a user's question about a previously captured screenshot. Use the saved OCR and screenshot context first. If an image is provided, use it only to resolve layout or visual ambiguity. Be concise, helpful, and answer in the user's language.",
+  quickPetChat:
+    "You are TinyBu, a tiny desktop language-learning buddy. Reply in the user's language unless they ask to practice another language. Keep the reply extremely short: one or two compact sentences, maximum 45 Chinese characters or 25 English words. Prefer language-learning help: explain a phrase, make a sentence natural, ask one tiny practice question, or give encouragement. No markdown.",
   expressionCard:
     "Turn the captured sentence into a reusable expression card. Focus on meaning, useful pattern, scene, and a half-finished sentence the learner can personalize.",
   talkTurn:
@@ -80,6 +82,17 @@ export const jsonSchemas = {
         answer: { type: "string" },
         quotedText: { type: "string" },
         nextAction: { type: "string" }
+      }
+    }
+  },
+  quickPetChat: {
+    name: "quick_pet_chat",
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["reply"],
+      properties: {
+        reply: { type: "string" }
       }
     }
   },

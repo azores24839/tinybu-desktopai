@@ -1,38 +1,45 @@
 # TinyBu Desktop MVP
 
-TinyBu is a desktop-first AI language-learning buddy. It helps learners turn selected text, articles, video transcripts, pasted content, clipboard snippets, and screenshots into understanding-first topic practice, saved expressions, gentle review, and editable learning memory.
+TinyBu is a desktop-first AI language-learning workspace. It turns browser selections, articles, video transcripts, pasted text, clipboard snippets, and screenshots into organized topics, understanding-first study, low-pressure expression practice, practice review, saved expressions, and editable learning memory.
 
-## Current core capabilities
+Current product flow:
 
-The current app implements a Capture -> Select -> Answer -> Review learning loop:
+```text
+Browse / Capture
+-> Inbox
+-> Organize
+-> Topics
+-> Study Room
+-> Practice
+-> Practice Review
+-> Notebook / Bu's Memory
+```
 
-- Tauri v2 desktop shell with a main window and a transparent always-on-top desktop pet window.
-- React + TypeScript + Vite frontend.
-- Chrome MV3 capture extension in `apps/extension`.
-- Localhost desktop capture bridge at `http://127.0.0.1:1421/v1/captures`.
-- Capture import from selected browser text, article body, YouTube transcript / visible captions, pasted text, clipboard copy, URL payload, demo content, and desktop screenshots.
-- Content understanding for captures: topic, summary, keywords, preview questions, and suggested expressions.
-- Fragment selection workflow: short content and subtitles default to selected; long content gets 3-6 recommended fragments.
-- Practice question generation from selected fragments.
-- Guided answer flow with one question at a time, lightweight TinyBu replies, and two-level Tips.
-- Review generation with what was discussed, what worked, more natural expressions, saved notebook expressions, and next practice.
-- Notebook for source material and saved / need-practice / learned expressions.
-- Editable TinyBu Memory for learning preferences and support notes.
-- Desktop screenshot capture with preview mode, optional AI OCR, screenshot Q&A, and diagnostic capture on OCR failure.
-- Desktop pet actions: copy capture, open practice, screenshot recognition, undo last capture, reset count, hide, and quick chat.
-- IndexedDB persistence through Dexie.
-- Mixed AI modes:
-  - Local rules.
-  - User API Key through Tauri keyring commands when running as desktop.
-  - Cloud proxy endpoint at `apps/api/server.mjs`.
-
-For the fuller Chinese product / implementation summary, see:
+For the full Chinese product / implementation summary, see:
 
 ```text
 docs/current-core-capabilities.md
 ```
 
-## Run the web dev version
+## Current Core Capabilities
+
+- Tauri v2 desktop shell with a main window and transparent always-on-top desktop pet.
+- React + TypeScript + Vite frontend.
+- Chrome MV3 capture extension in `apps/extension`.
+- Local desktop capture bridge at `http://127.0.0.1:1421/v1/captures`.
+- Capture import from selected browser text, article body, YouTube transcript / visible captions, pasted text, clipboard copy, URL payload, demo content, and desktop screenshots.
+- Inbox and Organize workflow for turning loose captures into Topics.
+- Persistent Topic records through Dexie / IndexedDB.
+- Topic Detail and Study Room for source review, summaries, useful expressions, and study preparation.
+- Practice flow with one question at a time, lightweight TinyBu replies, and two-level Tips.
+- Practice Review with better expressions, saved suggestions, next step, Notebook updates, and Bu's Memory updates.
+- Notebook focused on saved expressions rather than full source storage.
+- Bu's Memory dashboard for learning interests, difficulties, expression directions, and suggestions.
+- Desktop screenshot capture with transparent selection overlay, preview mode, optional AI OCR, screenshot Q&A, and diagnostic capture on OCR failure.
+- Desktop pet actions: copy capture, open main app, screenshot recognition, undo last capture, reset count, hide, and quick chat.
+- AI provider modes: local rules, user API key, and local cloud proxy.
+
+## Run Web Dev Version
 
 ```bash
 npm install
@@ -45,14 +52,23 @@ Open:
 http://127.0.0.1:1420/
 ```
 
-## Try the Chrome capture extension
+Note: the desktop pet, system screenshot capture, keychain storage, and Tauri capture bridge require the Tauri desktop app.
 
-1. Start TinyBu:
+## Run Tauri Desktop App
 
 ```bash
-npm run dev
+npm run tauri:dev
 ```
 
+Tauri windows:
+
+- `main`: TinyBu main workspace.
+- `pet`: transparent desktop pet.
+- `screenshot`: temporary transparent screenshot overlay.
+
+## Try Chrome Capture Extension
+
+1. Start TinyBu.
 2. Open Chrome or another Chromium browser.
 3. Go to `chrome://extensions`.
 4. Enable Developer mode.
@@ -67,22 +83,65 @@ The extension supports:
 
 - selected text capture;
 - article body capture;
-- YouTube transcript capture when the transcript is present in the page;
-- visible YouTube captions as a fallback.
+- YouTube transcript capture when transcript is present;
+- visible YouTube captions as fallback.
 
-The extension now first tries to send captured content to the desktop bridge:
+It first tries to send captured content to the desktop bridge:
 
 ```text
 http://127.0.0.1:1421/v1/captures
 ```
 
-When the Tauri app is running, TinyBu updates its `已记录N条` counter and stores pending captures for later practice. If the desktop bridge is not available, the extension falls back to local extension storage and, when available, the browser TinyBu page at:
+When the Tauri app is running, TinyBu updates the desktop pet capture count and imports pending captures into Inbox. If the bridge is unavailable, the extension falls back to local extension storage and, when available, the browser TinyBu page.
+
+## AI Provider Modes
+
+TinyBu Settings currently support three provider modes.
+
+### Rules fallback
+
+No network and no API key. This is useful for UI/demo testing, but it is not real AI. Screenshot OCR is not available in this mode. Desktop pet quick chat intentionally reports that rules mode is not real AI.
+
+### User API key
+
+Recommended for local testing.
+
+Settings:
 
 ```text
-http://127.0.0.1:1420/
+Provider mode: User API key
+Chat / learning model: MiniMax-M2.7
+Screenshot / vision model: qwen/qwen3.6-35b-a3b
+OpenRouter base URL: https://openrouter.ai/api/v1
 ```
 
-## Run the optional cloud proxy
+Then paste your API key in Settings and click `Save Settings`.
+
+If your key starts with `sk-or-`, TinyBu treats it as an OpenRouter key and routes requests to OpenRouter automatically. `MiniMax-M2.7` is automatically mapped to:
+
+```text
+minimax/minimax-m2.7
+```
+
+Use `Check saved key` in Settings to confirm TinyBu can read the key.
+
+### Cloud proxy
+
+Use this when you want the frontend to call a local proxy instead of directly holding provider logic.
+
+Default proxy URL:
+
+```text
+http://127.0.0.1:8787/v1/nomi/task
+```
+
+Run with OpenRouter:
+
+```bash
+OPENROUTER_API_KEY=your-openrouter-key npm run api:dev
+```
+
+Run with Anthropic-compatible endpoint:
 
 ```bash
 ANTHROPIC_BASE_URL=https://api.minimaxi.com/anthropic \
@@ -91,39 +150,73 @@ ANTHROPIC_MODEL=MiniMax-M2.7 \
 npm run api:dev
 ```
 
-The proxy also supports `OPENAI_API_KEY` as a fallback, but TinyBu's default Settings point at the local Anthropic-compatible proxy.
-
-The default proxy URL in Settings is:
-
-```text
-http://127.0.0.1:8787/v1/nomi/task
-```
-
-## Run as a Tauri desktop app
-
-This machine currently needs Rust/Cargo installed before Tauri can run.
-
-Install Rust from:
-
-```text
-https://www.rust-lang.org/tools/install
-```
-
-Then run:
+Run with OpenAI:
 
 ```bash
-npm run tauri:dev
+OPENAI_API_KEY=your-openai-key npm run api:dev
+```
+
+The proxy also supports:
+
+```text
+OPENROUTER_BASE_URL
+API_TIMEOUT_MS
+```
+
+Most AI tasks use structured JSON schema through the proxy. `quickPetChat` uses a lightweight plain-text path for faster desktop pet replies.
+
+## Desktop Pet Quick Chat
+
+The desktop pet quick chat uses the same Settings as the main app:
+
+- provider mode;
+- saved API key;
+- chat model;
+- OpenRouter base URL or cloud proxy URL.
+
+For speed in testing:
+
+- no JSON schema;
+- short prompt;
+- `max_tokens` around 70;
+- 12 second timeout;
+- errors are shown directly instead of hidden by canned fallback replies.
+
+The reply bubble expands upward so longer text does not cover the pet avatar. Replies are intentionally kept short.
+
+## Screenshot Capture
+
+Screenshot capture is opened from the desktop pet menu.
+
+Behavior:
+
+- main and pet windows are temporarily hidden;
+- transparent overlay shows the desktop;
+- selected region is captured by Tauri;
+- screenshot Capture appears in Inbox;
+- AI OCR only runs if screenshot recognition is enabled in Settings.
+
+Vision model is configured separately from chat model:
+
+```text
+Screenshot / vision model: qwen/qwen3.6-35b-a3b
 ```
 
 ## Verification
 
-The current implementation has been checked with:
+Useful checks:
 
 ```bash
 npm run typecheck
 npm run build
+node --check apps/api/server.mjs
+cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
-The core demo flow was also smoke-tested in a browser:
+Recent verified checks:
 
-Welcome -> Try Demo -> Watch Room -> Capture -> Expression Card -> Save to Notebook -> Finish & Talk -> Send answer -> Rescue Button -> End Talk -> Mirror Card -> Notebook -> Memory Log.
+```bash
+npm run typecheck
+npm run build
+node --check apps/api/server.mjs
+```

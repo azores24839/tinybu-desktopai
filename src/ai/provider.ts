@@ -11,6 +11,7 @@ import type {
   PracticeQuestionsOutput,
   PracticeTipOutput,
   PracticeTurnOutput,
+  QuickPetChatOutput,
   RescueOutput,
   RescueType,
   ScreenshotRecognitionOutput,
@@ -27,6 +28,7 @@ import {
   practiceQuestionsRules,
   practiceTipRules,
   practiceTurnRules,
+  quickPetChatRules,
   recommendFragmentsRules,
   reviewRules,
   rescueRules,
@@ -36,11 +38,36 @@ import {
 
 type TaskName = keyof typeof taskPrompts;
 type ImageTaskPayload = { imageDataUrl?: string; [key: string]: unknown };
+const QUICK_PET_CHAT_PROMPT =
+  "TinyBu desktop buddy. Reply in the user's language. Max 35 Chinese chars or 18 English words. No markdown.";
 
 function modelForTask(task: TaskName, appState: AppStateRecord) {
   return task === "screenshotCapture" || task === "screenshotQuestion"
     ? appState.settings.visionModel || appState.settings.aiModel
     : appState.settings.aiModel;
+}
+
+function isOpenRouterApiKey(apiKey: string) {
+  return /^sk-or-/i.test(apiKey.trim());
+}
+
+function normalizeOpenRouterModel(model: string) {
+  const trimmed = model.trim();
+  const aliases: Record<string, string> = {
+    "MiniMax-M2.7": "minimax/minimax-m2.7",
+    "minimax-m2.7": "minimax/minimax-m2.7",
+    "MiniMax M2.7": "minimax/minimax-m2.7",
+    "MiniMax-M2": "minimax/minimax-m2",
+    "minimax-m2": "minimax/minimax-m2",
+    "MiniMax M2": "minimax/minimax-m2"
+  };
+  return aliases[trimmed] ?? trimmed;
+}
+
+async function loadRequiredUserApiKey() {
+  const apiKey = await loadUserApiKey();
+  if (!apiKey) throw new Error("No user API key saved");
+  return apiKey;
 }
 
 function buildOpenAiInput(task: TaskName, payload: unknown) {
@@ -163,6 +190,46 @@ async function parseOpenAiJson(response: Response) {
   return parseJsonValue(outputText);
 }
 
+async function parseOpenAiText(response: Response) {
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data?.error?.message || data?.error || `AI request failed: ${response.status}`);
+  }
+
+  const messageContent = data.choices?.[0]?.message?.content;
+  const messageContentText = Array.isArray(messageContent)
+    ? messageContent.find((content: { type?: string }) => content.type === "text")?.text
+    : messageContent;
+  const outputText =
+    data.output_text ??
+    data.output
+      ?.flatMap((item: { content?: Array<{ type?: string; text?: string }> }) => item.content ?? [])
+      ?.find((content: { type?: string }) => content.type === "output_text")?.text ??
+    messageContentText;
+
+  if (!outputText) {
+    throw new Error("AI response did not contain output text");
+  }
+
+  return String(outputText).trim();
+}
+
+function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => {
+    window.clearTimeout(timer);
+  });
+}
+
+function quickReplyText(text: string) {
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (compact.length <= 90) return compact;
+  return `${compact.slice(0, 88)}...`;
+}
+
 function asStringArray(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item ?? "").trim()).filter(Boolean);
@@ -198,10 +265,10 @@ function normalizeScreenshotRecognition(value: unknown): ScreenshotRecognitionOu
 async function callOpenAi<T>(
   task: TaskName,
   payload: unknown,
-  appState: AppStateRecord
+  appState: AppStateRecord,
+  providedApiKey?: string
 ): Promise<T> {
-  const apiKey = await loadUserApiKey();
-  if (!apiKey) throw new Error("No user API key saved");
+  const apiKey = providedApiKey ?? (await loadRequiredUserApiKey());
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -230,13 +297,14 @@ async function callOpenAi<T>(
 async function callOpenRouter<T>(
   task: TaskName,
   payload: unknown,
-  appState: AppStateRecord
+  appState: AppStateRecord,
+  providedApiKey?: string
 ): Promise<T> {
-  const apiKey = await loadUserApiKey();
-  if (!apiKey) throw new Error("No user API key saved");
+  const apiKey = providedApiKey ?? (await loadRequiredUserApiKey());
 
   const baseUrl = (appState.settings.openRouterBaseUrl || "https://openrouter.ai/api/v1").replace(/\/+$/, "");
   const schema = jsonSchemas[task];
+  const model = normalizeOpenRouterModel(modelForTask(task, appState));
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -246,7 +314,7 @@ async function callOpenRouter<T>(
       "X-Title": "TinyBu Desktop"
     },
     body: JSON.stringify({
-      model: modelForTask(task, appState),
+      model,
       messages: [
         { role: "system", content: `${taskPrompts[task]}\nReturn only valid JSON.` },
         ...buildOpenRouterMessages(task, payload)
@@ -266,13 +334,108 @@ async function callOpenRouter<T>(
   return parseOpenAiJson(response) as Promise<T>;
 }
 
+async function callQuickPetChatOpenAi(
+  payload: { message: string; [key: string]: unknown },
+  appState: AppStateRecord,
+  apiKey: string
+): Promise<QuickPetChatOutput> {
+  const response = await fetchWithTimeout(
+    "https://api.openai.com/v1/responses",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: modelForTask("quickPetChat", appState),
+        instructions: QUICK_PET_CHAT_PROMPT,
+        input: String(payload.message),
+        max_output_tokens: 70
+      })
+    },
+    12000
+  );
+
+  return { reply: quickReplyText(await parseOpenAiText(response)) };
+}
+
+async function callQuickPetChatOpenRouter(
+  payload: { message: string; [key: string]: unknown },
+  appState: AppStateRecord,
+  apiKey: string
+): Promise<QuickPetChatOutput> {
+  const baseUrl = (appState.settings.openRouterBaseUrl || "https://openrouter.ai/api/v1").replace(/\/+$/, "");
+  const response = await fetchWithTimeout(
+    `${baseUrl}/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": window.location.origin,
+        "X-Title": "TinyBu Desktop"
+      },
+      body: JSON.stringify({
+        model: normalizeOpenRouterModel(modelForTask("quickPetChat", appState)),
+        messages: [
+          { role: "system", content: QUICK_PET_CHAT_PROMPT },
+          { role: "user", content: String(payload.message) }
+        ],
+        max_tokens: 70,
+        temperature: 0.35
+      })
+    },
+    12000
+  );
+
+  return { reply: quickReplyText(await parseOpenAiText(response)) };
+}
+
+async function callQuickPetChatUserKey(
+  payload: { message: string; [key: string]: unknown },
+  appState: AppStateRecord
+): Promise<QuickPetChatOutput> {
+  const apiKey = await loadRequiredUserApiKey();
+  return isOpenRouterApiKey(apiKey) || shouldUseOpenRouter("quickPetChat", appState)
+    ? callQuickPetChatOpenRouter(payload, appState, apiKey)
+    : callQuickPetChatOpenAi(payload, appState, apiKey);
+}
+
+async function callQuickPetChatCloudProxy(
+  payload: { message: string; [key: string]: unknown },
+  appState: AppStateRecord
+): Promise<QuickPetChatOutput> {
+  const response = await fetchWithTimeout(
+    appState.settings.cloudProxyUrl,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        task: "quickPetChat",
+        model: modelForTask("quickPetChat", appState),
+        payload: {
+          message: payload.message,
+          fast: true
+        }
+      })
+    },
+    12000
+  );
+
+  return { reply: quickReplyText(await parseOpenAiText(response)) };
+}
+
 function shouldUseOpenRouter(task: TaskName, appState: AppStateRecord) {
   const baseUrl = appState.settings.openRouterBaseUrl;
   return Boolean(baseUrl) && modelForTask(task, appState).includes("/");
 }
 
-function callUserKey<T>(task: TaskName, payload: unknown, appState: AppStateRecord) {
-  return shouldUseOpenRouter(task, appState) ? callOpenRouter<T>(task, payload, appState) : callOpenAi<T>(task, payload, appState);
+async function callUserKey<T>(task: TaskName, payload: unknown, appState: AppStateRecord) {
+  const apiKey = await loadRequiredUserApiKey();
+  return isOpenRouterApiKey(apiKey) || shouldUseOpenRouter(task, appState)
+    ? callOpenRouter<T>(task, payload, appState, apiKey)
+    : callOpenAi<T>(task, payload, appState, apiKey);
 }
 
 async function callCloudProxy<T>(
@@ -624,6 +787,28 @@ export async function generatePracticeTurn(args: {
         : callUserKey("practiceTurn", payload, args.appState),
     () => practiceTurnRules(args)
   );
+}
+
+export async function generateQuickPetChat(args: {
+  message: string;
+  appState: AppStateRecord;
+}): Promise<QuickPetChatOutput> {
+  const payload = {
+    message: args.message,
+    instruction: "Reply briefly as a desktop language-learning buddy.",
+    nativeLanguage: args.appState.profile.nativeLanguage,
+    targetLanguage: args.appState.profile.targetLanguage,
+    level: args.appState.profile.level,
+    supportPreference: args.appState.profile.supportPreference
+  };
+
+  if (args.appState.settings.aiProviderMode === "rules") {
+    throw new Error("Quick chat is set to Rules fallback mode. Switch AI provider mode to Cloud proxy or User API key.");
+  }
+
+  return args.appState.settings.aiProviderMode === "cloud-proxy"
+    ? callQuickPetChatCloudProxy(payload, args.appState)
+    : callQuickPetChatUserKey(payload, args.appState);
 }
 
 export async function generateReview(args: {

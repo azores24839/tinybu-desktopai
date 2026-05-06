@@ -16,32 +16,39 @@ async function getInvoke(): Promise<InvokeFn | null> {
 }
 
 export async function saveUserApiKey(key: string) {
+  localStorage.setItem("nomi-dev-openai-key", key);
   const invoke = await getInvoke();
   if (invoke) {
-    await invoke("save_api_key", { key });
+    try {
+      await invoke("save_api_key", { key });
+    } catch (error) {
+      console.warn("Unable to save API key to system keychain; local backup was saved.", error);
+    }
     return;
   }
-
-  localStorage.setItem("nomi-dev-openai-key", key);
 }
 
 export async function loadUserApiKey() {
   const invoke = await getInvoke();
   if (invoke) {
-    return invoke<string | null>("load_api_key");
+    try {
+      const key = await invoke<string | null>("load_api_key");
+      if (key) return key;
+    } catch (error) {
+      console.warn("Unable to load API key from system keychain; trying local backup.", error);
+    }
   }
 
   return localStorage.getItem("nomi-dev-openai-key");
 }
 
 export async function clearUserApiKey() {
+  localStorage.removeItem("nomi-dev-openai-key");
   const invoke = await getInvoke();
   if (invoke) {
     await invoke("clear_api_key");
     return;
   }
-
-  localStorage.removeItem("nomi-dev-openai-key");
 }
 
 export function providerLabel(mode: string) {

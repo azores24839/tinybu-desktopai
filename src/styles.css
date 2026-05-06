@@ -923,6 +923,16 @@ a {
   gap: 10px;
 }
 
+.settings-note {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--subtle);
+  padding: 10px 12px;
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 650;
+}
+
 .preview-window {
   overflow: hidden;
   min-height: 470px;
@@ -1008,29 +1018,33 @@ body.nomi-pet-body #root {
   user-select: none;
 }
 
+.pet-shell.has-reply {
+  padding-top: 178px;
+}
+
 .pet-reply-bubble {
   position: absolute;
   bottom: 268px;
   left: 50%;
   z-index: 4;
-  display: -webkit-box;
+  display: block;
   width: max-content;
-  max-width: 210px;
-  overflow: hidden;
+  max-width: 230px;
+  max-height: 138px;
+  overflow: auto;
   transform: translateX(-50%);
   border: 1.5px solid #7a5642;
   border-radius: 18px;
   background: #fffdf8;
   color: #6a4936;
-  padding: 8px 12px;
+  padding: 9px 12px;
   box-shadow: none;
   font-size: 12px;
   font-weight: 850;
   line-height: 1.35;
   text-align: center;
   pointer-events: none;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  white-space: normal;
 }
 
 .pet-reply-bubble::after {
@@ -1233,4 +1247,74 @@ body.nomi-pet-body #root {
 html.nomi-pet-html body.nomi-pet-body {
   min-width: 0;
   min-height: 0;
+}
+
+html.tinybu-screenshot-html,
+html.tinybu-screenshot-html body,
+html.tinybu-screenshot-html #root {
+  background: transparent !important;
+}
+
+html.tinybu-screenshot-html {
+  overflow: hidden;
+}
+
+body.tinybu-screenshot-body {
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  background: transparent !important;
+}
+
+body.tinybu-screenshot-body #root {
+  width: 100vw;
+  height: 100vh;
+}
+
+.screenshot-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: rgba(30, 34, 40, 0.16);
+  cursor: crosshair;
+  user-select: none;
+}
+
+.screenshot-hint,
+.screenshot-size {
+  position: fixed;
+  z-index: 3;
+  border: 1px solid rgba(150, 125, 99, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.94);
+  color: #967d63;
+  padding: 8px 12px;
+  box-shadow: 0 10px 24px rgba(26, 24, 22, 0.16);
+  font-size: 13px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.screenshot-hint {
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.screenshot-size {
+  transform: translateY(-100%);
+}
+
+.screenshot-selection {
+  position: fixed;
+  z-index: 2;
+  border: 2px solid #fee08d;
+  border-radius: 12px;
+  background: rgba(254, 224, 141, 0.12);
+  box-shadow:
+    0 0 0 9999px rgba(20, 22, 26, 0.26),
+    0 0 0 1px rgba(150, 125, 99, 0.3) inset;
+  pointer-events: none;
 }

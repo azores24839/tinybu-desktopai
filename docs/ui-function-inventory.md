@@ -1,6 +1,12 @@
-# Nomi 当前界面与功能梳理
+# 历史 UI 草图：Nomi 早期界面与功能梳理
 
-> 状态说明：这份文档偏 UI 草图和早期信息架构梳理，部分 Watch / Talk / Mirror Card 描述已和当前代码实现不完全一致。当前已经实现的核心能力请以 `docs/current-core-capabilities.md` 为准；当前主实现是 Capture → Select → Answer → Review 的 Practice 流程。
+> 状态说明：这是一份历史 UI 草图文档，仍保留 Nomi / Watch / Talk / Mirror Card 等早期概念，已经不代表当前产品实现。
+>
+> 当前产品名是 TinyBu。当前主流程是：
+>
+> `Browse / Capture -> Inbox -> Organize -> Topics -> Study Room -> Practice -> Practice Review -> Notebook / Bu's Memory`
+>
+> 当前权威产品与实现说明请以 `docs/current-core-capabilities.md` 为准。除非明确要参考早期草图，不应再按本文档设计或实现新页面。
 
 这份文档用于辅助生成 UI 草图，只描述信息架构、页面功能和用户流程，不包含视觉设计要求。
 

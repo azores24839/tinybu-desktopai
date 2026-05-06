@@ -574,6 +574,10 @@ fn emit_capture_bridge_state(app: &tauri::AppHandle, snapshot: &CaptureBridgeSna
   if let Err(error) = app.emit_to("pet", CAPTURE_BRIDGE_EVENT, snapshot.clone()) {
     eprintln!("TinyBu could not emit capture bridge state: {error}");
   }
+
+  if let Err(error) = app.emit_to("main", CAPTURE_BRIDGE_EVENT, snapshot.clone()) {
+    eprintln!("TinyBu could not emit capture bridge state to main: {error}");
+  }
 }
 
 fn read_http_request(stream: &mut TcpStream) -> Result<(String, Vec<u8>), String> {

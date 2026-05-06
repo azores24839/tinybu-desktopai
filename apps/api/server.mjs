@@ -13,6 +13,23 @@ const defaultModel =
   process.env.OPENAI_MODEL ??
   "MiniMax-M2.7";
 
+function normalizeOpenRouterModel(model = "") {
+  const trimmed = model.trim();
+  const aliases = {
+    "MiniMax-M2.7": "minimax/minimax-m2.7",
+    "minimax-m2.7": "minimax/minimax-m2.7",
+    "MiniMax M2.7": "minimax/minimax-m2.7",
+    "MiniMax-M2": "minimax/minimax-m2",
+    "minimax-m2": "minimax/minimax-m2",
+    "MiniMax M2": "minimax/minimax-m2"
+  };
+  return aliases[trimmed] ?? trimmed;
+}
+
+function shouldUseOpenRouterModel(model = "") {
+  return normalizeOpenRouterModel(model).includes("/");
+}
+
 const taskPrompts = {
   contentUnderstanding:
     "You are TinyBu, a gentle language companion. Understand the captured source, name the topic, summarize it briefly, and create short A2-B1 speaking questions. Keep outputs concise and useful for speaking practice.",
@@ -43,6 +60,9 @@ const taskPrompts = {
   memory:
     "Create short learning memories that support future practice. Do not save private or sensitive information."
 };
+
+const quickPetChatPrompt =
+  "TinyBu desktop buddy. Reply in the user's language. Max 35 Chinese chars or 18 English words. No markdown.";
 
 function sendJson(res, status, body) {
   res.writeHead(status, {
@@ -558,6 +578,7 @@ async function callOpenAi(task, model, payload) {
 
 async function callOpenRouter(task, model, payload) {
   const schema = schemaFor(task);
+  const normalizedModel = normalizeOpenRouterModel(model);
   const response = await fetchWithTimeout(`${openRouterBaseUrl.replace(/\/+$/, "")}/chat/completions`, {
     method: "POST",
     headers: {
@@ -567,7 +588,7 @@ async function callOpenRouter(task, model, payload) {
       "X-Title": "TinyBu Desktop"
     },
     body: JSON.stringify({
-      model,
+      model: normalizedModel,
       messages: [
         { role: "system", content: `${taskPrompts[task]}\nReturn only valid JSON.` },
         ...buildOpenRouterMessages(task, payload)
@@ -594,6 +615,74 @@ async function callOpenRouter(task, model, payload) {
   };
 }
 
+async function callQuickPetChatAnthropic(model, payload) {
+  const response = await fetchWithTimeout(anthropicEndpoint(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": anthropicAuthToken,
+      Authorization: `Bearer ${anthropicAuthToken}`,
+      "anthropic-version": "2023-06-01"
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 70,
+      system: quickPetChatPrompt,
+      messages: [{ role: "user", content: String(payload?.message ?? "") }]
+    })
+  });
+  const data = await response.json();
+  if (!response.ok) return { response, data };
+  const text = data.content
+    ?.filter((item) => item.type === "text")
+    .map((item) => item.text)
+    .join("\n")
+    .trim();
+  return { response, data: { output_text: text || "" } };
+}
+
+async function callQuickPetChatOpenAi(model, payload) {
+  const response = await fetchWithTimeout("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${openAiApiKey}`
+    },
+    body: JSON.stringify({
+      model,
+      instructions: quickPetChatPrompt,
+      input: String(payload?.message ?? ""),
+      max_output_tokens: 70
+    })
+  });
+  return { response, data: await response.json() };
+}
+
+async function callQuickPetChatOpenRouter(model, payload) {
+  const normalizedModel = normalizeOpenRouterModel(model);
+  const response = await fetchWithTimeout(`${openRouterBaseUrl.replace(/\/+$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${openRouterApiKey}`,
+      "HTTP-Referer": "http://127.0.0.1",
+      "X-Title": "TinyBu Desktop"
+    },
+    body: JSON.stringify({
+      model: normalizedModel,
+      messages: [
+        { role: "system", content: quickPetChatPrompt },
+        { role: "user", content: String(payload?.message ?? "") }
+      ],
+      max_tokens: 70,
+      temperature: 0.35
+    })
+  });
+  const data = await response.json();
+  if (!response.ok) return { response, data };
+  return { response, data: { output_text: data.choices?.[0]?.message?.content ?? "" } };
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     sendJson(res, 200, { ok: true });
@@ -615,13 +704,36 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (task === "quickPetChat") {
+      if (anthropicAuthToken) {
+        const { response, data } = await callQuickPetChatAnthropic(model, payload);
+        sendJson(res, response.status, data);
+        return;
+      }
+
+      if (openRouterApiKey && shouldUseOpenRouterModel(model)) {
+        const { response, data } = await callQuickPetChatOpenRouter(model, payload);
+        sendJson(res, response.status, data);
+        return;
+      }
+
+      if (!openAiApiKey) {
+        sendJson(res, 500, { error: "Configure ANTHROPIC_AUTH_TOKEN, OPENROUTER_API_KEY, or OPENAI_API_KEY before using the cloud proxy." });
+        return;
+      }
+
+      const { response, data } = await callQuickPetChatOpenAi(model, payload);
+      sendJson(res, response.status, data);
+      return;
+    }
+
     if (anthropicAuthToken) {
       const output = await callAnthropic(task, model, payload);
       sendJson(res, 200, { output_text: JSON.stringify(output) });
       return;
     }
 
-    if (openRouterApiKey && model.includes("/")) {
+    if (openRouterApiKey && shouldUseOpenRouterModel(model)) {
       const { response, data } = await callOpenRouter(task, model, payload);
       sendJson(res, response.status, data);
       return;

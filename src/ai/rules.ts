@@ -12,6 +12,7 @@ import type {
   PracticeQuestionsOutput,
   PracticeTipOutput,
   PracticeTurnOutput,
+  QuickPetChatOutput,
   RescueOutput,
   RescueType,
   TalkMessage,
@@ -267,6 +268,18 @@ export function practiceTurnRules(args: {
       ? "I can understand your main idea, and one small answer is enough to keep going."
       : "You answered the meaning and connected it to your own thinking."
   };
+}
+
+export function quickPetChatRules(args: { message: string; appState: AppStateRecord }): QuickPetChatOutput {
+  const message = args.message.trim();
+  if (!message) return { reply: "我在，给我一句话就好。" };
+  if (/[?？]|怎么|如何|what|how|why/i.test(message)) {
+    return { reply: "可以。先拆成一句主语加动词，再补一个小理由。" };
+  }
+  if (/[a-zA-Z]/.test(message)) {
+    return { reply: "我懂。可以顺手练一句：I think... because..." };
+  }
+  return { reply: `我在。要不要把这句试着说成${args.appState.profile.targetLanguage}？` };
 }
 
 export function reviewRules(args: {

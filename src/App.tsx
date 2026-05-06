@@ -26,8 +26,8 @@ import {
 } from "lucide-react";
 import { demoContents } from "./data/demoContent";
 import { clearLearningData, db, loadAppState, normalizeCapture, saveAppState } from "./lib/db";
-import { clearUserApiKey, saveUserApiKey } from "./lib/secureKey";
-import { invokeTauri, listenTauri } from "./lib/tauriBridge";
+import { clearUserApiKey, loadUserApiKey, saveUserApiKey } from "./lib/secureKey";
+import { invokeTauri, listenTauri, type CaptureBridgeState } from "./lib/tauriBridge";
 import { defaultAppState, nowIso, uid } from "./lib/defaults";
 import {
   answerScreenshotQuestion,
@@ -240,9 +240,11 @@ export default function App() {
   const [screenshotQuestionBusy, setScreenshotQuestionBusy] = useState(false);
   const [homePasteDraft, setHomePasteDraft] = useState("");
   const [apiKeyDraft, setApiKeyDraft] = useState("");
+  const [apiKeyStatus, setApiKeyStatus] = useState("");
   const [busyLabel, setBusyLabel] = useState("");
   const lastExternalCaptureSignature = useRef("");
   const bridgeImportingRef = useRef(false);
+  const initialBridgeDrainRef = useRef(false);
 
   const activeTopic = useMemo(
     () => topics.find((topic) => topic.id === appState.activeTopicId) ?? topics[0],
@@ -329,6 +331,36 @@ export default function App() {
 
     listenTauri("nomi-open-captures", () => {
       void importPendingBridgeCaptures();
+    }).then((cleanup) => {
+      if (active) unlisten = cleanup;
+      else cleanup();
+    });
+
+    return () => {
+      active = false;
+      unlisten();
+    };
+  }, [appState]);
+
+  useEffect(() => {
+    if (!appState.onboarded || initialBridgeDrainRef.current) return;
+    initialBridgeDrainRef.current = true;
+
+    void invokeTauri<CaptureBridgeState>("get_capture_bridge_state").then((state) => {
+      if ((state?.pendingCount ?? 0) > 0) {
+        void importPendingBridgeCaptures();
+      }
+    });
+  }, [appState.onboarded]);
+
+  useEffect(() => {
+    let active = true;
+    let unlisten = () => {};
+
+    listenTauri<CaptureBridgeState>("nomi-capture-bridge-updated", (event) => {
+      if ((event.payload?.pendingCount ?? 0) > 0) {
+        void importPendingBridgeCaptures();
+      }
     }).then((cleanup) => {
       if (active) unlisten = cleanup;
       else cleanup();
@@ -1047,10 +1079,14 @@ export default function App() {
   }
 
   async function saveSettings(nextState: AppStateRecord, key?: string) {
+    setApiKeyStatus("");
     if (key?.trim()) {
       await saveUserApiKey(key.trim());
       nextState.settings.apiKeySaved = true;
       setApiKeyDraft("");
+      setApiKeyStatus("API key saved for this device.");
+    } else {
+      setApiKeyStatus("Settings saved.");
     }
     await persistState(nextState);
   }
@@ -1277,10 +1313,16 @@ export default function App() {
               <SettingsPage
                 appState={appState}
                 apiKeyDraft={apiKeyDraft}
+                apiKeyStatus={apiKeyStatus}
                 setApiKeyDraft={setApiKeyDraft}
                 saveSettings={saveSettings}
+                checkUserKey={async () => {
+                  const key = await loadUserApiKey();
+                  setApiKeyStatus(key ? "API key is readable by TinyBu." : "No API key found on this device.");
+                }}
                 clearUserKey={async () => {
                   await clearUserApiKey();
+                  setApiKeyStatus("API key cleared.");
                   await updateState((state) => ({
                     ...state,
                     settings: { ...state.settings, apiKeySaved: false }
@@ -2780,8 +2822,10 @@ function MemoryPage({
 function SettingsPage({
   appState,
   apiKeyDraft,
+  apiKeyStatus,
   setApiKeyDraft,
   saveSettings,
+  checkUserKey,
   clearUserKey,
   clearMemory,
   clearAllData,
@@ -2789,8 +2833,10 @@ function SettingsPage({
 }: {
   appState: AppStateRecord;
   apiKeyDraft: string;
+  apiKeyStatus: string;
   setApiKeyDraft: (value: string) => void;
   saveSettings: (state: AppStateRecord, key?: string) => void;
+  checkUserKey: () => void;
   clearUserKey: () => void;
   clearMemory: () => void;
   clearAllData: () => void;
@@ -2852,16 +2898,34 @@ function SettingsPage({
             </select>
           </label>
           <label>
-            Model
+            Chat / learning model
             <input value={draft.settings.aiModel} onChange={(event) => setDraft({ ...draft, settings: { ...draft.settings, aiModel: event.target.value } })} />
+          </label>
+          <label>
+            Screenshot / vision model
+            <input value={draft.settings.visionModel} onChange={(event) => setDraft({ ...draft, settings: { ...draft.settings, visionModel: event.target.value } })} />
+          </label>
+          <label>
+            OpenRouter base URL
+            <input value={draft.settings.openRouterBaseUrl} onChange={(event) => setDraft({ ...draft, settings: { ...draft.settings, openRouterBaseUrl: event.target.value } })} />
+          </label>
+          <label>
+            Cloud proxy URL
+            <input value={draft.settings.cloudProxyUrl} onChange={(event) => setDraft({ ...draft, settings: { ...draft.settings, cloudProxyUrl: event.target.value } })} />
           </label>
           <label>
             API key
             <input type="password" value={apiKeyDraft} onChange={(event) => setApiKeyDraft(event.target.value)} placeholder={draft.settings.apiKeySaved ? "Saved" : "Paste key"} />
           </label>
-          <button className="secondary" onClick={clearUserKey}>
-            Clear saved key
-          </button>
+          {apiKeyStatus && <p className="settings-note">{apiKeyStatus}</p>}
+          <div className="button-row">
+            <button className="secondary" onClick={checkUserKey}>
+              Check saved key
+            </button>
+            <button className="secondary" onClick={clearUserKey}>
+              Clear saved key
+            </button>
+          </div>
         </section>
         <section className="panel">
           <h2>Data / local storage</h2>
