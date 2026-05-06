@@ -1,4 +1,10 @@
-import type { CaptureItem, ExpressionRecord, TopicItem } from "../../types";
+import type { CaptureItem, ExpressionRecord, TopicItem, TopicStatus } from "../../types";
+
+export const topicStatusLabels: Record<TopicStatus, string> = {
+  ready: "Ready to study",
+  "in-progress": "In progress",
+  practiced: "Practiced"
+};
 
 export function topicCaptures(topic: TopicItem | undefined, captures: CaptureItem[]) {
   if (!topic) return [];

@@ -13,7 +13,6 @@ import {
   Pencil,
   Plus,
   RotateCcw,
-  Save,
   Send,
   Settings,
   Sparkles,
@@ -39,6 +38,8 @@ import {
 import { InboxPage } from "./features/captures/InboxPage";
 import { OrganizePage } from "./features/captures/OrganizePage";
 import { topicCaptures, topicExpressions } from "./features/topics/topicUtils";
+import { TopicsPage } from "./features/topics/TopicsPage";
+import { TopicDetailPage } from "./features/topics/TopicDetailPage";
 import { ScreenshotPreviewBlock } from "./features/screenshots/ScreenshotPreviewBlock";
 import { ScreenshotQuestionPanel } from "./features/screenshots/ScreenshotQuestionPanel";
 import { useScreenshotCaptureFlow } from "./features/screenshots/useScreenshotCaptureFlow";
@@ -69,19 +70,12 @@ import type {
   Screen,
   ScreenshotCapturePayload,
   TopicItem,
-  TopicStatus,
   UserProfile
 } from "./types";
 
 const goalOptions = ["日常聊天", "旅行交流", "学习 / 留学", "工作沟通", "观点表达", "看视频学表达", "减少开口焦虑"];
 const languageOptions = ["中文", "English", "日本語", "Español", "Français", "Deutsch", "한국어", "Other"];
 const targetLanguageOptions = ["English", "Japanese", "Spanish", "French", "German", "Chinese", "Korean", "Other"];
-
-const topicStatusLabels: Record<TopicStatus, string> = {
-  ready: "Ready to study",
-  "in-progress": "In progress",
-  practiced: "Practiced"
-};
 
 const interfaceLanguageOptions: UserProfile["interfaceLanguage"][] = ["中文", "English"];
 
@@ -1558,208 +1552,6 @@ function HomePage({
             <i className="rhythm-cell level-3" />
             <i className="rhythm-cell level-4" />
             <span>More</span>
-          </div>
-        </section>
-      </div>
-    </section>
-  );
-}
-
-function TopicsPage({
-  topics,
-  captures,
-  expressions,
-  openTopic,
-  startPractice
-}: {
-  topics: TopicItem[];
-  captures: CaptureItem[];
-  expressions: ExpressionRecord[];
-  openTopic: (topic: TopicItem, next?: Screen) => void;
-  startPractice: (topic: TopicItem) => void;
-}) {
-  const [selectedTopicId, setSelectedTopicId] = useState(topics[0]?.id ?? "");
-  const selectedTopic = topics.find((topic) => topic.id === selectedTopicId) ?? topics[0];
-  const sources = topicCaptures(selectedTopic, captures);
-  const savedExpressions = topicExpressions(selectedTopic, expressions);
-
-  useEffect(() => {
-    if (!selectedTopicId && topics[0]) setSelectedTopicId(topics[0].id);
-  }, [selectedTopicId, topics]);
-
-  return (
-    <section className="page">
-      <AppHeader title="Topics" description="Choose a topic, inspect sources, then study or practice." />
-      <div className="topics-layout">
-        <main className="topic-list">
-          {topics.length ? (
-            topics.map((topic) => (
-              <button
-                key={topic.id}
-                className={selectedTopic?.id === topic.id ? "topic-list-card active" : "topic-list-card"}
-                onClick={() => setSelectedTopicId(topic.id)}
-              >
-                <div>
-                  <h3>{topic.name}</h3>
-                  <p>{topic.summary}</p>
-                </div>
-                <div className="meta-row">
-                  <span>{topic.captureIds.length} sources</span>
-                  <span>{topic.savedExpressionCount} saved</span>
-                  <span>{formatDate(topic.updatedAt)}</span>
-                  <span className="status-pill">{topicStatusLabels[topic.status]}</span>
-                </div>
-              </button>
-            ))
-          ) : (
-            <EmptyState title="No topics yet" body="Open Inbox and use Organize with Bu to create your first topic." />
-          )}
-        </main>
-        <aside className="topic-detail-panel">
-          {selectedTopic ? (
-            <>
-              <p className="eyebrow">Topic Detail</p>
-              <h2>{selectedTopic.name}</h2>
-              <p>{selectedTopic.summary}</p>
-              <div className="stats-grid two">
-                <div>
-                  <span>Sources</span>
-                  <strong>{sources.length}</strong>
-                </div>
-                <div>
-                  <span>Useful Expressions</span>
-                  <strong>{savedExpressions.length}</strong>
-                </div>
-              </div>
-              <div>
-                <h3>Sources Preview</h3>
-                <div className="mini-list">
-                  {sources.slice(0, 5).map((capture) => (
-                    <span key={capture.id}>{capture.title}</span>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <h3>Recent Practice</h3>
-                <p>{selectedTopic.lastPracticedAt ? formatDate(selectedTopic.lastPracticedAt) : "No practice yet."}</p>
-              </div>
-              <div className="stack-actions">
-                <button className="primary" onClick={() => openTopic(selectedTopic, "study-room")}>
-                  Open Study Room
-                </button>
-                <button className="secondary" onClick={() => startPractice(selectedTopic)}>
-                  Start Practice
-                </button>
-                <button className="secondary" onClick={() => openTopic(selectedTopic)}>
-                  Edit Topic
-                </button>
-              </div>
-            </>
-          ) : (
-            <EmptyState title="Select a topic" body="Topic details will show sources, overview, and practice actions." />
-          )}
-        </aside>
-      </div>
-    </section>
-  );
-}
-
-function TopicDetailPage({
-  topic,
-  captures,
-  expressions,
-  updateTopic,
-  openStudyRoom,
-  startPractice,
-  back
-}: {
-  topic: TopicItem;
-  captures: CaptureItem[];
-  expressions: ExpressionRecord[];
-  updateTopic: (topic: TopicItem) => void;
-  openStudyRoom: () => void;
-  startPractice: () => void;
-  back: () => void;
-}) {
-  const [name, setName] = useState(topic.name);
-  const [summary, setSummary] = useState(topic.summary);
-
-  useEffect(() => {
-    setName(topic.name);
-    setSummary(topic.summary);
-  }, [topic.id, topic.name, topic.summary]);
-
-  return (
-    <section className="page">
-      <AppHeader title={topic.name} description="Topic Detail">
-        <button className="secondary" onClick={back}>
-          <ChevronLeft size={18} /> Back to Topics
-        </button>
-        <button className="secondary" onClick={() => updateTopic({ ...topic, name, summary, updatedAt: nowIso() })}>
-          <Save size={18} /> Save
-        </button>
-        <button className="primary" onClick={openStudyRoom}>
-          Open Study Room
-        </button>
-      </AppHeader>
-
-      <section className="panel topic-hero">
-        <div className="form-grid">
-          <label>
-            Topic name
-            <input value={name} onChange={(event) => setName(event.target.value)} />
-          </label>
-          <label>
-            Topic description
-            <input value={summary} onChange={(event) => setSummary(event.target.value)} />
-          </label>
-        </div>
-        <div className="meta-row">
-          {topic.tags.map((tag) => (
-            <span className="tag" key={tag}>{tag}</span>
-          ))}
-          <span>{captures.length} sources</span>
-          <span>{expressions.length} saved expressions</span>
-          <span>{topic.lastPracticedAt ? `Last practiced ${formatDate(topic.lastPracticedAt)}` : "Not practiced yet"}</span>
-        </div>
-      </section>
-
-      <div className="two-column">
-        <section className="panel">
-          <div className="section-title">Sources</div>
-          {captures.map((capture) => (
-            <label className="source-row" key={capture.id}>
-              <input type="checkbox" defaultChecked />
-              <div>
-                <strong>{capture.title}</strong>
-                <span>{sourceLabel(capture.sourceKind)} · {capture.summary}</span>
-              </div>
-            </label>
-          ))}
-        </section>
-        <section className="panel">
-          <div className="section-title">Learning Overview</div>
-          <h3>Key ideas</h3>
-          <div className="mini-list">
-            {captures.flatMap((capture) => capture.questions ?? []).slice(0, 4).map((question) => (
-              <span key={question}>{question}</span>
-            ))}
-          </div>
-          <h3>Recommended expressions</h3>
-          <div className="mini-list">
-            {captures.flatMap((capture) => capture.suggestedExpressions ?? []).slice(0, 5).map((expression) => (
-              <span key={expression}>{expression}</span>
-            ))}
-          </div>
-          <h3>Practice goals</h3>
-          <p>{topic.practiceGoal}</p>
-          <div className="button-row">
-            <button className="primary" onClick={openStudyRoom}>
-              Open Study Room
-            </button>
-            <button className="secondary" onClick={startPractice}>
-              Start Practice
-            </button>
           </div>
         </section>
       </div>
