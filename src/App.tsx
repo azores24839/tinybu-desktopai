@@ -3,7 +3,6 @@ import {
   Archive,
   BookOpen,
   Brain,
-  Check,
   ChevronLeft,
   ChevronRight,
   Crown,
@@ -28,14 +27,15 @@ import { clearLearningData, db, loadAppState, normalizeCapture, saveAppState } f
 import { clearUserApiKey, loadUserApiKey, saveUserApiKey } from "./lib/secureKey";
 import { invokeTauri, listenTauri, type CaptureBridgeState } from "./lib/tauriBridge";
 import { defaultAppState, nowIso, uid } from "./lib/defaults";
+import { ScreenshotPreviewBlock } from "./features/screenshots/ScreenshotPreviewBlock";
+import { ScreenshotQuestionPanel } from "./features/screenshots/ScreenshotQuestionPanel";
+import { useScreenshotCaptureFlow } from "./features/screenshots/useScreenshotCaptureFlow";
 import {
-  answerScreenshotQuestion,
   generatePracticeQuestions,
   generatePracticeTip,
   generatePracticeTurn,
   generateReview,
   recommendFragments,
-  recognizeScreenshotCapture,
   understandContent,
   updateMemory
 } from "./ai/provider";
@@ -56,7 +56,6 @@ import type {
   ReviewRecord,
   Screen,
   ScreenshotCapturePayload,
-  ScreenshotQuestionAnswer,
   TopicItem,
   TopicStatus,
   UserProfile
@@ -247,10 +246,6 @@ function captureText(capture: CaptureItem) {
   return capture.sourceText || capture.fragments.map((fragment) => fragment.text).join("\n");
 }
 
-function canConfirmScreenshotText(capture: CaptureItem) {
-  return Boolean(capture.screenshot?.imageDataUrl && capture.screenshot.visibleText.length);
-}
-
 function suggestedGroups(captures: CaptureItem[]) {
   const groups = captures
     .filter((capture) => !capture.topicId && normalizeStatus(capture.status) !== "archived")
@@ -362,6 +357,21 @@ export default function App() {
     () => reviews.find((review) => review.id === activeSession?.reviewId) ?? reviews[0],
     [activeSession?.reviewId, reviews]
   );
+
+  const { importScreenshotCapture, confirmScreenshotText, askAboutScreenshot } = useScreenshotCaptureFlow({
+    appState,
+    screenshotQuestionBusy,
+    createCaptureRecord,
+    updateCapture,
+    persistState,
+    navigate,
+    getCaptureText: captureText,
+    setCaptures,
+    setBusyLabel,
+    setNomiState,
+    setScreenshotQuestionInput,
+    setScreenshotQuestionBusy
+  });
 
   useEffect(() => {
     async function boot() {
@@ -551,127 +561,6 @@ export default function App() {
     }
   }
 
-  async function importScreenshotCapture(payload: ScreenshotCapturePayload) {
-    const previewCapture = createScreenshotPreviewCapture(payload);
-    if (!appState.settings.screenshotRecognitionEnabled) {
-      await db.captures.put(previewCapture);
-      setCaptures((items) => [previewCapture, ...items]);
-      await persistState({
-        ...appState,
-        onboarded: true,
-        companionReady: true,
-        activeCaptureId: previewCapture.id
-      });
-      navigate("inbox");
-      return;
-    }
-
-    setBusyLabel("Recognizing screenshot");
-    setNomiState("thinking");
-    try {
-      const recognition = await recognizeScreenshotCapture({
-        imageDataUrl: payload.imageDataUrl,
-        width: payload.width,
-        height: payload.height,
-        appState
-      });
-      const text = String(recognition.text ?? "").trim();
-      const capture = await createCaptureRecord({
-        title: recognition.title || "Screenshot Capture",
-        sourceUrl: "",
-        sourceKind: "screenshot",
-        text: text || recognition.visibleText.join("\n") || "Screenshot capture",
-        capturedAt: payload.capturedAt,
-        appState,
-        screenshot: {
-          imageDataUrl: payload.imageDataUrl,
-          width: payload.width,
-          height: payload.height,
-          language: recognition.language,
-          screenType: recognition.screenType,
-          contextNote: recognition.contextNote,
-          visibleText: recognition.visibleText,
-          errorMessages: recognition.errorMessages,
-          interactiveElements: recognition.interactiveElements,
-          questionAnswers: []
-        }
-      });
-      await db.captures.put(capture);
-      setCaptures((items) => [capture, ...items]);
-      await persistState({
-        ...appState,
-        onboarded: true,
-        companionReady: true,
-        activeCaptureId: capture.id
-      });
-      navigate("inbox");
-    } catch (error) {
-      const diagnosticCapture = createScreenshotDiagnosticCapture(
-        payload,
-        error instanceof Error ? error.message : "Screenshot recognition failed"
-      );
-      await db.captures.put(diagnosticCapture);
-      setCaptures((items) => [diagnosticCapture, ...items]);
-      navigate("inbox");
-    } finally {
-      setBusyLabel("");
-      setNomiState("idle");
-    }
-  }
-
-  function createScreenshotPreviewCapture(payload: ScreenshotCapturePayload): CaptureItem {
-    const area = payload.captureArea;
-    const areaNote = area ? `Captured area: x=${area.x}, y=${area.y}, ${area.width}x${area.height}.` : "";
-    const previewText = `Screenshot preview mode. AI recognition is disabled. ${areaNote}`;
-    return {
-      id: uid("capture"),
-      title: "Screenshot Preview",
-      sourceUrl: "",
-      sourceKind: "screenshot",
-      sourceText: previewText,
-      screenshot: {
-        imageDataUrl: payload.imageDataUrl,
-        width: payload.width,
-        height: payload.height,
-        language: "Unknown",
-        screenType: "Screenshot",
-        contextNote: previewText,
-        visibleText: [],
-        errorMessages: [],
-        interactiveElements: [],
-        questionAnswers: []
-      },
-      topic: "Screenshot Notes",
-      summary: previewText,
-      keywords: ["screenshot"],
-      questions: ["What do you want to understand from this screenshot?"],
-      suggestedExpressions: [],
-      capturedAt: payload.capturedAt,
-      fragments: [
-        {
-          id: uid("fragment"),
-          text: previewText,
-          selected: true,
-          recommended: true,
-          sourceIndex: 0
-        }
-      ],
-      status: "unsorted"
-    };
-  }
-
-  function createScreenshotDiagnosticCapture(payload: ScreenshotCapturePayload, message: string): CaptureItem {
-    const diagnosticText = `Screenshot was captured, but OCR did not return text. ${message}`;
-    return {
-      ...createScreenshotPreviewCapture(payload),
-      id: uid("capture"),
-      title: "Screenshot OCR Diagnostic",
-      sourceText: diagnosticText,
-      summary: diagnosticText,
-      fragments: [{ id: uid("fragment"), text: diagnosticText, selected: true, recommended: true, sourceIndex: 0 }]
-    };
-  }
-
   async function persistState(nextState: AppStateRecord) {
     await saveAppState(nextState);
     setAppState(nextState);
@@ -823,15 +712,6 @@ export default function App() {
     const normalized = normalizeCapture(nextCapture);
     await db.captures.put(normalized);
     setCaptures((items) => items.map((item) => (item.id === normalized.id ? normalized : item)));
-  }
-
-  async function confirmScreenshotText(capture: CaptureItem) {
-    if (!canConfirmScreenshotText(capture) || !capture.screenshot) return;
-    const { imageDataUrl, ...screenshotWithoutImage } = capture.screenshot;
-    await updateCapture({
-      ...capture,
-      screenshot: screenshotWithoutImage
-    });
   }
 
   async function updateTopic(nextTopic: TopicItem) {
@@ -1113,48 +993,6 @@ export default function App() {
     setBusyLabel("");
     setNomiState("celebrating");
     navigate("practice-review");
-  }
-
-  async function askAboutScreenshot(capture: CaptureItem, question: string) {
-    const text = question.trim();
-    if (!text || screenshotQuestionBusy || !capture.screenshot) return;
-    setScreenshotQuestionInput("");
-    setScreenshotQuestionBusy(true);
-    setNomiState("thinking");
-    try {
-      const output = await answerScreenshotQuestion({
-        question: text,
-        screenshot: {
-          imageDataUrl: capture.screenshot.imageDataUrl,
-          title: capture.title,
-          sourceText: captureText(capture),
-          summary: capture.summary,
-          screenType: capture.screenshot.screenType,
-          visibleText: capture.screenshot.visibleText,
-          errorMessages: capture.screenshot.errorMessages,
-          interactiveElements: capture.screenshot.interactiveElements
-        },
-        appState
-      });
-      const answer: ScreenshotQuestionAnswer = {
-        id: uid("screenshot-answer"),
-        question: text,
-        answer: output.answer,
-        quotedText: output.quotedText,
-        nextAction: output.nextAction,
-        createdAt: nowIso()
-      };
-      await updateCapture({
-        ...capture,
-        screenshot: {
-          ...capture.screenshot,
-          questionAnswers: [answer, ...(capture.screenshot.questionAnswers ?? [])]
-        }
-      });
-      setNomiState("encouraging");
-    } finally {
-      setScreenshotQuestionBusy(false);
-    }
   }
 
   async function saveExpressionFromCapture(capture: CaptureItem, expression: string) {
@@ -1971,16 +1809,7 @@ function InboxPage({
                 <h2>{selectedCapture.title}</h2>
                 <p>{selectedCapture.summary || "No AI summary yet."}</p>
               </div>
-              {selectedCapture.screenshot?.imageDataUrl && (
-                <div className="screenshot-preview-block">
-                  <img className="screenshot-preview-image" src={selectedCapture.screenshot.imageDataUrl} alt="Captured screenshot preview" />
-                  {canConfirmScreenshotText(selectedCapture) && (
-                    <button className="secondary" onClick={() => confirmScreenshotText(selectedCapture)}>
-                      <Check size={16} /> Confirm text
-                    </button>
-                  )}
-                </div>
-              )}
+              <ScreenshotPreviewBlock capture={selectedCapture} onConfirmText={confirmScreenshotText} />
               <div className="source-preview">
                 {selectedCapture.fragments.slice(0, 8).map((fragment) => (
                   <p key={fragment.id}>{fragment.text}</p>
@@ -2423,16 +2252,7 @@ function StudyRoomPage({
               <section className="panel">
                 <p className="eyebrow">Original Source</p>
                 <h2>{current.title}</h2>
-                {current.screenshot?.imageDataUrl && (
-                  <div className="screenshot-preview-block">
-                    <img className="screenshot-preview-image" src={current.screenshot.imageDataUrl} alt="Captured screenshot preview" />
-                    {canConfirmScreenshotText(current) && (
-                      <button className="secondary" onClick={() => confirmScreenshotText(current)}>
-                        <Check size={16} /> Confirm text
-                      </button>
-                    )}
-                  </div>
-                )}
+                <ScreenshotPreviewBlock capture={current} onConfirmText={confirmScreenshotText} />
                 <div className="source-preview tall">
                   {current.fragments.map((fragment) => (
                     <p key={fragment.id}>{fragment.text}</p>
@@ -2451,33 +2271,13 @@ function StudyRoomPage({
                   ))}
                 </div>
               </section>
-              {current.screenshot && (
-                <section className="panel">
-                  <div className="section-title">Ask this screenshot</div>
-                  <form
-                    className="inline-form"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      askAboutScreenshot(current, screenshotQuestionInput);
-                    }}
-                  >
-                    <input
-                      value={screenshotQuestionInput}
-                      onChange={(event) => setScreenshotQuestionInput(event.target.value)}
-                      placeholder="Ask about this screenshot..."
-                      disabled={screenshotQuestionBusy}
-                    />
-                    <button className="primary" disabled={!screenshotQuestionInput.trim() || screenshotQuestionBusy}>
-                      Ask
-                    </button>
-                  </form>
-                  <div className="mini-list">
-                    {(current.screenshot.questionAnswers ?? []).map((item) => (
-                      <span key={item.id}>{item.answer}</span>
-                    ))}
-                  </div>
-                </section>
-              )}
+              <ScreenshotQuestionPanel
+                capture={current}
+                questionInput={screenshotQuestionInput}
+                setQuestionInput={setScreenshotQuestionInput}
+                askAboutScreenshot={askAboutScreenshot}
+                busy={screenshotQuestionBusy}
+              />
             </>
           ) : (
             <EmptyState title="No source selected" body="This topic does not have sources yet." />
