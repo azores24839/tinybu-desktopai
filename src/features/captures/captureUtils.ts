@@ -1,5 +1,14 @@
 import type { CaptureItem, CaptureStatus, ExternalCaptureKind } from "../../types";
 
+export const captureStatusLabels: Record<CaptureStatus, string> = {
+  unsorted: "Unsorted",
+  suggested: "Suggested",
+  "in-topic": "In Topic",
+  studied: "Studied",
+  practiced: "Practiced",
+  archived: "Archived"
+};
+
 export function splitCaptureText(text: string): string[] {
   const lines = text
     .split(/\n+/)
