@@ -870,6 +870,15 @@ a {
   color: var(--brand);
 }
 
+.screenshot-preview-block {
+  display: grid;
+  gap: 10px;
+}
+
+.screenshot-preview-block button {
+  justify-self: start;
+}
+
 .screenshot-preview-image {
   display: block;
   width: 100%;

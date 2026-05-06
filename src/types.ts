@@ -166,7 +166,7 @@ export interface TopicItem {
 }
 
 export interface ScreenshotCaptureRecord {
-  imageDataUrl: string;
+  imageDataUrl?: string;
   width: number;
   height: number;
   language: string;

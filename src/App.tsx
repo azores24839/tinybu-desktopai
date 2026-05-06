@@ -247,6 +247,10 @@ function captureText(capture: CaptureItem) {
   return capture.sourceText || capture.fragments.map((fragment) => fragment.text).join("\n");
 }
 
+function canConfirmScreenshotText(capture: CaptureItem) {
+  return Boolean(capture.screenshot?.imageDataUrl && capture.screenshot.visibleText.length);
+}
+
 function suggestedGroups(captures: CaptureItem[]) {
   const groups = captures
     .filter((capture) => !capture.topicId && normalizeStatus(capture.status) !== "archived")
@@ -821,6 +825,15 @@ export default function App() {
     setCaptures((items) => items.map((item) => (item.id === normalized.id ? normalized : item)));
   }
 
+  async function confirmScreenshotText(capture: CaptureItem) {
+    if (!canConfirmScreenshotText(capture) || !capture.screenshot) return;
+    const { imageDataUrl, ...screenshotWithoutImage } = capture.screenshot;
+    await updateCapture({
+      ...capture,
+      screenshot: screenshotWithoutImage
+    });
+  }
+
   async function updateTopic(nextTopic: TopicItem) {
     await db.topics.put(nextTopic);
     setTopics((items) => items.map((item) => (item.id === nextTopic.id ? nextTopic : item)));
@@ -1298,6 +1311,7 @@ export default function App() {
                 activeCapture={activeCapture}
                 openCapture={openCapture}
                 updateCapture={updateCapture}
+                confirmScreenshotText={confirmScreenshotText}
                 archiveCapture={archiveCapture}
                 deleteCapture={deleteCapture}
                 createTopicFromCaptures={createTopicFromCaptures}
@@ -1346,6 +1360,7 @@ export default function App() {
                 screenshotQuestionInput={screenshotQuestionInput}
                 setScreenshotQuestionInput={setScreenshotQuestionInput}
                 askAboutScreenshot={askAboutScreenshot}
+                confirmScreenshotText={confirmScreenshotText}
                 screenshotQuestionBusy={screenshotQuestionBusy}
               />
             )}
@@ -1836,6 +1851,7 @@ function InboxPage({
   activeCapture,
   openCapture,
   updateCapture,
+  confirmScreenshotText,
   archiveCapture,
   deleteCapture,
   createTopicFromCaptures,
@@ -1847,6 +1863,7 @@ function InboxPage({
   activeCapture?: CaptureItem;
   openCapture: (capture: CaptureItem) => void;
   updateCapture: (capture: CaptureItem) => void;
+  confirmScreenshotText: (capture: CaptureItem) => void;
   archiveCapture: (capture: CaptureItem) => void;
   deleteCapture: (id: string) => void;
   createTopicFromCaptures: (captureIds: string[], name?: string) => void;
@@ -1954,8 +1971,15 @@ function InboxPage({
                 <h2>{selectedCapture.title}</h2>
                 <p>{selectedCapture.summary || "No AI summary yet."}</p>
               </div>
-              {selectedCapture.screenshot && (
-                <img className="screenshot-preview-image" src={selectedCapture.screenshot.imageDataUrl} alt="Captured screenshot preview" />
+              {selectedCapture.screenshot?.imageDataUrl && (
+                <div className="screenshot-preview-block">
+                  <img className="screenshot-preview-image" src={selectedCapture.screenshot.imageDataUrl} alt="Captured screenshot preview" />
+                  {canConfirmScreenshotText(selectedCapture) && (
+                    <button className="secondary" onClick={() => confirmScreenshotText(selectedCapture)}>
+                      <Check size={16} /> Confirm text
+                    </button>
+                  )}
+                </div>
               )}
               <div className="source-preview">
                 {selectedCapture.fragments.slice(0, 8).map((fragment) => (
@@ -2351,6 +2375,7 @@ function StudyRoomPage({
   screenshotQuestionInput,
   setScreenshotQuestionInput,
   askAboutScreenshot,
+  confirmScreenshotText,
   screenshotQuestionBusy
 }: {
   topic: TopicItem;
@@ -2364,6 +2389,7 @@ function StudyRoomPage({
   screenshotQuestionInput: string;
   setScreenshotQuestionInput: (value: string) => void;
   askAboutScreenshot: (capture: CaptureItem, question: string) => void;
+  confirmScreenshotText: (capture: CaptureItem) => void;
   screenshotQuestionBusy: boolean;
 }) {
   const current = activeCapture && captures.some((capture) => capture.id === activeCapture.id) ? activeCapture : captures[0];
@@ -2397,8 +2423,15 @@ function StudyRoomPage({
               <section className="panel">
                 <p className="eyebrow">Original Source</p>
                 <h2>{current.title}</h2>
-                {current.screenshot && (
-                  <img className="screenshot-preview-image" src={current.screenshot.imageDataUrl} alt="Captured screenshot preview" />
+                {current.screenshot?.imageDataUrl && (
+                  <div className="screenshot-preview-block">
+                    <img className="screenshot-preview-image" src={current.screenshot.imageDataUrl} alt="Captured screenshot preview" />
+                    {canConfirmScreenshotText(current) && (
+                      <button className="secondary" onClick={() => confirmScreenshotText(current)}>
+                        <Check size={16} /> Confirm text
+                      </button>
+                    )}
+                  </div>
                 )}
                 <div className="source-preview tall">
                   {current.fragments.map((fragment) => (
