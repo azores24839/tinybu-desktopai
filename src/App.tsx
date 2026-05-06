@@ -27,6 +27,16 @@ import { clearLearningData, db, loadAppState, normalizeCapture, saveAppState } f
 import { clearUserApiKey, loadUserApiKey, saveUserApiKey } from "./lib/secureKey";
 import { invokeTauri, listenTauri, type CaptureBridgeState } from "./lib/tauriBridge";
 import { defaultAppState, nowIso, uid } from "./lib/defaults";
+import { formatDate } from "./lib/date";
+import {
+  captureText,
+  inferPracticeGoal,
+  normalizeStatus,
+  sourceLabel,
+  splitCaptureText,
+  suggestedGroups
+} from "./features/captures/captureUtils";
+import { topicCaptures, topicExpressions } from "./features/topics/topicUtils";
 import { ScreenshotPreviewBlock } from "./features/screenshots/ScreenshotPreviewBlock";
 import { ScreenshotQuestionPanel } from "./features/screenshots/ScreenshotQuestionPanel";
 import { useScreenshotCaptureFlow } from "./features/screenshots/useScreenshotCaptureFlow";
@@ -185,102 +195,11 @@ function parseIncomingCapture(): ExternalCapturePayload | null {
   }
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(new Date(value));
-}
-
 function weekStart() {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
   date.setDate(date.getDate() - date.getDay());
   return date;
-}
-
-function splitCaptureText(text: string): string[] {
-  const lines = text
-    .split(/\n+/)
-    .map(cleanCapturedLine)
-    .filter(Boolean);
-  if (lines.length > 1) return lines;
-  const sentences = text
-    .split(/(?<=[.!?。！？])\s+/)
-    .map(cleanCapturedLine)
-    .filter(Boolean);
-  return sentences.length ? sentences : [cleanCapturedLine(text)].filter(Boolean);
-}
-
-function cleanCapturedLine(line: string) {
-  return line
-    .replace(/^\s*\d{1,2}:\d{2}(?::\d{2})?\s*\d*\s*(?:分钟)?\d*\s*秒钟\s*/g, "")
-    .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b\s*\d*\s*(?:分钟)?\d*\s*秒钟\s*/g, " ")
-    .replace(/^\s*\d+\s*(?:分钟)?\d*\s*秒钟\s*/g, "")
-    .replace(/\s+\d+\s*(?:分钟)?\d*\s*秒钟\s*/g, " ")
-    .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, " ")
-    .replace(/^\s*\d+\s*(seconds?|secs?)\s*/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function sourceLabel(kind: ExternalCaptureKind) {
-  if (kind === "youtube") return "YouTube transcript";
-  if (kind === "video") return "Video transcript";
-  if (kind === "article") return "Article";
-  if (kind === "selection") return "Web selection";
-  if (kind === "screenshot") return "Screenshot";
-  return "Pasted text";
-}
-
-function normalizeStatus(status: CaptureItem["status"]): CaptureStatus {
-  if (status === "new") return "unsorted";
-  if (status === "in-practice") return "studied";
-  if (status === "completed") return "practiced";
-  return status;
-}
-
-function captureText(capture: CaptureItem) {
-  return capture.sourceText || capture.fragments.map((fragment) => fragment.text).join("\n");
-}
-
-function suggestedGroups(captures: CaptureItem[]) {
-  const groups = captures
-    .filter((capture) => !capture.topicId && normalizeStatus(capture.status) !== "archived")
-    .reduce<Record<string, CaptureItem[]>>((acc, capture) => {
-      const name = capture.topic || "Fresh Captures";
-      acc[name] = [...(acc[name] ?? []), capture];
-      return acc;
-    }, {});
-
-  return Object.entries(groups).map(([name, items]) => ({
-    id: name,
-    name,
-    captures: items,
-    summary: items[0]?.summary || "A suggested topic based on recent captures.",
-    practiceGoal: inferPracticeGoal(items)
-  }));
-}
-
-function inferPracticeGoal(captures: CaptureItem[]) {
-  const text = captures.flatMap((capture) => capture.questions ?? []).join(" ");
-  if (/compare|different|优缺点|比较/i.test(text)) return "Compare two ideas";
-  if (/agree|opinion|观点|think/i.test(text)) return "Express an opinion";
-  if (/summarize|main idea|复述|summary/i.test(text)) return "Retell the key idea";
-  return "Give a clear personal response";
-}
-
-function topicCaptures(topic: TopicItem | undefined, captures: CaptureItem[]) {
-  if (!topic) return [];
-  const ids = new Set(topic.captureIds);
-  return captures.filter((capture) => ids.has(capture.id));
-}
-
-function topicExpressions(topic: TopicItem | undefined, expressions: ExpressionRecord[]) {
-  if (!topic) return [];
-  return expressions.filter((expression) => topic.captureIds.includes(expression.sourceContentId));
 }
 
 function NomiOrb({ state }: { state: NomiState }) {
