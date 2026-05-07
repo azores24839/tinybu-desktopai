@@ -1,6 +1,6 @@
-# 历史 UI 草图：Nomi 早期界面与功能梳理
+# 历史 UI 草图：TinyBu 早期界面与功能梳理
 
-> 状态说明：这是一份历史 UI 草图文档，仍保留 Nomi / Watch / Talk / Mirror Card 等早期概念，已经不代表当前产品实现。
+> 状态说明：这是一份历史 UI 草图文档，仍保留 TinyBu / Watch / Talk / Review 等早期概念，已经不代表当前产品实现。
 >
 > 当前产品名是 TinyBu。当前主流程是：
 >
@@ -12,15 +12,15 @@
 
 ## 产品定位
 
-Nomi 是一个桌面端 AI 外语表达伙伴。核心目标是帮助用户把看过、读过或粘贴进来的真实内容，转化成可以开口表达、可以反复练习、可以被记住的语言素材。
+TinyBu 是一个桌面端 AI 外语表达伙伴。核心目标是帮助用户把看过、读过或粘贴进来的真实内容，转化成可以开口表达、可以反复练习、可以被记住的语言素材。
 
 核心闭环：
 
 1. 导入或选择内容。
 2. 阅读 / 观看内容。
 3. 捕捉有用表达。
-4. 和 Nomi 进行低压力 Talk。
-5. 生成 Mirror Card 复盘。
+4. 和 TinyBu 进行低压力 Talk。
+5. 生成 Review 复盘。
 6. 更新 Notebook 和 Memory。
 
 ## 全局结构
@@ -46,25 +46,25 @@ Nomi 是一个桌面端 AI 外语表达伙伴。核心目标是帮助用户把�
 
 全局状态：
 
-- 顶部 busy banner：AI 正在生成表达卡、准备讨论、生成 Mirror Card 等。
-- Nomi 状态：idle、listening、speaking、thinking、encouraging、celebrating。
+- 顶部 busy banner：AI 正在生成表达卡、准备讨论、生成 Review 等。
+- TinyBu 状态：idle、listening、speaking、thinking、encouraging、celebrating。
 - Expression Modal：表达卡弹窗，可在多个场景中打开。
 
 ## 页面清单
 
 ### 1. Welcome
 
-用途：首次进入产品时说明 Nomi 的核心价值，并提供开始路径。
+用途：首次进入产品时说明 TinyBu 的核心价值，并提供开始路径。
 
 主要内容：
 
-- 品牌：Nomi / 诺米
+- 品牌：TinyBu / TinyBu
 - 核心文案：把看过的内容变成说得出口的表达
-- 产品预览：示例 transcript、捕捉表达、表达卡、Nomi 鼓励语
+- 产品预览：示例 transcript、捕捉表达、表达卡、TinyBu 鼓励语
 
 主要操作：
 
-- Start with Nomi：进入 Onboarding
+- Start with TinyBu：进入 Onboarding
 - Try Demo：跳过设置，直接进入 demo 内容的 Watch Room
 
 ### 2. Onboarding
@@ -93,7 +93,7 @@ Nomi 是一个桌面端 AI 外语表达伙伴。核心目标是帮助用户把�
 
 ### 3. Companion Setup
 
-用途：创建或确认 Nomi 的陪伴方式。
+用途：创建或确认 TinyBu 的陪伴方式。
 
 主要内容：
 
@@ -108,8 +108,8 @@ Nomi 是一个桌面端 AI 外语表达伙伴。核心目标是帮助用户把�
 
 主要操作：
 
-- Use Default Nomi
-- Create Nomi
+- Use Default TinyBu
+- Create TinyBu
 
 ### 4. Home
 
@@ -119,7 +119,7 @@ Nomi 是一个桌面端 AI 外语表达伙伴。核心目标是帮助用户把�
 
 - 当前学习目标概览：目标语言、水平、支架偏好
 - 快捷入口：
-  - Watch with Nomi
+  - Watch with TinyBu
   - Paste Transcript
   - Try Demo Content
 - 示例内容列表：
@@ -130,7 +130,7 @@ Nomi 是一个桌面端 AI 外语表达伙伴。核心目标是帮助用户把�
 - 最近学习概览：
   - 最近捕捉的表达
   - 最近 Talk
-  - Nomi 最近记住的内容
+  - TinyBu 最近记住的内容
 
 主要操作：
 
@@ -140,7 +140,7 @@ Nomi 是一个桌面端 AI 外语表达伙伴。核心目标是帮助用户把�
 
 外部内容能力：
 
-- 当前代码支持通过 URL query 中的 `nomiCapture` 接收外部 capture payload。
+- 当前代码支持通过 URL query 中的 `tinybuCapture` 接收外部 capture payload，并保留旧 `nomiCapture` 作为兼容入口。
 - payload 可包含 kind、title、url、text、capturedAt。
 - 支持来源类型：selection、article、youtube、video、manual。
 - 如果检测到外部 capture，会直接进入 Watch Room。
@@ -160,7 +160,7 @@ Nomi 是一个桌面端 AI 外语表达伙伴。核心目标是帮助用户把�
   - 3 开始 Talk
 - 当前片段
 - Transcript 行列表
-- 右侧 Nomi companion panel
+- 右侧 TinyBu companion panel
 - 已捕捉表达列表
 
 每一行 transcript 的操作：
@@ -190,14 +190,14 @@ Nomi 是一个桌面端 AI 外语表达伙伴。核心目标是帮助用户把�
 - Talk 标题
 - 简短说明：每次只聊一个问题，卡住时可以用支架按钮
 - 对话消息流：
-  - Nomi message
+  - TinyBu message
   - User message
   - Rescue message
 - 输入区
 - 语音输入按钮占位
 - Send 按钮
 - Rescue 支架按钮区
-- 右侧 Nomi companion panel
+- 右侧 TinyBu companion panel
 - 右侧显示可用 captured expressions
 
 用户输入：
@@ -217,15 +217,15 @@ Rescue 类型：
 
 主要操作：
 
-- Send：提交回答，生成 Nomi 下一轮回复和问题
+- Send：提交回答，生成 TinyBu 下一轮回复和问题
 - Rescue：生成 1-3 条支架提示
-- End Talk：结束对话，生成 Mirror Card 和 Memory
+- End Talk：结束对话，生成 Review 和 Memory
 
 空状态：
 
 - 如果还没有 Talk Session，提示用户先从 Watch Room 开始。
 
-### 7. Mirror Card
+### 7. Review
 
 用途：对一次 Talk 进行温和复盘，帮助用户看到自己表达成功的部分，并给出自然表达建议。
 
@@ -233,7 +233,7 @@ Rescue 类型：
 
 - 生成时间
 - What you talked about
-- What Nomi understood
+- What TinyBu understood
 - What worked
 - More natural expression
 - Try again
@@ -247,7 +247,7 @@ Rescue 类型：
 
 空状态：
 
-- 如果没有 Mirror Card，提示完成一次 Talk 后生成。
+- 如果没有 Review，提示完成一次 Talk 后生成。
 
 ### 8. Notebook
 
@@ -275,7 +275,7 @@ Rescue 类型：
 
 - Practice again：练习次数 +1，并标记为 need-practice
 - Use in a new sentence：标记为 my-sentence
-- Talk with Nomi：带着该表达进入对应内容的 Watch / Talk 流程
+- Talk with TinyBu：带着该表达进入对应内容的 Watch / Talk 流程
 - Mark as learned：标记已学会
 - Delete：删除表达
 
@@ -285,7 +285,7 @@ Rescue 类型：
 
 ### 9. Memory
 
-用途：展示和编辑 Nomi 记住的学习支架。强调不是隐私标签，而是学习辅助信息。
+用途：展示和编辑 TinyBu 记住的学习支架。强调不是隐私标签，而是学习辅助信息。
 
 Memory 类型：
 
@@ -313,12 +313,12 @@ Memory 类型：
 
 ### 10. Settings
 
-用途：调整学习设置、Nomi 行为、AI 模式和数据。
+用途：调整学习设置、TinyBu 行为、AI 模式和数据。
 
 分区：
 
 - 学习设置
-- Nomi 设置
+- TinyBu 设置
 - AI 模式
 - 数据
 
@@ -329,9 +329,9 @@ Memory 类型：
 - 当前水平
 - 开口压力
 
-Nomi 设置：
+TinyBu 设置：
 
-- Nomi 风格
+- TinyBu 风格
 - 语速
 - 开启温和反馈
 - 显示母语辅助
@@ -435,12 +435,12 @@ AI 模式：
 - status
 - created / ended time
 
-### Mirror Card
+### Review
 
 复盘卡包含：
 
 - topic summary
-- what Nomi understood
+- what TinyBu understood
 - what worked
 - natural expression suggestions
 - try again sentence
@@ -465,19 +465,19 @@ Welcome → Onboarding → Companion Setup → Home
 
 ### Demo 快速体验流程
 
-Welcome → Try Demo → Watch Room → Talk Mode → Mirror Card
+Welcome → Try Demo → Watch Room → Talk Mode → Review
 
 ### 粘贴内容练习流程
 
-Home → Paste Transcript → Watch Room → 捕捉表达 → Talk Mode → Mirror Card → Notebook / Memory
+Home → Paste Transcript → Watch Room → 捕捉表达 → Talk Mode → Review → Notebook / Memory
 
 ### 外部内容导入流程
 
-外部 capture payload → Watch Room → 捕捉表达 / 解释 → Talk Mode → Mirror Card
+外部 capture payload → Watch Room → 捕捉表达 / 解释 → Talk Mode → Review
 
 ### 表达复习流程
 
-Notebook → 选择表达 → Practice again / Talk with Nomi / Mark as learned
+Notebook → 选择表达 → Practice again / Talk with TinyBu / Mark as learned
 
 ### 记忆管理流程
 
@@ -485,4 +485,4 @@ Memory → 编辑记忆 → 删除不想保留的记忆
 
 ## 给 UI 草图 AI 的简短提示词
 
-请为一个桌面端 AI 外语表达伙伴 Nomi 生成低保真 UI 草图。不要做视觉风格设计，只做信息架构和功能布局。产品核心流程是：导入或选择真实内容，阅读 transcript，捕捉可复用表达，和 Nomi 进行低压力 Talk，生成 Mirror Card 复盘，并把表达保存到 Notebook、把学习偏好保存到可编辑 Memory。需要覆盖这些页面：Welcome、Onboarding、Companion Setup、Home、Watch Room、Talk Mode、Mirror Card、Notebook、Memory、Settings，以及 Expression Card Modal。主应用使用左侧导航，包含 Home、Watch、Talk、Notebook、Memory、Settings。每个页面请体现主要模块、用户操作、空状态和关键数据对象，但不要指定颜色、字体、插画或具体视觉风格。
+请为一个桌面端 AI 外语表达伙伴 TinyBu 生成低保真 UI 草图。不要做视觉风格设计，只做信息架构和功能布局。产品核心流程是：导入或选择真实内容，阅读 transcript，捕捉可复用表达，和 TinyBu 进行低压力 Talk，生成 Review 复盘，并把表达保存到 Notebook、把学习偏好保存到可编辑 Memory。需要覆盖这些页面：Welcome、Onboarding、Companion Setup、Home、Watch Room、Talk Mode、Review、Notebook、Memory、Settings，以及 Expression Card Modal。主应用使用左侧导航，包含 Home、Watch、Talk、Notebook、Memory、Settings。每个页面请体现主要模块、用户操作、空状态和关键数据对象，但不要指定颜色、字体、插画或具体视觉风格。

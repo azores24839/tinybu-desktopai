@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -12,6 +12,16 @@ import {
 } from "../apps/api/providerRouting.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const legacyNamePattern = /\b(?:NOMI|Nomi|nomi|NORI|Nori|nori|Mirror|mirror)[A-Za-z0-9_-]*/g;
+const ignoredLegacyNameDirs = new Set([".git", "dist", "node_modules", "src-tauri/target"]);
+const legacyNameAllowlist = new Map([
+  ["apps/api/server.mjs", new Set(["nomi"])],
+  ["docs/current-core-capabilities.md", new Set(["nomiCapture", "mirrorCards", "Mirror"])],
+  ["docs/ui-function-inventory.md", new Set(["nomiCapture"])],
+  ["src/App.tsx", new Set(["nomiCapture", "NOMI_CAPTURE"])],
+  ["src/lib/db.ts", new Set(["nomi-desktop", "mirrorCards"])],
+  ["src/lib/secureKey.ts", new Set(["nomi-dev-openai-key"])]
+]);
 
 async function loadTsModule(relativePath) {
   const filePath = resolve(root, relativePath);
@@ -27,6 +37,42 @@ async function loadTsModule(relativePath) {
 
   return import(`data:text/javascript;base64,${Buffer.from(`${output}\n//# sourceURL=${pathToFileURL(filePath).href}`).toString("base64")}`);
 }
+
+async function listProjectFiles(dir = root, prefix = "") {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      if (!ignoredLegacyNameDirs.has(relativePath) && !ignoredLegacyNameDirs.has(entry.name)) {
+        files.push(...(await listProjectFiles(resolve(dir, entry.name), relativePath)));
+      }
+      continue;
+    }
+    if (/\.(?:ts|tsx|js|mjs|json|html|css|md|rs)$/.test(entry.name) && relativePath !== "test/regression.test.mjs") {
+      files.push(relativePath);
+    }
+  }
+  return files;
+}
+
+test("legacy Nomi, Nori, and Mirror names stay confined to compatibility allowlist", async () => {
+  const files = await listProjectFiles();
+  const violations = [];
+
+  for (const relativePath of files) {
+    const source = await readFile(resolve(root, relativePath), "utf8");
+    const allowed = legacyNameAllowlist.get(relativePath) ?? new Set();
+    for (const match of source.matchAll(legacyNamePattern)) {
+      const token = match[0];
+      if (!allowed.has(token)) {
+        violations.push(`${relativePath}: ${token}`);
+      }
+    }
+  }
+
+  assert.deepEqual(violations, []);
+});
 
 test("provider routing keeps MiniMax on Anthropic-compatible when user token exists", () => {
   assert.equal(normalizeOpenRouterModel("MiniMax-M2.7"), "minimax/minimax-m2.7");
@@ -139,14 +185,28 @@ test("screenshot AI payloads only include images for visual layout questions", a
 });
 
 test("general AI task payloads preserve transcript, context, and learner profile", async () => {
-  const { buildContentUnderstandingPayload, buildExpressionCardPayload } = await loadTsModule("src/ai/taskPayloads.ts");
+  const {
+    buildContentUnderstandingPayload,
+    buildExpressionCardPayload,
+    buildMemoryPayload,
+    buildReviewPayload,
+    buildRescuePayload,
+    buildTalkTurnPayload
+  } = await loadTsModule("src/ai/taskPayloads.ts");
   const appState = {
     profile: {
       level: "A2",
       nativeLanguage: "中文",
-      targetLanguage: "English"
+      targetLanguage: "English",
+      anxiety: 4,
+      supportPreference: "gentle"
     }
   };
+  const messages = [{ role: "user", text: "Where is the station?" }];
+  const expressions = [
+    { original: "near the park", pattern: "near ..." },
+    { original: "go straight", pattern: "go straight" }
+  ];
   const content = {
     id: "content-1",
     title: "Travel clip",
@@ -167,6 +227,61 @@ test("general AI task payloads preserve transcript, context, and learner profile
     targetLanguage: "English",
     nativeLanguage: "中文"
   });
+  assert.deepEqual(
+    buildTalkTurnPayload({
+      answer: "I think it is nearby.",
+      messages,
+      content,
+      expressions,
+      appState
+    }),
+    {
+      answer: "I think it is nearby.",
+      messages,
+      contentSummary: "A short travel conversation.",
+      capturedExpressions: expressions,
+      level: "A2",
+      anxiety: 4,
+      supportPreference: "gentle"
+    }
+  );
+  assert.deepEqual(buildRescuePayload("hint", "How should I answer?", appState), {
+    rescueType: "hint",
+    currentQuestion: "How should I answer?",
+    level: "A2",
+    anxiety: 4
+  });
+  assert.deepEqual(
+    buildReviewPayload({
+      sessionTitle: "Travel practice",
+      messages,
+      expressions,
+      appState
+    }),
+    {
+      sessionTitle: "Travel practice",
+      messages,
+      expressions,
+      level: "A2",
+      nativeLanguage: "中文",
+      targetLanguage: "English"
+    }
+  );
+
+  const review = {
+    talkedAbout: "Finding the station",
+    didWell: ["Clear intent"],
+    naturalExpressions: [],
+    savedExpressions: [],
+    nextPractice: "Ask for directions again."
+  };
+  assert.deepEqual(buildMemoryPayload({ review, expressions, appState }), {
+    review,
+    expressions,
+    rescueUsed: [],
+    profile: appState.profile
+  });
+  assert.deepEqual(buildMemoryPayload({ review, expressions, rescueUsed: ["hint"], appState }).rescueUsed, ["hint"]);
 });
 
 test("screenshot confirmation is only available while image data and OCR text are present", async () => {

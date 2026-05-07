@@ -6,7 +6,7 @@ import type {
   ExpressionRecord,
   FragmentRecommendationOutput,
   MemoryUpdateOutput,
-  MirrorOutput,
+  ReviewOutput,
   PracticeAnswer,
   PracticeQuestionsOutput,
   PracticeTipOutput,
@@ -34,7 +34,7 @@ import { normalizeScreenshotRecognition } from "./responseParsing";
 import {
   expressionCardRules,
   memoryUpdateRules,
-  mirrorRules,
+  talkReviewRules,
   practiceQuestionsRules,
   practiceTipRules,
   practiceTurnRules,
@@ -46,7 +46,14 @@ import {
   understandContentRules
 } from "./rules";
 import { buildScreenshotCapturePayload, buildScreenshotQuestionPayload, type ScreenshotQuestionSource } from "./screenshotPayloads";
-import { buildContentUnderstandingPayload, buildExpressionCardPayload } from "./taskPayloads";
+import {
+  buildContentUnderstandingPayload,
+  buildExpressionCardPayload,
+  buildMemoryPayload,
+  buildReviewPayload,
+  buildRescuePayload,
+  buildTalkTurnPayload
+} from "./taskPayloads";
 
 type TaskName = ProviderTaskName;
 
@@ -181,18 +188,7 @@ export async function generateTalkTurn(args: {
   appState: AppStateRecord;
   roundCount: number;
 }): Promise<TalkTurnOutput> {
-  const payload = {
-    answer: args.answer,
-    messages: args.messages,
-    contentSummary: args.content.summary,
-    capturedExpressions: args.expressions.map((item) => ({
-      original: item.original,
-      pattern: item.pattern
-    })),
-    level: args.appState.profile.level,
-    anxiety: args.appState.profile.anxiety,
-    supportPreference: args.appState.profile.supportPreference
-  };
+  const payload = buildTalkTurnPayload(args);
 
   return withFallback(
     args.appState,
@@ -209,12 +205,7 @@ export async function generateRescue(
   currentQuestion: string,
   appState: AppStateRecord
 ): Promise<RescueOutput> {
-  const payload = {
-    rescueType: type,
-    currentQuestion,
-    level: appState.profile.level,
-    anxiety: appState.profile.anxiety
-  };
+  const payload = buildRescuePayload(type, currentQuestion, appState);
 
   return withFallback(
     appState,
@@ -226,43 +217,31 @@ export async function generateRescue(
   );
 }
 
-export async function generateMirror(args: {
+export async function generateTalkReview(args: {
   sessionTitle: string;
   messages: TalkMessage[];
   expressions: ExpressionRecord[];
   appState: AppStateRecord;
-}): Promise<MirrorOutput> {
-  const payload = {
-    sessionTitle: args.sessionTitle,
-    messages: args.messages,
-    expressions: args.expressions,
-    level: args.appState.profile.level,
-    nativeLanguage: args.appState.profile.nativeLanguage,
-    targetLanguage: args.appState.profile.targetLanguage
-  };
+}): Promise<ReviewOutput> {
+  const payload = buildReviewPayload(args);
 
   return withFallback(
     args.appState,
     () =>
       args.appState.settings.aiProviderMode === "cloud-proxy"
-        ? callCloudProxy("mirror", payload, args.appState)
-        : callUserKey("mirror", payload, args.appState),
-    () => mirrorRules(args)
+        ? callCloudProxy("talkReview", payload, args.appState)
+        : callUserKey("talkReview", payload, args.appState),
+    () => talkReviewRules(args)
   );
 }
 
 export async function updateMemory(args: {
-  mirror: MirrorOutput;
+  review: ReviewOutput;
   expressions: ExpressionRecord[];
   rescueUsed?: RescueType[];
   appState: AppStateRecord;
 }): Promise<MemoryUpdateOutput> {
-  const payload = {
-    mirror: args.mirror,
-    expressions: args.expressions,
-    rescueUsed: args.rescueUsed ?? [],
-    profile: args.appState.profile
-  };
+  const payload = buildMemoryPayload(args);
 
   return withFallback(
     args.appState,
@@ -393,7 +372,7 @@ export async function generateReview(args: {
   fragments: CaptureFragment[];
   answers: PracticeAnswer[];
   appState: AppStateRecord;
-}): Promise<MirrorOutput> {
+}): Promise<ReviewOutput> {
   const payload = {
     title: args.title,
     fragments: args.fragments.map((fragment) => ({ id: fragment.id, text: fragment.text })),

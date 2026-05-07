@@ -26,7 +26,7 @@ export type FeedbackTiming =
   | "when-stuck"
   | "light-live"
   | "direct-natural";
-export type NomiState =
+export type CompanionState =
   | "idle"
   | "listening"
   | "speaking"
@@ -209,7 +209,7 @@ export interface ExpressionRecord {
 
 export interface TalkMessage {
   id: string;
-  role: "nomi" | "user" | "rescue";
+  role: "tinybu" | "user" | "rescue";
   text: string;
   createdAt: string;
   rescueType?: RescueType;
@@ -242,8 +242,6 @@ export interface ReviewRecord {
   createdAt: string;
 }
 
-export type MirrorCard = ReviewRecord;
-
 export interface PracticeQuestion {
   id: string;
   type: PracticeQuestionType;
@@ -258,7 +256,7 @@ export interface PracticeAnswer {
   id: string;
   questionId: string;
   answer: string;
-  nomiReply: string;
+  tinybuReply: string;
   createdAt: string;
 }
 
@@ -336,7 +334,7 @@ export interface RescueOutput {
   lines: string[];
 }
 
-export interface MirrorOutput {
+export interface ReviewOutput {
   talkedAbout: string;
   didWell: string[];
   naturalExpressions: Array<{

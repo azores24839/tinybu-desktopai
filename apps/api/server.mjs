@@ -15,6 +15,9 @@ const openRouterBaseUrl = process.env.OPENROUTER_BASE_URL ?? "https://openrouter
 const anthropicAuthToken = process.env.ANTHROPIC_AUTH_TOKEN;
 const anthropicBaseUrl = process.env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com";
 const apiTimeoutMs = Number(process.env.API_TIMEOUT_MS ?? 300000);
+const taskPath = "/v1/tinybu/task";
+const legacyTaskPath = "/v1/nomi/task";
+const taskPaths = new Set([taskPath, legacyTaskPath]);
 const defaultModel =
   process.env.ANTHROPIC_MODEL ??
   process.env.ANTHROPIC_DEFAULT_SONNET_MODEL ??
@@ -36,8 +39,8 @@ const taskPrompts = {
     "Continue a low-pressure language practice conversation. First respond to meaning, then give one tiny natural expression if helpful, then ask one simple next question.",
   rescue:
     "The learner is stuck. Give 1-3 short support lines only. Do not answer everything for them.",
-  mirror:
-    "Create a gentle post-talk mirror card. Start with what the learner communicated successfully. Give only 1-2 natural expression suggestions.",
+  talkReview:
+    "Create a gentle post-talk review. Start with what the learner communicated successfully. Give only 1-2 natural expression suggestions.",
   recommendFragments:
     "Select 3-6 fragments that are most useful for low-pressure speaking practice. Prefer clear opinions, reusable patterns, and lines learners can connect to their own life.",
   practiceQuestions:
@@ -208,7 +211,7 @@ function schemaFor(task) {
         }
       }
     },
-    mirror: reviewSchema("mirror_card"),
+    talkReview: reviewSchema("talk_review"),
     recommendFragments: {
       name: "fragment_recommendation",
       schema: {
@@ -680,7 +683,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method !== "POST" || req.url !== "/v1/nomi/task") {
+  if (req.method !== "POST" || !taskPaths.has(req.url ?? "")) {
     sendJson(res, 404, { error: "Not found" });
     return;
   }
@@ -755,6 +758,6 @@ const server = http.createServer(async (req, res) => {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   server.listen(port, "127.0.0.1", () => {
     const provider = anthropicAuthToken ? "Anthropic-compatible" : openRouterApiKey ? "OpenRouter/OpenAI" : "OpenAI";
-    console.log(`TinyBu ${provider} proxy listening on http://127.0.0.1:${port}/v1/nomi/task`);
+    console.log(`TinyBu ${provider} proxy listening on http://127.0.0.1:${port}${taskPath}`);
   });
 }

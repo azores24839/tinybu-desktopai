@@ -22,7 +22,7 @@ type ClipboardSuppressEvent = {
 type MenuSide = "left" | "right";
 
 const CLIPBOARD_SHORTCUT = "CommandOrControl+Shift+N";
-const CLIPBOARD_SHORTCUT_STORAGE_KEY = "noriClipboardShortcutAllowed";
+const CLIPBOARD_SHORTCUT_STORAGE_KEY = "tinybuClipboardShortcutAllowed";
 const CLIPBOARD_POLL_MS = 700;
 const CLIPBOARD_PROMPT_MS = 8000;
 const PET_CLOSED_WIDTH = 280;
@@ -63,11 +63,11 @@ export default function PetApp() {
   const showQuickForm = activity !== "dragging" && !petReply && !pendingClipboardText;
 
   useEffect(() => {
-    document.documentElement.classList.add("nomi-pet-html");
-    document.body.classList.add("nomi-pet-body");
+    document.documentElement.classList.add("tinybu-pet-html");
+    document.body.classList.add("tinybu-pet-body");
     return () => {
-      document.documentElement.classList.remove("nomi-pet-html");
-      document.body.classList.remove("nomi-pet-body");
+      document.documentElement.classList.remove("tinybu-pet-html");
+      document.body.classList.remove("tinybu-pet-body");
     };
   }, []);
 
@@ -82,16 +82,16 @@ export default function PetApp() {
       const state = await invokeTauri<CaptureBridgeState>("get_capture_bridge_state");
       if (mounted && state) setCount(state.count);
 
-      unlistenBridge = await listenTauri<CaptureBridgeState>("nomi-capture-bridge-updated", (event) => {
+      unlistenBridge = await listenTauri<CaptureBridgeState>("tinybu-capture-bridge-updated", (event) => {
         setCount(event.payload.count);
         setActivity("idle");
       });
 
-      unlistenPrompt = await listenTauri<ClipboardSuppressEvent>("nomi-clipboard-prompt", (event) => {
+      unlistenPrompt = await listenTauri<ClipboardSuppressEvent>("tinybu-clipboard-prompt", (event) => {
         promptClipboardText(event.payload.text);
       });
 
-      unlistenSuppress = await listenTauri<ClipboardSuppressEvent>("nomi-clipboard-suppress", (event) => {
+      unlistenSuppress = await listenTauri<ClipboardSuppressEvent>("tinybu-clipboard-suppress", (event) => {
         suppressClipboardText(event.payload.text);
       });
 
@@ -401,9 +401,9 @@ export default function PetApp() {
         ]);
         const workArea = monitor?.workArea;
         if (workArea) {
-          const noriCenterX = position.x + size.width / 2;
-          const availableRight = workArea.position.x + workArea.size.width - noriCenterX;
-          const availableLeft = noriCenterX - workArea.position.x;
+          const petCenterX = position.x + size.width / 2;
+          const availableRight = workArea.position.x + workArea.size.width - petCenterX;
+          const availableLeft = petCenterX - workArea.position.x;
           side = availableRight >= 180 || availableRight >= availableLeft ? "right" : "left";
         }
       } catch (error) {

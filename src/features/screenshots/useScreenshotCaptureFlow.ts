@@ -6,7 +6,7 @@ import type {
   AppStateRecord,
   CaptureItem,
   ExternalCaptureKind,
-  NomiState,
+  CompanionState,
   Screen,
   ScreenshotCapturePayload
 } from "../../types";
@@ -33,7 +33,7 @@ type ScreenshotCaptureFlowArgs = {
   getCaptureText: (capture: CaptureItem) => string;
   setCaptures: Dispatch<SetStateAction<CaptureItem[]>>;
   setBusyLabel: (label: string) => void;
-  setNomiState: (state: NomiState) => void;
+  setCompanionState: (state: CompanionState) => void;
   setScreenshotQuestionInput: (value: string) => void;
   setScreenshotQuestionBusy: (busy: boolean) => void;
 };
@@ -48,7 +48,7 @@ export function useScreenshotCaptureFlow({
   getCaptureText,
   setCaptures,
   setBusyLabel,
-  setNomiState,
+  setCompanionState,
   setScreenshotQuestionInput,
   setScreenshotQuestionBusy
 }: ScreenshotCaptureFlowArgs) {
@@ -68,7 +68,7 @@ export function useScreenshotCaptureFlow({
     }
 
     setBusyLabel("Recognizing screenshot");
-    setNomiState("thinking");
+    setCompanionState("thinking");
     try {
       const recognition = await recognizeScreenshotCapture({
         imageDataUrl: payload.imageDataUrl,
@@ -122,7 +122,7 @@ export function useScreenshotCaptureFlow({
       navigate("inbox");
     } finally {
       setBusyLabel("");
-      setNomiState("idle");
+      setCompanionState("idle");
     }
   }
 
@@ -140,7 +140,7 @@ export function useScreenshotCaptureFlow({
     if (!text || screenshotQuestionBusy || !capture.screenshot) return;
     setScreenshotQuestionInput("");
     setScreenshotQuestionBusy(true);
-    setNomiState("thinking");
+    setCompanionState("thinking");
     try {
       const output = await answerScreenshotQuestion({
         question: text,
@@ -171,7 +171,7 @@ export function useScreenshotCaptureFlow({
           questionAnswers: [answer, ...(capture.screenshot.questionAnswers ?? [])]
         }
       });
-      setNomiState("encouraging");
+      setCompanionState("encouraging");
     } finally {
       setScreenshotQuestionBusy(false);
     }

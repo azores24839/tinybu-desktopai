@@ -7,7 +7,7 @@ import type {
   FragmentRecommendationOutput,
   MemoryItem,
   MemoryUpdateOutput,
-  MirrorOutput,
+  ReviewOutput,
   PracticeAnswer,
   PracticeQuestionsOutput,
   PracticeTipOutput,
@@ -287,7 +287,7 @@ export function reviewRules(args: {
   fragments: CaptureFragment[];
   answers: PracticeAnswer[];
   appState: AppStateRecord;
-}): MirrorOutput {
+}): ReviewOutput {
   const firstAnswer = args.answers[0]?.answer || "I think this idea is useful.";
   const selectedText = args.fragments.slice(0, 2).map((fragment) => fragment.text).join(" ");
   const savedBase = expressionCardRules(selectedText || firstAnswer, {
@@ -324,12 +324,12 @@ export function reviewRules(args: {
   };
 }
 
-export function mirrorRules(args: {
+export function talkReviewRules(args: {
   sessionTitle: string;
   messages: TalkMessage[];
   expressions: ExpressionRecord[];
   appState: AppStateRecord;
-}): MirrorOutput {
+}): ReviewOutput {
   const userMessages = args.messages.filter((message) => message.role === "user");
   const usedPattern = args.expressions.find((item) =>
     userMessages.some((message) => contains(message.text, item.pattern.split("…")[0] || item.original.slice(0, 8)))
@@ -370,7 +370,7 @@ export function mirrorRules(args: {
 }
 
 export function memoryUpdateRules(args: {
-  mirror: MirrorOutput;
+  review: ReviewOutput;
   expressions: ExpressionRecord[];
   rescueUsed?: RescueType[];
   appState: AppStateRecord;
@@ -408,7 +408,7 @@ export function memoryUpdateRules(args: {
       id: uid("memory"),
       type: "next",
       title: "下次建议",
-      body: args.mirror.nextPractice,
+      body: args.review.nextPractice,
       editable: true,
       updatedAt: nowIso()
     }

@@ -6,7 +6,7 @@ document.querySelectorAll("button[data-kind]").forEach((button) => {
 
     try {
       const response = await chrome.runtime.sendMessage({
-        type: "NOMI_CAPTURE_ACTIVE_TAB",
+        type: "TINYBU_CAPTURE_ACTIVE_TAB",
         kind: button.dataset.kind
       });
 

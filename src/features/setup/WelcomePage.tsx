@@ -1,12 +1,12 @@
 import { ChevronRight } from "lucide-react";
-import { NomiOrb } from "../../components/NomiOrb";
+import { TinyBuOrb } from "../../components/TinyBuOrb";
 
 export function WelcomePage({ start, demo }: { start: () => void; demo: () => void }) {
   return (
     <section className="welcome-layout">
       <div className="hero-copy">
         <div className="brand-mark">
-          <NomiOrb state="speaking" />
+          <TinyBuOrb state="speaking" />
           <span>TinyBu</span>
         </div>
         <h1>Turn real captures into language practice.</h1>

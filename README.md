@@ -160,7 +160,7 @@ Use this when you want the frontend to call a local proxy instead of directly ho
 Default proxy URL:
 
 ```text
-http://127.0.0.1:8787/v1/nomi/task
+http://127.0.0.1:8787/v1/tinybu/task
 ```
 
 Run with OpenRouter:

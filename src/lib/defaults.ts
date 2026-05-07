@@ -27,7 +27,7 @@ export const defaultSettings: AppSettings = {
   visionModel: "qwen/qwen3.6-35b-a3b",
   screenshotRecognitionEnabled: false,
   openRouterBaseUrl: "https://openrouter.ai/api/v1",
-  cloudProxyUrl: "http://127.0.0.1:8787/v1/nomi/task",
+  cloudProxyUrl: "http://127.0.0.1:8787/v1/tinybu/task",
   apiKeySaved: false
 };
 

@@ -96,7 +96,7 @@ Topic 已持久化为独立记录，包含：
 
 - Welcome 支持 Try Demo，生成 demo Capture。
 - Home 支持手动粘贴文本、文章片段或字幕。
-- 支持 URL query `nomiCapture` 导入外部 payload。
+- 支持 URL query `tinybuCapture` 导入外部 payload，并保留旧 `nomiCapture` 作为兼容入口。
 
 ### 浏览器扩展
 
@@ -274,7 +274,7 @@ Quick Chat 当前实现：
 
 `apps/api/server.mjs` 提供本地代理：
 
-- 默认监听：`http://127.0.0.1:8787/v1/nomi/task`
+- 默认监听：`http://127.0.0.1:8787/v1/tinybu/task`
 - 支持 `ANTHROPIC_AUTH_TOKEN`
 - 支持 `OPENROUTER_API_KEY`
 - 支持 `OPENAI_API_KEY`
@@ -349,7 +349,7 @@ Settings 当前包含：
 - reviews
 - expressions
 - talkSessions
-- mirrorCards
+- legacy mirrorCards store（旧 IndexedDB 表名，保留用于兼容历史数据）
 - memories
 
 Tauri 侧：
@@ -366,13 +366,13 @@ Tauri 侧：
 - YouTube transcript 捕捉在 transcript 面板打开时效果最好。
 - Cloud proxy 模式需要单独启动 `npm run api:dev` 并提供环境变量 key。
 - 当前没有流式输出；桌宠 quick chat 用短 prompt 和低 token 优化响应速度。
-- 早期 Watch / Talk / Mirror Card 文档属于历史草图，当前主实现以 Topic 工作台流程为准。
+- 早期 Watch / Talk / Review 文档属于历史草图，当前主实现以 Topic 工作台和 Review 流程为准。
 
 ## 当前代码结构状态
 
 截至 2026-05-07，前端已经从单一大 `App.tsx` 逐步拆分出以下模块：
 
-- `src/components/`：`AppHeader`、`EmptyState`、`NomiOrb`
+- `src/components/`：`AppHeader`、`EmptyState`、`TinyBuOrb`
 - `src/features/captures/`：Inbox、Organize、capture 工具函数
 - `src/features/topics/`：Topics、Topic Detail、Study Room、topic 工具函数
 - `src/features/screenshots/`：截图导入 flow、预览、确认清图、截图问答

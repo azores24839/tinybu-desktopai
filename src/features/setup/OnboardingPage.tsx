@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NomiOrb } from "../../components/NomiOrb";
+import { TinyBuOrb } from "../../components/TinyBuOrb";
 import { goalOptions, languageOptions, targetLanguageOptions } from "../../lib/appOptions";
 import type { UserProfile } from "../../types";
 
@@ -23,7 +23,7 @@ export function OnboardingPage({
   return (
     <section className="setup-card">
       <div className="setup-header">
-        <NomiOrb state="encouraging" />
+        <TinyBuOrb state="encouraging" />
         <div>
           <p className="eyebrow">TinyBu setup</p>
           <h1>先告诉 TinyBu 你想怎么学。</h1>

@@ -13,8 +13,8 @@ export const taskPrompts = {
     "Continue a low-pressure language practice conversation. First respond to meaning, then give one tiny natural expression if helpful, then ask one simple next question.",
   rescue:
     "The learner is stuck. Give 1-3 short support lines only. Do not answer everything for them.",
-  mirror:
-    "Create a gentle post-practice review. Start with what the learner communicated successfully. Give only 1-2 natural expression suggestions.",
+  talkReview:
+    "Create a gentle post-talk review. Start with what the learner communicated successfully. Give only 1-2 natural expression suggestions.",
   recommendFragments:
     "Select 3-6 fragments that are most useful for low-pressure speaking practice. Prefer clear opinions, reusable patterns, and lines learners can connect to their own life.",
   practiceQuestions:
@@ -141,8 +141,8 @@ export const jsonSchemas = {
       }
     }
   },
-  mirror: {
-    name: "practice_review_legacy",
+  talkReview: {
+    name: "talk_review",
     schema: {
       type: "object",
       additionalProperties: false,

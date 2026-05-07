@@ -1,16 +1,16 @@
-# Airi 对 Nomi 的参考笔记
+# Airi 对 TinyBu 的参考笔记
 
-## Nomi 最终在做什么
+## TinyBu 最终在做什么
 
-根据当前代码库来看，Nomi 是一个基于 Tauri、React、Dexie 和 AI Provider 层构建的桌面端语言学习陪伴应用。它的核心产品闭环是：
+根据当前代码库来看，TinyBu 是一个基于 Tauri、React、Dexie 和 AI Provider 层构建的桌面端语言学习陪伴应用。它的核心产品闭环是：
 
 1. 学习者观看内容，或粘贴真实文本 / transcript。
-2. Nomi 帮用户从内容中提取可复用表达。
+2. TinyBu 帮用户从内容中提取可复用表达。
 3. 学习者围绕这个内容进行低压力的口语或文字对话练习。
-4. Nomi 生成一次对话后的 Mirror Card。
-5. Nomi 更新学习记忆，服务于之后的练习。
+4. TinyBu 生成一次对话后的 Review。
+5. TinyBu 更新学习记忆，服务于之后的练习。
 
-所以，Nomi 的最终形态看起来不是一个泛聊天机器人，而更像是一个「内容到表达」的语言陪伴工具：它把用户本来就关心的输入，转化成用户能说出口、能复用的语言。
+所以，TinyBu 的最终形态看起来不是一个泛聊天机器人，而更像是一个「内容到表达」的语言陪伴工具：它把用户本来就关心的输入，转化成用户能说出口、能复用的语言。
 
 最强的产品差异点不是聊天本身，而是这个学习闭环：
 
@@ -29,11 +29,11 @@ Airi 是一个大型多包项目，包含 apps、packages、services、integrati
 
 参考：https://github.com/moeru-ai/airi
 
-对 Nomi 来说，真正值得借鉴的是分层思路，而不是项目规模。
+对 TinyBu 来说，真正值得借鉴的是分层思路，而不是项目规模。
 
-当前 Nomi 的大部分 AI 编排逻辑都在 `src/ai/provider.ts` 中。对于早期原型这是合理的，但一旦加入流式输出、语音、更多 Provider、取消请求、重试或任务历史，这个文件会迅速变得拥挤。
+当前 TinyBu 的大部分 AI 编排逻辑都在 `src/ai/provider.ts` 中。对于早期原型这是合理的，但一旦加入流式输出、语音、更多 Provider、取消请求、重试或任务历史，这个文件会迅速变得拥挤。
 
-建议 Nomi 逐步演化成这样的结构：
+建议 TinyBu 逐步演化成这样的结构：
 
 - `src/ai/tasks.ts`：定义任务名称、任务 payload 和结果类型
 - `src/ai/providers/`：OpenAI、云端代理、本地规则等 Provider 实现
@@ -42,9 +42,9 @@ Airi 是一个大型多包项目，包含 apps、packages、services、integrati
 
 ### 2. 把 Companion 当作状态，而不是装饰
 
-Airi 的核心概念不是普通助手，而是 AI 角色 / 伴侣。Nomi 现在已经有了这个雏形，例如 `CompanionProfile`、`NomiState` 和 orb 状态。
+Airi 的核心概念不是普通助手，而是 AI 角色 / 伴侣。TinyBu 现在已经有了这个雏形，例如 `CompanionProfile`、`TinyBuState` 和 orb 状态。
 
-下一步有价值的方向，是让 Nomi 的状态更加明确。
+下一步有价值的方向，是让 TinyBu 的状态更加明确。
 
 可以考虑这样的状态模型：
 
@@ -61,7 +61,7 @@ Airi 近期 release notes 中出现了很多 Provider / Model 设置相关的工
 
 参考：https://github.com/moeru-ai/airi/releases
 
-Nomi 可以借鉴「Provider Registry」这个想法，但要做得轻量：
+TinyBu 可以借鉴「Provider Registry」这个想法，但要做得轻量：
 
 - Provider 元数据：名称、设置字段、是否支持 streaming、是否支持 JSON schema
 - Provider 校验：保存前测试 API Key 或云端代理是否可用
@@ -84,7 +84,7 @@ Nomi 可以借鉴「Provider Registry」这个想法，但要做得轻量：
 
 ### 4. 结构化的 Chat Lifecycle
 
-Nomi 现在是在按钮事件里直接生成每一轮 Talk turn。这样很清楚，但一旦加入语音、流式响应或打断能力，交互就需要一个更明确的生命周期。
+TinyBu 现在是在按钮事件里直接生成每一轮 Talk turn。这样很清楚，但一旦加入语音、流式响应或打断能力，交互就需要一个更明确的生命周期。
 
 一个有用的生命周期可以是：
 
@@ -100,7 +100,7 @@ Nomi 现在是在按钮事件里直接生成每一轮 Talk turn。这样很清�
 
 ### 5. 将 Memory 作为一等产品表面
 
-Airi 将长期陪伴看作产品的重要部分。Nomi 的 memory 更偏学习场景，这是正确的。当前 `MemoryItem` 的结构已经朝着合适方向走了：
+Airi 将长期陪伴看作产品的重要部分。TinyBu 的 memory 更偏学习场景，这是正确的。当前 `MemoryItem` 的结构已经朝着合适方向走了：
 
 - interest
 - expression
@@ -108,29 +108,29 @@ Airi 将长期陪伴看作产品的重要部分。Nomi 的 memory 更偏学习�
 - anxiety
 - next
 
-受 Airi 启发，Nomi 可以进一步定义 memory 的作用域：
+受 Airi 启发，TinyBu 可以进一步定义 memory 的作用域：
 
 - session memory：这一次 Talk 里发生了什么
 - learning memory：稳定的学习偏好和重复出现的模式
 - expression memory：用户想复用的短语和句型
 - support memory：什么样的支架能帮助用户继续说下去
 
-所有 memory 都应该保持可编辑。Nomi 的信任感，取决于学习者是否觉得这些记忆是可见、可控的。
+所有 memory 都应该保持可编辑。TinyBu 的信任感，取决于学习者是否觉得这些记忆是可见、可控的。
 
 ### 6. 语音和实时能力是未来层，而不是地基
 
-Airi 的实时语音方向对 Nomi 是相关的，但 Nomi 不应该从这里开始。当前产品闭环在没有语音的情况下也成立。语音应该放在同一套 Talk lifecycle 之上：
+Airi 的实时语音方向对 TinyBu 是相关的，但 TinyBu 不应该从这里开始。当前产品闭环在没有语音的情况下也成立。语音应该放在同一套 Talk lifecycle 之上：
 
 - speech-to-text 创建用户 turn
-- AI task 创建 Nomi turn
+- AI task 创建 TinyBu turn
 - text-to-speech 读出回复
-- memory / mirror 仍然使用同一套持久化 session
+- memory / review 仍然使用同一套持久化 session
 
 这样未来的语音模式不会变成另一个独立产品。
 
 ### 7. Tool / Plugin 架构是更后面的模式
 
-Airi 有 integrations 和 plugin 式扩展能力。对 Nomi 来说，近期对应的东西不是通用插件系统，而是内容来源：
+Airi 有 integrations 和 plugin 式扩展能力。对 TinyBu 来说，近期对应的东西不是通用插件系统，而是内容来源：
 
 - 粘贴 transcript
 - YouTube transcript
@@ -151,9 +151,9 @@ Airi 有 integrations 和 plugin 式扩展能力。对 Nomi 来说，近期对�
 - billing / server runtime 相关机制
 - 重型 observability 基础设施
 
-这些解决的是 Airi 那种规模的问题。Nomi 眼下最大的风险不是架构不够大，而是丢掉学习闭环的清晰度。
+这些解决的是 Airi 那种规模的问题。TinyBu 眼下最大的风险不是架构不够大，而是丢掉学习闭环的清晰度。
 
-## 推荐的 Nomi 优先级
+## 推荐的 TinyBu 优先级
 
 ### 现在
 
@@ -179,6 +179,6 @@ Airi 有 integrations 和 plugin 式扩展能力。对 Nomi 来说，近期对�
 
 ## 结论
 
-Airi 的价值在于证明：AI companion 产品会受益于清晰的 runtime 分层、Provider 抽象、角色状态、记忆系统和实时扩展能力。Nomi 应该借鉴这些原则，但保持产品范围更窄、更清楚：
+Airi 的价值在于证明：AI companion 产品会受益于清晰的 runtime 分层、Provider 抽象、角色状态、记忆系统和实时扩展能力。TinyBu 应该借鉴这些原则，但保持产品范围更窄、更清楚：
 
-Nomi 首先不是要成为一个通用虚拟伴侣。它要成为一个语言陪伴者，帮助学习者把真实内容转化成更自信、可复用、说得出口的表达。
+TinyBu 首先不是要成为一个通用虚拟伴侣。它要成为一个语言陪伴者，帮助学习者把真实内容转化成更自信、可复用、说得出口的表达。

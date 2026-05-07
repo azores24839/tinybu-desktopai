@@ -2,7 +2,7 @@ import type {
   CaptureFragment,
   CaptureItem,
   ExpressionRecord,
-  MirrorOutput,
+  ReviewOutput,
   PracticeAnswer,
   PracticeQuestion,
   PracticeQuestionsOutput,
@@ -93,7 +93,7 @@ export function buildPracticeAnswer({
     id: createId(),
     questionId: question.id,
     answer,
-    nomiReply: `${turn.encouragement} ${turn.response}`,
+    tinybuReply: `${turn.encouragement} ${turn.response}`,
     createdAt: now()
   };
 }
@@ -109,7 +109,7 @@ export function buildSavedPracticeExpressions({
   createId,
   now
 }: {
-  reviewOutput: MirrorOutput;
+  reviewOutput: ReviewOutput;
   topic: TopicItem;
   createId: () => string;
   now: () => string;
@@ -137,7 +137,7 @@ export function buildPracticeReviewRecord({
   createId,
   now
 }: {
-  reviewOutput: MirrorOutput;
+  reviewOutput: ReviewOutput;
   session: PracticeSession;
   savedExpressions: ExpressionRecord[];
   createId: () => string;

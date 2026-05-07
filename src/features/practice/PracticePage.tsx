@@ -60,7 +60,7 @@ export function PracticePage({
                 </div>
                 <div className="bu-feedback">
                   <strong>TinyBu</strong>
-                  <p>{answer.nomiReply}</p>
+                  <p>{answer.tinybuReply}</p>
                   <button className="secondary">Save expression</button>
                 </div>
               </div>
@@ -68,7 +68,7 @@ export function PracticePage({
             {lastAnswer && (
               <div className="tiny-note">
                 <span>More natural</span>
-                <p>{lastAnswer.nomiReply}</p>
+                <p>{lastAnswer.tinybuReply}</p>
               </div>
             )}
           </section>

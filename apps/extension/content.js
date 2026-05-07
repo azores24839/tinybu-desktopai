@@ -1,16 +1,16 @@
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type === "NOMI_PING") {
+  if (message?.type === "TINYBU_PING") {
     sendResponse({ ok: true });
     return true;
   }
 
-  if (message?.type === "NOMI_DELIVER_TO_PAGE") {
+  if (message?.type === "TINYBU_DELIVER_TO_PAGE") {
     deliverToPage(message.payload);
     sendResponse({ ok: true });
     return true;
   }
 
-  if (message?.type !== "NOMI_EXTRACT") return false;
+  if (message?.type !== "TINYBU_EXTRACT") return false;
 
   try {
     const payload = extractPayload(message.kind);
@@ -26,10 +26,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 (() => {
-  const HOST_ID = "nomi-floating-capture-host";
+  const HOST_ID = "tinybu-floating-capture-host";
   const BRIDGE_INSTALLED_KEY = "__tinybuInvisibleCaptureBridgeInstalled";
-  const STORAGE_KEY = "nomiFloatingPosition";
-  const CAPTURE_COUNT_KEY = "nomiCaptureCount";
+  const STORAGE_KEY = "tinybuFloatingPosition";
+  const CAPTURE_COUNT_KEY = "tinybuCaptureCount";
   const EDGE_GAP = 24;
   const VIEWPORT_GAP = 8;
   const BUTTON_SIZE = 112;
@@ -40,7 +40,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const DESKTOP_CLIPBOARD_SUPPRESS_URL = "http://127.0.0.1:1421/v1/clipboard-suppress";
   const DESKTOP_CLIPBOARD_PROMPT_URL = "http://127.0.0.1:1421/v1/clipboard-prompt";
   const DESKTOP_PET_VISIBILITY_URL = "http://127.0.0.1:1421/v1/pet-visibility";
-  const QUICK_CHAT_PROXY_URL = "http://127.0.0.1:8787/v1/nomi/task";
+  const QUICK_CHAT_PROXY_URL = "http://127.0.0.1:8787/v1/tinybu/task";
   const QUICK_CHAT_MODEL = "MiniMax-M2.7";
   const AVATAR_BASE_URL = "http://127.0.0.1:1420/avatar/states";
   const avatarStateImages = {
@@ -87,7 +87,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     );
   }
 
-  function initFloatingNomi() {
+  function initFloatingTinyBu() {
     if (!document.documentElement || dedupeFloatingHosts()) return;
 
     const host = document.createElement("div");
@@ -106,29 +106,29 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     shadow.append(createFloatingStyles());
 
     const root = document.createElement("div");
-    root.className = "nomi-root";
+    root.className = "tinybu-root";
     root.dataset.state = "idle";
 
     const button = document.createElement("button");
-    button.className = "nomi-button";
+    button.className = "tinybu-button";
     button.type = "button";
     button.setAttribute("aria-label", "TinyBu capture assistant");
     button.title = "TinyBu Capture";
 
     const avatar = document.createElement("img");
-    avatar.className = "nomi-avatar";
+    avatar.className = "tinybu-avatar";
     avatar.alt = "";
     avatar.draggable = false;
     avatar.src = avatarStateImages.idle;
     button.append(avatar);
 
     const status = document.createElement("span");
-    status.className = "nomi-status";
+    status.className = "tinybu-status";
     status.textContent = "";
     status.hidden = true;
 
     const quickForm = document.createElement("form");
-    quickForm.className = "nomi-quick-form";
+    quickForm.className = "tinybu-quick-form";
 
     const quickInput = document.createElement("input");
     quickInput.type = "text";
@@ -139,12 +139,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     root.append(button, status, quickForm);
 
     const bubble = document.createElement("div");
-    bubble.className = "nomi-bubble";
+    bubble.className = "tinybu-bubble";
     bubble.setAttribute("role", "dialog");
     bubble.hidden = true;
 
     const feedbackBubble = document.createElement("div");
-    feedbackBubble.className = "nomi-bubble feedback";
+    feedbackBubble.className = "tinybu-bubble feedback";
     feedbackBubble.setAttribute("role", "status");
     feedbackBubble.hidden = true;
 
@@ -264,7 +264,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
 
     function handleCopySelection(event) {
-      if (drag || isEventFromNomi(event)) return;
+      if (drag || isEventFromTinyBu(event)) return;
 
       const copiedSelection = getPromptableSelectionSnapshot();
       if (!copiedSelection) return;
@@ -306,7 +306,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       feedbackBubble.hidden = true;
       feedbackBubble.replaceChildren();
       setMode("selectionPrompt");
-      bubble.className = "nomi-bubble selection";
+      bubble.className = "tinybu-bubble selection";
       bubble.replaceChildren();
 
       const yesButton = document.createElement("button");
@@ -331,7 +331,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       feedbackBubble.replaceChildren();
       updateQuickFormVisibility();
       setMode("actionPrompt");
-      bubble.className = "nomi-bubble actions";
+      bubble.className = "tinybu-bubble actions";
       bubble.replaceChildren();
 
       const actions = document.createElement("div");
@@ -402,7 +402,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return new Promise((resolve, reject) => {
         chrome.runtime.sendMessage(
           {
-            type: "NOMI_OPEN_CAPTURE",
+            type: "TINYBU_OPEN_CAPTURE",
             payload
           },
           (response) => {
@@ -426,7 +426,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     function showFeedback(message) {
       clearFeedbackTimer();
       hideSelectionBubble();
-      feedbackBubble.className = "nomi-bubble feedback";
+      feedbackBubble.className = "tinybu-bubble feedback";
       feedbackBubble.replaceChildren();
 
       const text = document.createElement("strong");
@@ -644,7 +644,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
 
     function handleDocumentPointerDown(event) {
-      if (isEventFromNomi(event)) return;
+      if (isEventFromTinyBu(event)) return;
       if (
         mode === "selectionPrompt" ||
         mode === "capturingSelection" ||
@@ -662,7 +662,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
     }
 
-    function isEventFromNomi(event) {
+    function isEventFromTinyBu(event) {
       return event?.target === host || event?.composedPath?.().includes(host);
     }
 
@@ -910,7 +910,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         box-sizing: border-box;
       }
 
-      .nomi-root {
+      .tinybu-root {
         position: absolute;
         left: 0;
         top: 0;
@@ -925,7 +925,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         transition: transform 80ms linear;
       }
 
-      .nomi-button {
+      .tinybu-button {
         position: relative;
         display: grid;
         place-items: center;
@@ -949,35 +949,35 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           transform 160ms ease;
       }
 
-      .nomi-button:hover,
-      .nomi-button:focus-visible {
+      .tinybu-button:hover,
+      .tinybu-button:focus-visible {
         transform: translateY(-1px);
       }
 
-      .nomi-root[data-state="dragging"] .nomi-button {
+      .tinybu-root[data-state="dragging"] .tinybu-button {
         cursor: grabbing;
         transform: scale(0.96);
       }
 
-      .nomi-root[data-state="selectionPrompt"] .nomi-button,
-      .nomi-root[data-state="capturingSelection"] .nomi-button,
-      .nomi-root[data-state="actionPrompt"] .nomi-button {
+      .tinybu-root[data-state="selectionPrompt"] .tinybu-button,
+      .tinybu-root[data-state="capturingSelection"] .tinybu-button,
+      .tinybu-root[data-state="actionPrompt"] .tinybu-button {
         filter: none;
       }
 
-      .nomi-root[data-state="saving"] .nomi-button {
-        animation: nomi-pulse 900ms ease-in-out infinite;
+      .tinybu-root[data-state="saving"] .tinybu-button {
+        animation: tinybu-pulse 900ms ease-in-out infinite;
       }
 
-      .nomi-root[data-state="saved"] .nomi-button {
+      .tinybu-root[data-state="saved"] .tinybu-button {
         filter: none;
       }
 
-      .nomi-root[data-state="error"] .nomi-button {
+      .tinybu-root[data-state="error"] .tinybu-button {
         filter: drop-shadow(0 12px 22px rgba(196, 64, 54, 0.18));
       }
 
-      .nomi-avatar {
+      .tinybu-avatar {
         display: block;
         width: 104px;
         height: 104px;
@@ -987,17 +987,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         filter: none;
       }
 
-      .nomi-root[data-state="selectionPrompt"] .nomi-avatar,
-      .nomi-root[data-state="capturingSelection"] .nomi-avatar,
-      .nomi-root[data-state="saving"] .nomi-avatar,
-      .nomi-root[data-state="saved"] .nomi-avatar {
+      .tinybu-root[data-state="selectionPrompt"] .tinybu-avatar,
+      .tinybu-root[data-state="capturingSelection"] .tinybu-avatar,
+      .tinybu-root[data-state="saving"] .tinybu-avatar,
+      .tinybu-root[data-state="saved"] .tinybu-avatar {
         width: ${BUTTON_SIZE}px;
         height: ${BUTTON_SIZE}px;
         filter: none;
         transform: none;
       }
 
-      .nomi-status {
+      .tinybu-status {
         width: max-content;
         max-width: 120px;
         border: 1px solid rgba(223, 228, 220, 0.95);
@@ -1012,22 +1012,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         pointer-events: none;
       }
 
-      .nomi-status[hidden] {
+      .tinybu-status[hidden] {
         display: none;
       }
 
-      .nomi-quick-form {
+      .tinybu-quick-form {
         z-index: 3;
         width: 119px;
         margin-top: 8px;
         pointer-events: auto;
       }
 
-      .nomi-quick-form[hidden] {
+      .tinybu-quick-form[hidden] {
         display: none;
       }
 
-      .nomi-quick-form input {
+      .tinybu-quick-form input {
         width: 100%;
         min-height: 30px;
         border: 1.6px solid #7a5642;
@@ -1042,16 +1042,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         box-shadow: 0 8px 20px rgba(106, 73, 54, 0.12);
       }
 
-      .nomi-quick-form input::placeholder {
+      .tinybu-quick-form input::placeholder {
         color: rgba(106, 73, 54, 0.62);
       }
 
-      .nomi-quick-form input:focus {
+      .tinybu-quick-form input:focus {
         border-color: #5d3f2f;
         box-shadow: 0 0 0 3px rgba(254, 224, 141, 0.5);
       }
 
-      .nomi-bubble {
+      .tinybu-bubble {
         position: absolute;
         z-index: 2147483647;
         display: grid;
@@ -1067,11 +1067,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         pointer-events: auto;
       }
 
-      .nomi-bubble[hidden] {
+      .tinybu-bubble[hidden] {
         display: none;
       }
 
-      .nomi-bubble.actions {
+      .tinybu-bubble.actions {
         width: max-content;
         min-width: 112px;
         gap: 3px;
@@ -1082,7 +1082,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         padding: 5px;
       }
 
-      .nomi-bubble.selection {
+      .tinybu-bubble.selection {
         width: min(150px, calc(100vw - 16px));
         border: 0;
         border-radius: 999px;
@@ -1091,14 +1091,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         padding: 0;
       }
 
-      .nomi-bubble strong {
+      .tinybu-bubble strong {
         color: #172021;
         font-size: 14px;
         font-weight: 800;
         line-height: 1.28;
       }
 
-      .nomi-bubble p {
+      .tinybu-bubble p {
         display: -webkit-box;
         overflow: hidden;
         margin: 0;
@@ -1119,7 +1119,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         flex-direction: column;
       }
 
-      .nomi-bubble button {
+      .tinybu-bubble button {
         min-height: 34px;
         border: 1px solid #dfe4dc;
         border-radius: 8px;
@@ -1134,25 +1134,25 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         text-align: center;
       }
 
-      .nomi-bubble button:hover,
-      .nomi-bubble button:focus-visible {
+      .tinybu-bubble button:hover,
+      .tinybu-bubble button:focus-visible {
         border-color: rgba(36, 108, 91, 0.34);
         background: #e7f5ef;
         outline: none;
       }
 
-      .nomi-bubble button.primary {
+      .tinybu-bubble button.primary {
         border-color: #246c5b;
         background: #246c5b;
         color: #ffffff;
       }
 
-      .nomi-bubble button.primary:hover,
-      .nomi-bubble button.primary:focus-visible {
+      .tinybu-bubble button.primary:hover,
+      .tinybu-bubble button.primary:focus-visible {
         background: #1f5c4e;
       }
 
-      .nomi-bubble.actions button {
+      .tinybu-bubble.actions button {
         min-height: 24px;
         border: 0;
         border-radius: 8px;
@@ -1165,13 +1165,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         white-space: nowrap;
       }
 
-      .nomi-bubble.actions button:hover,
-      .nomi-bubble.actions button:focus-visible {
+      .tinybu-bubble.actions button:hover,
+      .tinybu-bubble.actions button:focus-visible {
         background: #fee08d;
         outline: none;
       }
 
-      .nomi-bubble button.selection-save {
+      .tinybu-bubble button.selection-save {
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -1190,8 +1190,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         text-align: left;
       }
 
-      .nomi-bubble button.selection-save:hover,
-      .nomi-bubble button.selection-save:focus-visible {
+      .tinybu-bubble button.selection-save:hover,
+      .tinybu-bubble button.selection-save:focus-visible {
         border-color: transparent;
         background: #fee08d;
         color: #967d63;
@@ -1199,7 +1199,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         transform: translateY(-1px);
       }
 
-      .nomi-bubble button.selection-save:active {
+      .tinybu-bubble button.selection-save:active {
         transform: translateY(0) scale(0.99);
       }
 
@@ -1224,13 +1224,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         transform: translateY(-1px) rotate(-45deg);
       }
 
-      .nomi-bubble button.selection-save:hover .selection-check::after,
-      .nomi-bubble button.selection-save:focus-visible .selection-check::after,
-      .nomi-bubble button.selection-save:active .selection-check::after {
+      .tinybu-bubble button.selection-save:hover .selection-check::after,
+      .tinybu-bubble button.selection-save:focus-visible .selection-check::after,
+      .tinybu-bubble button.selection-save:active .selection-check::after {
         border-color: #f6bf34;
       }
 
-      .nomi-bubble.feedback {
+      .tinybu-bubble.feedback {
         position: absolute;
         width: max-content;
         max-width: min(210px, calc(100vw - 16px));
@@ -1248,14 +1248,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         -webkit-line-clamp: 2;
       }
 
-      .nomi-bubble.feedback strong {
+      .tinybu-bubble.feedback strong {
         color: #6a4936;
         font-size: 12px;
         font-weight: 850;
         line-height: 1.35;
       }
 
-      .nomi-bubble.feedback::after {
+      .tinybu-bubble.feedback::after {
         content: "";
         position: absolute;
         left: calc(var(--bubble-arrow-left, 50%) - 6px);
@@ -1268,11 +1268,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         background: #fffdf8;
       }
 
-      .nomi-bubble.feedback[hidden] {
+      .tinybu-bubble.feedback[hidden] {
         display: none;
       }
 
-      @keyframes nomi-pulse {
+      @keyframes tinybu-pulse {
         0%,
         100% {
           transform: scale(1);
@@ -1420,7 +1420,7 @@ function getYouTubeTranscriptLines() {
 function deliverToPage(payload) {
   let count = 0;
   const message = {
-    type: "NOMI_EXTENSION_CAPTURE",
+    type: "TINYBU_EXTENSION_CAPTURE",
     payload
   };
 

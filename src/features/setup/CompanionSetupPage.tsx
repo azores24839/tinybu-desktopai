@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NomiOrb } from "../../components/NomiOrb";
+import { TinyBuOrb } from "../../components/TinyBuOrb";
 import type { CompanionProfile } from "../../types";
 
 export function CompanionSetupPage({
@@ -15,7 +15,7 @@ export function CompanionSetupPage({
   return (
     <section className="setup-card">
       <div className="setup-header">
-        <NomiOrb state="speaking" />
+        <TinyBuOrb state="speaking" />
         <div>
           <p className="eyebrow">Companion</p>
           <h1>选择 TinyBu 的陪伴方式。</h1>

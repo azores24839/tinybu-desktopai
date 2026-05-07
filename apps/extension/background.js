@@ -1,23 +1,23 @@
-const NOMI_URL = "http://127.0.0.1:1420/";
+const TINYBU_URL = "http://127.0.0.1:1420/";
 const DESKTOP_BRIDGE_URL = "http://127.0.0.1:1421/v1/captures";
-const PENDING_CAPTURES_KEY = "nomiPendingCaptures";
-const CAPTURE_COUNT_KEY = "nomiCaptureCount";
+const PENDING_CAPTURES_KEY = "tinybuPendingCaptures";
+const CAPTURE_COUNT_KEY = "tinybuCaptureCount";
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
-    id: "nomi-selection",
+    id: "tinybu-selection",
     title: "Send selection to TinyBu",
     contexts: ["selection"]
   });
 
   chrome.contextMenus.create({
-    id: "nomi-page",
+    id: "tinybu-page",
     title: "Save page to TinyBu",
     contexts: ["page"]
   });
 
   chrome.contextMenus.create({
-    id: "nomi-youtube",
+    id: "tinybu-youtube",
     title: "Capture YouTube transcript to TinyBu",
     contexts: ["page"],
     documentUrlPatterns: ["https://www.youtube.com/*", "https://youtube.com/*"]
@@ -28,9 +28,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab?.id) return;
 
   const kindByMenu = {
-    "nomi-selection": "selection",
-    "nomi-page": "article",
-    "nomi-youtube": "youtube"
+    "tinybu-selection": "selection",
+    "tinybu-page": "article",
+    "tinybu-youtube": "youtube"
   };
 
   try {
@@ -41,7 +41,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type === "NOMI_CAPTURE_ACTIVE_TAB") {
+  if (message?.type === "TINYBU_CAPTURE_ACTIVE_TAB") {
     getActiveTab()
       .then((tab) => captureFromTab(tab.id, message.kind, tab.url))
       .then((result) => sendResponse(result))
@@ -49,7 +49,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message?.type === "NOMI_OPEN_CAPTURE") {
+  if (message?.type === "TINYBU_OPEN_CAPTURE") {
     saveCapture(message.payload)
       .then((result) => sendResponse({ ok: true, ...result }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
@@ -60,7 +60,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status !== "complete" || !isNomiUrl(tab.url)) return;
+  if (changeInfo.status !== "complete" || !isTinyBuUrl(tab.url)) return;
   flushPendingCapturesToTab(tabId).catch((error) => {
     console.error("TinyBu pending capture delivery failed", error);
   });
@@ -90,7 +90,7 @@ async function captureFromTab(tabId, kind, tabUrl = "") {
 async function sendExtractMessage(tabId, kind) {
   try {
     return await chrome.tabs.sendMessage(tabId, {
-      type: "NOMI_EXTRACT",
+      type: "TINYBU_EXTRACT",
       kind
     });
   } catch (error) {
@@ -105,7 +105,7 @@ async function sendExtractMessage(tabId, kind) {
   await wait(80);
 
   return chrome.tabs.sendMessage(tabId, {
-    type: "NOMI_EXTRACT",
+    type: "TINYBU_EXTRACT",
     kind
   });
 }
@@ -119,7 +119,7 @@ async function saveCapture(payload) {
     return { count: bridgeResult.count };
   }
 
-  const delivered = await deliverCaptureToOpenNomiTab(normalized);
+  const delivered = await deliverCaptureToOpenTinyBuTab(normalized);
   const count = await incrementCaptureCount();
 
   if (!delivered) {
@@ -182,14 +182,14 @@ async function incrementCaptureCount() {
   return count;
 }
 
-async function deliverCaptureToOpenNomiTab(payload) {
-  const tabs = await chrome.tabs.query({ url: `${NOMI_URL}*` });
+async function deliverCaptureToOpenTinyBuTab(payload) {
+  const tabs = await chrome.tabs.query({ url: `${TINYBU_URL}*` });
   const tab = tabs.find((item) => item.id && item.status === "complete");
 
   if (!tab?.id) return false;
 
   try {
-    await deliverCaptureToNomiTab(tab.id, payload);
+    await deliverCaptureToTinyBuTab(tab.id, payload);
     return true;
   } catch (error) {
     console.warn("TinyBu capture delivery deferred", error);
@@ -218,7 +218,7 @@ async function flushPendingCapturesToTab(tabId) {
 
   for (const payload of pending) {
     try {
-      await deliverCaptureToNomiTab(tabId, payload);
+      await deliverCaptureToTinyBuTab(tabId, payload);
     } catch (error) {
       undelivered.push(payload);
       console.warn("TinyBu pending capture delivery deferred", error);
@@ -230,17 +230,17 @@ async function flushPendingCapturesToTab(tabId) {
   });
 }
 
-async function deliverCaptureToNomiTab(tabId, payload) {
+async function deliverCaptureToTinyBuTab(tabId, payload) {
   await ensureContentScript(tabId);
   await chrome.tabs.sendMessage(tabId, {
-    type: "NOMI_DELIVER_TO_PAGE",
+    type: "TINYBU_DELIVER_TO_PAGE",
     payload
   });
 }
 
 async function ensureContentScript(tabId) {
   try {
-    await chrome.tabs.sendMessage(tabId, { type: "NOMI_PING" });
+    await chrome.tabs.sendMessage(tabId, { type: "TINYBU_PING" });
     return;
   } catch {
     await chrome.scripting.executeScript({
@@ -271,8 +271,8 @@ function canInjectIntoUrl(url) {
   return /^(https?:|file:)/.test(url || "");
 }
 
-function isNomiUrl(url) {
-  return typeof url === "string" && url.startsWith(NOMI_URL);
+function isTinyBuUrl(url) {
+  return typeof url === "string" && url.startsWith(TINYBU_URL);
 }
 
 function isMissingReceiverError(error) {

@@ -15,10 +15,10 @@ use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 const SERVICE_NAME: &str = "TinyBu";
 const OPENAI_ACCOUNT: &str = "openai_api_key";
 const CAPTURE_BRIDGE_ADDR: &str = "127.0.0.1:1421";
-const CAPTURE_BRIDGE_EVENT: &str = "nomi-capture-bridge-updated";
-const CLIPBOARD_PROMPT_EVENT: &str = "nomi-clipboard-prompt";
-const CLIPBOARD_SUPPRESS_EVENT: &str = "nomi-clipboard-suppress";
-const OPEN_CAPTURES_EVENT: &str = "nomi-open-captures";
+const CAPTURE_BRIDGE_EVENT: &str = "tinybu-capture-bridge-updated";
+const CLIPBOARD_PROMPT_EVENT: &str = "tinybu-clipboard-prompt";
+const CLIPBOARD_SUPPRESS_EVENT: &str = "tinybu-clipboard-suppress";
+const OPEN_CAPTURES_EVENT: &str = "tinybu-open-captures";
 const SCREENSHOT_CAPTURE_EVENT: &str = "tinybu-screenshot-captured";
 
 type SharedCaptureBridge = Arc<Mutex<CaptureBridgeState>>;

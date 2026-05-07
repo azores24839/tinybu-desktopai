@@ -13,7 +13,7 @@ import {
   Wand2
 } from "lucide-react";
 import { demoContents } from "./data/demoContent";
-import { NomiOrb } from "./components/NomiOrb";
+import { TinyBuOrb } from "./components/TinyBuOrb";
 import { clearLearningData, db, loadAppState, normalizeCapture, saveAppState } from "./lib/db";
 import { clearUserApiKey, loadUserApiKey, saveUserApiKey } from "./lib/secureKey";
 import { invokeTauri, listenTauri, type CaptureBridgeState } from "./lib/tauriBridge";
@@ -73,7 +73,7 @@ import type {
   ExternalCaptureKind,
   ExternalCapturePayload,
   MemoryItem,
-  NomiState,
+  CompanionState,
   PracticeAnswer,
   PracticeSession,
   ReviewRecord,
@@ -83,8 +83,14 @@ import type {
   UserProfile
 } from "./types";
 
+const CAPTURE_QUERY_PARAM = "tinybuCapture";
+const LEGACY_CAPTURE_QUERY_PARAM = "nomiCapture";
+const CAPTURE_MESSAGE_TYPE = "TINYBU_CAPTURE";
+const LEGACY_CAPTURE_MESSAGE_TYPE = "NOMI_CAPTURE";
+
 function parseIncomingCapture(): ExternalCapturePayload | null {
-  const raw = new URLSearchParams(window.location.search).get("nomiCapture");
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get(CAPTURE_QUERY_PARAM) ?? params.get(LEGACY_CAPTURE_QUERY_PARAM);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as ExternalCapturePayload;
@@ -113,7 +119,7 @@ export default function App() {
   const [reviews, setReviews] = useState<ReviewRecord[]>([]);
   const [expressions, setExpressions] = useState<ExpressionRecord[]>([]);
   const [memories, setMemories] = useState<MemoryItem[]>([]);
-  const [nomiState, setNomiState] = useState<NomiState>("idle");
+  const [companionState, setCompanionState] = useState<CompanionState>("idle");
   const [practiceInput, setPracticeInput] = useState("");
   const [screenshotQuestionInput, setScreenshotQuestionInput] = useState("");
   const [screenshotQuestionBusy, setScreenshotQuestionBusy] = useState(false);
@@ -158,7 +164,7 @@ export default function App() {
     getCaptureText: captureText,
     setCaptures,
     setBusyLabel,
-    setNomiState,
+    setCompanionState,
     setScreenshotQuestionInput,
     setScreenshotQuestionBusy
   });
@@ -223,7 +229,7 @@ export default function App() {
     let active = true;
     let unlisten = () => {};
 
-    listenTauri("nomi-open-captures", () => {
+    listenTauri("tinybu-open-captures", () => {
       void importPendingBridgeCaptures();
     }).then((cleanup) => {
       if (active) unlisten = cleanup;
@@ -251,7 +257,7 @@ export default function App() {
     let active = true;
     let unlisten = () => {};
 
-    listenTauri<CaptureBridgeState>("nomi-capture-bridge-updated", (event) => {
+    listenTauri<CaptureBridgeState>("tinybu-capture-bridge-updated", (event) => {
       if ((event.payload?.pendingCount ?? 0) > 0) {
         void importPendingBridgeCaptures();
       }
@@ -268,7 +274,7 @@ export default function App() {
 
   useEffect(() => {
     async function handleExtensionCapture(event: MessageEvent) {
-      if (event.data?.type !== "NOMI_CAPTURE" && event.data?.type !== "TINYBU_CAPTURE") return;
+      if (event.data?.type !== CAPTURE_MESSAGE_TYPE && event.data?.type !== LEGACY_CAPTURE_MESSAGE_TYPE) return;
       const incomingCapture = event.data.payload as ExternalCapturePayload;
       const text = incomingCapture?.text?.trim();
       if (!text) return;
@@ -436,7 +442,7 @@ export default function App() {
     const text = args.text.trim();
     if (!text) return;
     setBusyLabel("Organizing capture");
-    setNomiState("thinking");
+    setCompanionState("thinking");
     const capture = await createCaptureRecord({ ...args, text, appState });
     await db.captures.put(capture);
     setCaptures((items) => [capture, ...items]);
@@ -450,7 +456,7 @@ export default function App() {
     });
     setHomePasteDraft("");
     setBusyLabel("");
-    setNomiState("idle");
+    setCompanionState("idle");
     navigate("inbox");
   }
 
@@ -602,7 +608,7 @@ export default function App() {
     if (!fragments.length) return;
 
     setBusyLabel("Generating practice");
-    setNomiState("thinking");
+    setCompanionState("thinking");
     const output = await generatePracticeQuestions({ fragments, appState });
     const questions = buildPracticeQuestions(output.questions, () => uid("question"));
     const session = buildPracticeSession({
@@ -623,7 +629,7 @@ export default function App() {
     setTopics((items) => items.map((item) => (item.id === topic.id ? nextTopic : item)));
     setAppState((state) => ({ ...state, activeTopicId: topic.id, activePracticeSessionId: session.id }));
     setBusyLabel("");
-    setNomiState("listening");
+    setCompanionState("listening");
     navigate("practice");
   }
 
@@ -636,7 +642,7 @@ export default function App() {
     const question = session.questions[session.currentQuestionIndex];
     if (!question || question.tipLevel >= 2) return;
     const nextLevel = question.tipLevel + 1;
-    setNomiState("thinking");
+    setCompanionState("thinking");
     const tip = await generatePracticeTip({
       question: question.question,
       tipLevel: nextLevel,
@@ -650,7 +656,7 @@ export default function App() {
       questions: session.questions.map((item) => (item.id === question.id ? updatedQuestion : item)),
       updatedAt: nowIso()
     });
-    setNomiState("encouraging");
+    setCompanionState("encouraging");
   }
 
   async function submitPracticeAnswer(session: PracticeSession) {
@@ -658,7 +664,7 @@ export default function App() {
     const question = session.questions[session.currentQuestionIndex];
     if (!answer || !question) return;
     setPracticeInput("");
-    setNomiState("thinking");
+    setCompanionState("thinking");
     const turn = await generatePracticeTurn({
       answer,
       question: question.question,
@@ -683,7 +689,7 @@ export default function App() {
       currentQuestionIndex: session.currentQuestionIndex + 1,
       updatedAt: nowIso()
     });
-    setNomiState("listening");
+    setCompanionState("listening");
   }
 
   async function finishPractice(session: PracticeSession, answers: PracticeAnswer[]) {
@@ -721,7 +727,7 @@ export default function App() {
     const updatedCaptures = buildPracticedCaptures(capturesForTopic);
     const nextTopic = buildPracticedTopic({ topic, savedExpressionCount: savedExpressions.length, now: nowIso });
     const memoryUpdate = await updateMemory({
-      mirror: reviewOutput,
+      review: reviewOutput,
       expressions: savedExpressions,
       appState
     });
@@ -741,7 +747,7 @@ export default function App() {
     setCaptures((items) => items.map((item) => updatedCaptures.find((capture) => capture.id === item.id) ?? item));
     setTopics((items) => items.map((item) => (item.id === topic.id ? nextTopic : item)));
     setBusyLabel("");
-    setNomiState("celebrating");
+    setCompanionState("celebrating");
     navigate("practice-review");
   }
 
@@ -841,7 +847,7 @@ export default function App() {
         <div className="desktop-shell">
           <aside className="sidebar">
             <button className="brand-button" onClick={() => navigate("home")}>
-              <NomiOrb state={nomiState} />
+              <TinyBuOrb state={companionState} />
               <span>TinyBu</span>
             </button>
             <nav>

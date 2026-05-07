@@ -4,7 +4,6 @@ import type {
   CaptureItem,
   ExpressionRecord,
   MemoryItem,
-  MirrorCard,
   PracticeSession,
   ReviewRecord,
   TalkSession,
@@ -12,7 +11,10 @@ import type {
 } from "../types";
 import { defaultAppState } from "./defaults";
 
-class NomiDatabase extends Dexie {
+const LEGACY_DATABASE_NAME = "nomi-desktop";
+const LEGACY_REVIEW_STORE = "mirrorCards";
+
+class TinyBuDatabase extends Dexie {
   appState!: Table<AppStateRecord, string>;
   captures!: Table<CaptureItem, string>;
   practiceSessions!: Table<PracticeSession, string>;
@@ -20,16 +22,15 @@ class NomiDatabase extends Dexie {
   reviews!: Table<ReviewRecord, string>;
   expressions!: Table<ExpressionRecord, string>;
   talkSessions!: Table<TalkSession, string>;
-  mirrorCards!: Table<MirrorCard, string>;
   memories!: Table<MemoryItem, string>;
 
   constructor() {
-    super("nomi-desktop");
+    super(LEGACY_DATABASE_NAME);
     this.version(1).stores({
       appState: "id",
       expressions: "id,capturedAt,sourceTitle,category,saved,usedInTalk,learned",
       talkSessions: "id,createdAt,contentId,status",
-      mirrorCards: "id,createdAt,sessionId",
+      [LEGACY_REVIEW_STORE]: "id,createdAt,sessionId",
       memories: "id,type,updatedAt"
     });
     this.version(2).stores({
@@ -39,7 +40,7 @@ class NomiDatabase extends Dexie {
       reviews: "id,sessionId,createdAt",
       expressions: "id,capturedAt,sourceTitle,category,saved,usedInTalk,learned",
       talkSessions: "id,createdAt,contentId,status",
-      mirrorCards: "id,createdAt,sessionId",
+      [LEGACY_REVIEW_STORE]: "id,createdAt,sessionId",
       memories: "id,type,updatedAt"
     });
     this.version(3).stores({
@@ -50,13 +51,13 @@ class NomiDatabase extends Dexie {
       reviews: "id,sessionId,createdAt",
       expressions: "id,capturedAt,sourceTitle,sourceContentId,category,saved,usedInTalk,learned",
       talkSessions: "id,createdAt,contentId,status",
-      mirrorCards: "id,createdAt,sessionId",
+      [LEGACY_REVIEW_STORE]: "id,createdAt,sessionId",
       memories: "id,type,updatedAt"
     });
   }
 }
 
-export const db = new NomiDatabase();
+export const db = new TinyBuDatabase();
 
 export async function loadAppState(): Promise<AppStateRecord> {
   const existing = await db.appState.get("state");
@@ -100,7 +101,7 @@ export async function clearLearningData() {
     db.practiceSessions.clear(),
     db.reviews.clear(),
     db.talkSessions.clear(),
-    db.mirrorCards.clear(),
+    db.table(LEGACY_REVIEW_STORE).clear(),
     db.memories.clear()
   ]);
 }

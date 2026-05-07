@@ -402,7 +402,7 @@ a {
   color: var(--brand);
 }
 
-.nomi-orb {
+.tinybu-orb {
   display: grid;
   width: 38px;
   height: 38px;
@@ -411,7 +411,7 @@ a {
   background: var(--highlight);
 }
 
-.nomi-face {
+.tinybu-face {
   position: relative;
   width: 24px;
   height: 20px;
@@ -1186,24 +1186,24 @@ a {
   grid-column: span 2;
 }
 
-html.nomi-pet-html,
-html.nomi-pet-html body,
-html.nomi-pet-html #root {
+html.tinybu-pet-html,
+html.tinybu-pet-html body,
+html.tinybu-pet-html #root {
   background: transparent !important;
 }
 
-html.nomi-pet-html {
+html.tinybu-pet-html {
   overflow: hidden;
 }
 
-body.nomi-pet-body {
+body.tinybu-pet-body {
   overflow: hidden;
   min-width: 0;
   min-height: 0;
   background: transparent;
 }
 
-body.nomi-pet-body #root {
+body.tinybu-pet-body #root {
   width: 100vw;
   height: 100vh;
 }
@@ -1529,7 +1529,7 @@ body.nomi-pet-body #root {
   }
 }
 
-html.nomi-pet-html body.nomi-pet-body {
+html.tinybu-pet-html body.tinybu-pet-body {
   min-width: 0;
   min-height: 0;
 }
