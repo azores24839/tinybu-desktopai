@@ -102,6 +102,8 @@ export function HomePage({
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const activity = new Map<string, number>();
+  const locale = appState.profile.interfaceLanguage === "中文" ? "zh-CN" : "en-US";
+  const monthFormatter = new Intl.DateTimeFormat(locale, { month: "short" });
   const dateKey = (date: Date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   const addActivity = (value: string | undefined, weight: number) => {
@@ -116,11 +118,28 @@ export function HomePage({
     addActivity(topic.lastStudiedAt, 2);
   });
   sessions.forEach((session) => addActivity(session.completedAt, 3));
-  const rhythmDays = Array.from({ length: 70 }, (_, index) => {
-    const date = new Date(todayStart.getTime() - (69 - index) * dayMs);
-    const key = dateKey(date);
-    return { key, level: activity.get(key) ?? 0 };
+  const rhythmWeekCount = 18;
+  const currentMonday = new Date(todayStart);
+  currentMonday.setDate(todayStart.getDate() - ((todayStart.getDay() + 6) % 7));
+  const rhythmStart = new Date(currentMonday.getTime() - (rhythmWeekCount - 1) * 7 * dayMs);
+  const rhythmWeeks = Array.from({ length: rhythmWeekCount }, (_, weekIndex) => {
+    const days = Array.from({ length: 7 }, (_, dayIndex) => {
+      const date = new Date(rhythmStart.getTime() + (weekIndex * 7 + dayIndex) * dayMs);
+      const key = dateKey(date);
+      return {
+        key,
+        date,
+        future: date.getTime() > todayStart.getTime(),
+        level: activity.get(key) ?? 0
+      };
+    });
+    const monthDay = days.find((day) => day.date.getDate() === 1);
+    return {
+      label: weekIndex === 0 ? monthFormatter.format(days[0].date) : monthDay ? monthFormatter.format(monthDay.date) : "",
+      days
+    };
   });
+  const rhythmDays = rhythmWeeks.flatMap((week) => week.days);
 
   return (
     <section className="page">
@@ -154,23 +173,46 @@ export function HomePage({
         </section>
 
         <section className="panel rhythm-panel">
-          <div className="section-title">
-            <Sparkles size={18} />
-            {copy.rhythm}
+          <div className="rhythm-header">
+            <div className="section-title">
+              <Sparkles size={18} />
+              {copy.rhythm}
+            </div>
+            <div className="rhythm-legend">
+              <span>Less</span>
+              <i className="rhythm-cell level-0" />
+              <i className="rhythm-cell level-1" />
+              <i className="rhythm-cell level-2" />
+              <i className="rhythm-cell level-3" />
+              <i className="rhythm-cell level-4" />
+              <span>More</span>
+            </div>
           </div>
-          <div className="rhythm-grid" aria-label={copy.rhythm}>
-            {rhythmDays.map((day) => (
-              <span className={`rhythm-cell level-${day.level}`} key={day.key} title={`${day.key}: ${day.level}`} />
-            ))}
-          </div>
-          <div className="rhythm-legend">
-            <span>Less</span>
-            <i className="rhythm-cell level-0" />
-            <i className="rhythm-cell level-1" />
-            <i className="rhythm-cell level-2" />
-            <i className="rhythm-cell level-3" />
-            <i className="rhythm-cell level-4" />
-            <span>More</span>
+
+          <div className="rhythm-calendar" aria-label={copy.rhythm}>
+            <div className="rhythm-months" style={{ gridTemplateColumns: `repeat(${rhythmWeekCount}, var(--rhythm-cell-size))` }}>
+              {rhythmWeeks.map((week, index) => (
+                <span className="rhythm-month" key={`${week.label}-${index}`}>
+                  {week.label}
+                </span>
+              ))}
+            </div>
+            <div className="rhythm-calendar-body">
+              <div className="rhythm-weekdays" aria-hidden="true">
+                <span>Mon</span>
+                <span>Wed</span>
+                <span>Fri</span>
+              </div>
+              <div className="rhythm-grid" style={{ gridTemplateColumns: `repeat(${rhythmWeekCount}, var(--rhythm-cell-size))` }}>
+                {rhythmDays.map((day) => (
+                  <span
+                    className={`rhythm-cell level-${day.level}${day.future ? " future" : ""}`}
+                    key={day.key}
+                    title={`${day.key}: ${day.level}`}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </section>
       </div>

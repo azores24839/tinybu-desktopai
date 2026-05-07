@@ -46,6 +46,7 @@ import {
   understandContentRules
 } from "./rules";
 import { buildScreenshotCapturePayload, buildScreenshotQuestionPayload, type ScreenshotQuestionSource } from "./screenshotPayloads";
+import { buildContentUnderstandingPayload, buildExpressionCardPayload } from "./taskPayloads";
 
 type TaskName = ProviderTaskName;
 
@@ -91,12 +92,7 @@ export async function understandContent(
   content: ContentItem,
   appState: AppStateRecord
 ): Promise<ContentUnderstanding> {
-  const payload = {
-    transcript: content.transcript.map((line) => line.text).join("\n"),
-    level: appState.profile.level,
-    targetLanguage: appState.profile.targetLanguage,
-    nativeLanguage: appState.profile.nativeLanguage
-  };
+  const payload = buildContentUnderstandingPayload(content, appState);
 
   return withFallback(
     appState,
@@ -152,13 +148,7 @@ export async function generateExpressionCard(
   content: ContentItem,
   appState: AppStateRecord
 ) {
-  const payload = {
-    sentence,
-    context: content.summary,
-    level: appState.profile.level,
-    targetLanguage: appState.profile.targetLanguage,
-    nativeLanguage: appState.profile.nativeLanguage
-  };
+  const payload = buildExpressionCardPayload(sentence, content, appState);
 
   const base = await withFallback(
     appState,

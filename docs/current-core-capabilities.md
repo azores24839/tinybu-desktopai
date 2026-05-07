@@ -265,6 +265,7 @@ Quick Chat 当前实现：
 - 模型名包含 `/` 也会走 OpenRouter。
 - 截图相关 task 使用独立 vision model。
 - User API key 模式的前端模型选择和 OpenRouter 判断在 `src/ai/providerRouting.ts`，由回归测试覆盖。
+- 普通 AI task payload 构造在 `src/ai/taskPayloads.ts`，由回归测试覆盖。
 - 前端 OpenAI/OpenRouter 请求 payload 构造在 `src/ai/requestBuilders.ts`，由回归测试覆盖。
 - 截图识别和截图问答 payload 构造在 `src/ai/screenshotPayloads.ts`；只有视觉/位置类问题才附带截图图片。
 - 前端 OpenAI/OpenRouter/Cloud proxy client 在 `src/ai/providerClients.ts`。

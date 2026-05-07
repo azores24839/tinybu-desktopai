@@ -138,6 +138,37 @@ test("screenshot AI payloads only include images for visual layout questions", a
   assert.equal(buildScreenshotQuestionPayload({ question: "这段文字是什么意思？", screenshot, appState }).imageDataUrl, undefined);
 });
 
+test("general AI task payloads preserve transcript, context, and learner profile", async () => {
+  const { buildContentUnderstandingPayload, buildExpressionCardPayload } = await loadTsModule("src/ai/taskPayloads.ts");
+  const appState = {
+    profile: {
+      level: "A2",
+      nativeLanguage: "中文",
+      targetLanguage: "English"
+    }
+  };
+  const content = {
+    id: "content-1",
+    title: "Travel clip",
+    summary: "A short travel conversation.",
+    transcript: [{ text: "Where is the station?" }, { text: "It is near the park." }]
+  };
+
+  assert.deepEqual(buildContentUnderstandingPayload(content, appState), {
+    transcript: "Where is the station?\nIt is near the park.",
+    level: "A2",
+    targetLanguage: "English",
+    nativeLanguage: "中文"
+  });
+  assert.deepEqual(buildExpressionCardPayload("near the park", content, appState), {
+    sentence: "near the park",
+    context: "A short travel conversation.",
+    level: "A2",
+    targetLanguage: "English",
+    nativeLanguage: "中文"
+  });
+});
+
 test("screenshot confirmation is only available while image data and OCR text are present", async () => {
   const { canConfirmScreenshotText } = await loadTsModule("src/features/screenshots/screenshotUtils.ts");
   const capture = {

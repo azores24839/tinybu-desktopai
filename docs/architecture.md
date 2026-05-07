@@ -60,8 +60,8 @@ src/lib/
 
 src/ai/
   Prompts, JSON schemas, rules fallback, provider clients, frontend routing
-  helpers, request builders, screenshot payload builders, response parsing
-  and normalization.
+  helpers, task/request/screenshot payload builders, response parsing and
+  normalization.
 
 apps/api/
   Local cloud proxy plus provider routing helpers.
