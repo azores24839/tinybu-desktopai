@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { demoContents } from "./data/demoContent";
 import { TinyBuOrb } from "./components/TinyBuOrb";
-import { clearLearningData, db, loadAppState, normalizeCapture, saveAppState } from "./lib/db";
+import { clearLearningData, db, initializeDatabase, loadAppState, normalizeCapture, saveAppState } from "./lib/db";
 import { clearUserApiKey, loadUserApiKey, saveUserApiKey } from "./lib/secureKey";
 import { invokeTauri, listenTauri, type CaptureBridgeState } from "./lib/tauriBridge";
 import { defaultAppState, nowIso, uid } from "./lib/defaults";
@@ -171,6 +171,8 @@ export default function App() {
 
   useEffect(() => {
     async function boot() {
+      await initializeDatabase();
+
       const [state, storedCaptures, storedTopics, storedSessions, storedReviews, storedExpressions, storedMemories] =
         await Promise.all([
           loadAppState(),

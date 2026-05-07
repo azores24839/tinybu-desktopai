@@ -16,10 +16,11 @@ const legacyNamePattern = /\b(?:NOMI|Nomi|nomi|NORI|Nori|nori|Mirror|mirror)[A-Z
 const ignoredLegacyNameDirs = new Set([".git", "dist", "node_modules", "src-tauri/target"]);
 const legacyNameAllowlist = new Map([
   ["apps/api/server.mjs", new Set(["nomi"])],
-  ["docs/current-core-capabilities.md", new Set(["nomiCapture", "mirrorCards", "Mirror"])],
+  ["docs/architecture.md", new Set(["nomi-desktop"])],
+  ["docs/current-core-capabilities.md", new Set(["nomiCapture", "nomi-desktop", "mirrorCards", "Mirror"])],
   ["docs/ui-function-inventory.md", new Set(["nomiCapture"])],
   ["src/App.tsx", new Set(["nomiCapture", "NOMI_CAPTURE"])],
-  ["src/lib/db.ts", new Set(["nomi-desktop", "mirrorCards"])],
+  ["src/lib/db.ts", new Set(["nomi", "nomi-desktop", "mirrorCards"])],
   ["src/lib/secureKey.ts", new Set(["nomi-dev-openai-key"])]
 ]);
 

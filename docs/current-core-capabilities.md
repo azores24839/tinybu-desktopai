@@ -342,6 +342,8 @@ Settings 当前包含：
 
 前端使用 Dexie / IndexedDB：
 
+- 当前默认数据库名：`tinybu-desktop`
+- 启动时如果新库为空，会从旧 `nomi-desktop` 复制历史数据；旧库不会自动删除。
 - appState
 - captures
 - topics
@@ -349,8 +351,8 @@ Settings 当前包含：
 - reviews
 - expressions
 - talkSessions
-- legacy mirrorCards store（旧 IndexedDB 表名，保留用于兼容历史数据）
 - memories
+- legacy `mirrorCards` store 会迁移进 `reviews`，保留旧表名只用于读取历史数据。
 
 Tauri 侧：
 

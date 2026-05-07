@@ -57,6 +57,8 @@ src/features/settings/
 src/lib/
   Defaults, Dexie database setup, secure key storage, Tauri bridge helpers,
   shared options, UI copy, date formatting.
+  Dexie now writes to `tinybu-desktop`; startup migration copies data from
+  legacy `nomi-desktop` only when the new database is empty.
 
 src/ai/
   Prompts, JSON schemas, rules fallback, provider clients, frontend routing
@@ -156,4 +158,5 @@ Higher-risk refactors to postpone until the UI extractions are stable:
 - No Playwright coverage for major UI paths.
 - `App.tsx` still owns important side effects and flow orchestration.
 - `src/ai/provider.ts` needs provider-specific modules before adding many more providers.
+- IndexedDB migration currently copies legacy data but does not delete the old database; cleanup can be a later explicit maintenance step.
 - Long-term IndexedDB storage size needs monitoring if users keep many image-backed failed/preview screenshot captures.
