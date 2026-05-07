@@ -60,7 +60,7 @@ src/lib/
 
 src/ai/
   Prompts, JSON schemas, rules fallback, provider calls, frontend routing helpers,
-  response normalization.
+  response parsing and normalization.
 
 apps/api/
   Local cloud proxy plus provider routing helpers.

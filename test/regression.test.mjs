@@ -58,6 +58,32 @@ test("frontend provider routing picks task models and OpenRouter mode predictabl
   assert.equal(shouldUseOpenRouter("screenshotCapture", appState), true);
 });
 
+test("AI response parsing handles wrapped JSON, compact replies, and screenshot OCR aliases", async () => {
+  const { extractJsonText, normalizeScreenshotRecognition, parseJsonValue, quickReplyText } = await loadTsModule("src/ai/responseParsing.ts");
+
+  assert.equal(extractJsonText("```json\n{\"topic\":\"food\"}\n```"), "{\"topic\":\"food\"}");
+  assert.deepEqual(parseJsonValue("\"{\\\"topic\\\":\\\"food\\\"}\""), { topic: "food" });
+
+  const compact = quickReplyText(" hello    world ".repeat(10));
+  assert.equal(compact.length, 91);
+  assert.equal(compact.endsWith("..."), true);
+
+  const recognition = normalizeScreenshotRecognition({
+    screenshot_capture: {
+      title: "Dialog",
+      ocr_text: "保存失败",
+      language: "zh",
+      screen_type: "error dialog",
+      error_messages: ["保存失败"],
+      interactive_elements: ["重试"]
+    }
+  });
+  assert.equal(recognition.text, "保存失败");
+  assert.deepEqual(recognition.visibleText, ["保存失败"]);
+  assert.deepEqual(recognition.errorMessages, ["保存失败"]);
+  assert.deepEqual(recognition.interactiveElements, ["重试"]);
+});
+
 test("screenshot confirmation is only available while image data and OCR text are present", async () => {
   const { canConfirmScreenshotText } = await loadTsModule("src/features/screenshots/screenshotUtils.ts");
   const capture = {
