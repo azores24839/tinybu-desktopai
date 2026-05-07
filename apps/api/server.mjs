@@ -1,4 +1,5 @@
 import http from "node:http";
+import { pathToFileURL } from "node:url";
 
 const port = Number(process.env.PORT ?? 8787);
 const openAiApiKey = process.env.OPENAI_API_KEY;
@@ -13,7 +14,7 @@ const defaultModel =
   process.env.OPENAI_MODEL ??
   "MiniMax-M2.7";
 
-function normalizeOpenRouterModel(model = "") {
+export function normalizeOpenRouterModel(model = "") {
   const trimmed = model.trim();
   const aliases = {
     "MiniMax-M2.7": "minimax/minimax-m2.7",
@@ -26,7 +27,7 @@ function normalizeOpenRouterModel(model = "") {
   return aliases[trimmed] ?? trimmed;
 }
 
-function normalizeAnthropicModel(model = "") {
+export function normalizeAnthropicModel(model = "") {
   const trimmed = model.trim();
   const aliases = {
     "minimax/minimax-m2.7": "MiniMax-M2.7",
@@ -39,17 +40,18 @@ function normalizeAnthropicModel(model = "") {
   return aliases[trimmed] ?? trimmed;
 }
 
-function isAnthropicCompatibleModel(model = "") {
+export function isAnthropicCompatibleModel(model = "") {
   const trimmed = model.trim().toLowerCase();
   return trimmed.startsWith("minimax") || trimmed.startsWith("claude") || trimmed.startsWith("anthropic/");
 }
 
-function shouldUseOpenRouterModel(model = "") {
+export function shouldUseOpenRouterModel(model = "", options = {}) {
   const normalized = normalizeOpenRouterModel(model);
-  return normalized.includes("/") && (!anthropicAuthToken || !isAnthropicCompatibleModel(normalized));
+  const token = options.anthropicAuthToken ?? anthropicAuthToken;
+  return normalized.includes("/") && (!token || !isAnthropicCompatibleModel(normalized));
 }
 
-function isProviderQualifiedModel(model = "") {
+export function isProviderQualifiedModel(model = "") {
   return normalizeOpenRouterModel(model).includes("/");
 }
 
@@ -784,7 +786,9 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(port, "127.0.0.1", () => {
-  const provider = anthropicAuthToken ? "Anthropic-compatible" : openRouterApiKey ? "OpenRouter/OpenAI" : "OpenAI";
-  console.log(`TinyBu ${provider} proxy listening on http://127.0.0.1:${port}/v1/nomi/task`);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  server.listen(port, "127.0.0.1", () => {
+    const provider = anthropicAuthToken ? "Anthropic-compatible" : openRouterApiKey ? "OpenRouter/OpenAI" : "OpenAI";
+    console.log(`TinyBu ${provider} proxy listening on http://127.0.0.1:${port}/v1/nomi/task`);
+  });
+}

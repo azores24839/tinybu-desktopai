@@ -71,11 +71,12 @@ Remaining hotspots:
 - `src/App.tsx` is still large and owns too many business flows.
 - `src/ai/provider.ts` is large and mixes provider routing, request construction, parsing, and task helpers.
 - `src/styles.css` is large and global.
-- There are no automated behavior tests yet; current safety checks are mostly type/build checks.
+- There is a small Node-based regression suite for provider routing, screenshot confirmation, and practice data builders.
 
 Recommended current safety checks:
 
 ```bash
+npm run test:regression
 npm run typecheck
 npm run build
 node --check apps/api/server.mjs
@@ -103,9 +104,10 @@ When asked to refactor:
 
 1. Identify the exact files and functions to move.
 2. Move without changing behavior.
-3. Run `npm run typecheck`.
-4. Run `npm run build`.
-5. Report changed files and any residual risk.
+3. Run `npm run test:regression`.
+4. Run `npm run typecheck`.
+5. Run `npm run build`.
+6. Report changed files and any residual risk.
 
 ## Screenshot Behavior
 
@@ -145,7 +147,7 @@ Higher-risk refactors to postpone until the UI extractions are stable:
 
 ## Known Gaps
 
-- No unit tests for capture grouping, screenshot cleanup, provider routing, or practice flow.
+- Regression coverage is still small; currently it covers provider routing, screenshot confirmation, and practice data builders.
 - No Playwright coverage for major UI paths.
 - `App.tsx` still owns important side effects and flow orchestration.
 - `src/ai/provider.ts` needs provider-specific modules before adding many more providers.

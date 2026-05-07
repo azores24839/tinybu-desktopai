@@ -248,6 +248,7 @@ Screenshot / vision model: qwen/qwen3.6-35b-a3b
 Useful checks:
 
 ```bash
+npm run test:regression
 npm run typecheck
 npm run build
 node --check apps/api/server.mjs
@@ -257,6 +258,7 @@ cargo check --manifest-path src-tauri/Cargo.toml
 Recent verified checks:
 
 ```bash
+npm run test:regression
 npm run typecheck
 npm run build
 node --check apps/api/server.mjs
