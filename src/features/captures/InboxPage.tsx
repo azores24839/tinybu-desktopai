@@ -5,7 +5,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { formatDate } from "../../lib/date";
 import type { CaptureItem, CaptureStatus, ExternalCaptureKind, TopicItem } from "../../types";
 import { ScreenshotPreviewBlock } from "../screenshots/ScreenshotPreviewBlock";
-import { captureStatusLabels, captureText, normalizeStatus, sourceLabel } from "./captureUtils";
+import { captureStatusLabels, captureText, sourceLabel } from "./captureUtils";
 
 type InboxPageProps = {
   captures: CaptureItem[];
@@ -39,8 +39,7 @@ export function InboxPage({
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const visible = captures.filter((capture) => {
-    const normalized = normalizeStatus(capture.status);
-    if (status !== "all" && normalized !== status) return false;
+    if (status !== "all" && capture.status !== status) return false;
     if (source !== "all" && capture.sourceKind !== source) return false;
     const haystack = `${capture.title} ${capture.summary} ${captureText(capture)}`.toLowerCase();
     return haystack.includes(query.toLowerCase());
@@ -109,7 +108,7 @@ export function InboxPage({
                   <div className="meta-row">
                     <span>{sourceLabel(capture.sourceKind)}</span>
                     <span>{formatDate(capture.capturedAt)}</span>
-                    <span className="status-pill">{captureStatusLabels[normalizeStatus(capture.status)]}</span>
+                    <span className="status-pill">{captureStatusLabels[capture.status]}</span>
                   </div>
                 </div>
                 <div className="quick-actions">
@@ -167,7 +166,7 @@ export function InboxPage({
               <label>
                 Capture status
                 <select
-                  value={normalizeStatus(selectedCapture.status)}
+                  value={selectedCapture.status}
                   onChange={(event) => updateCapture({ ...selectedCapture, status: event.target.value as CaptureStatus })}
                 >
                   {Object.entries(captureStatusLabels).map(([value, label]) => (

@@ -96,7 +96,7 @@ Topic 已持久化为独立记录，包含：
 
 - Welcome 支持 Try Demo，生成 demo Capture。
 - Home 支持手动粘贴文本、文章片段或字幕。
-- 支持 URL query `tinybuCapture` 导入外部 payload，并保留旧 `nomiCapture` 作为兼容入口。
+- 支持 URL query `tinybuCapture` 导入外部 payload。
 
 ### 浏览器扩展
 
@@ -343,7 +343,6 @@ Settings 当前包含：
 前端使用 Dexie / IndexedDB：
 
 - 当前默认数据库名：`tinybu-desktop`
-- 启动时如果新库为空，会从旧 `nomi-desktop` 复制历史数据；旧库不会自动删除。
 - appState
 - captures
 - topics
@@ -352,7 +351,6 @@ Settings 当前包含：
 - expressions
 - talkSessions
 - memories
-- legacy `mirrorCards` store 会迁移进 `reviews`，保留旧表名只用于读取历史数据。
 
 Tauri 侧：
 

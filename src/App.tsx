@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { demoContents } from "./data/demoContent";
 import { TinyBuOrb } from "./components/TinyBuOrb";
-import { clearLearningData, db, initializeDatabase, loadAppState, normalizeCapture, saveAppState } from "./lib/db";
+import { clearLearningData, db, loadAppState, saveAppState } from "./lib/db";
 import { clearUserApiKey, loadUserApiKey, saveUserApiKey } from "./lib/secureKey";
 import { invokeTauri, listenTauri, type CaptureBridgeState } from "./lib/tauriBridge";
 import { defaultAppState, nowIso, uid } from "./lib/defaults";
@@ -22,7 +22,6 @@ import { uiCopy } from "./lib/uiCopy";
 import {
   captureText,
   inferPracticeGoal,
-  normalizeStatus,
   splitCaptureText
 } from "./features/captures/captureUtils";
 import { InboxPage } from "./features/captures/InboxPage";
@@ -84,13 +83,11 @@ import type {
 } from "./types";
 
 const CAPTURE_QUERY_PARAM = "tinybuCapture";
-const LEGACY_CAPTURE_QUERY_PARAM = "nomiCapture";
 const CAPTURE_MESSAGE_TYPE = "TINYBU_CAPTURE";
-const LEGACY_CAPTURE_MESSAGE_TYPE = "NOMI_CAPTURE";
 
 function parseIncomingCapture(): ExternalCapturePayload | null {
   const params = new URLSearchParams(window.location.search);
-  const raw = params.get(CAPTURE_QUERY_PARAM) ?? params.get(LEGACY_CAPTURE_QUERY_PARAM);
+  const raw = params.get(CAPTURE_QUERY_PARAM);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as ExternalCapturePayload;
@@ -171,8 +168,6 @@ export default function App() {
 
   useEffect(() => {
     async function boot() {
-      await initializeDatabase();
-
       const [state, storedCaptures, storedTopics, storedSessions, storedReviews, storedExpressions, storedMemories] =
         await Promise.all([
           loadAppState(),
@@ -186,7 +181,7 @@ export default function App() {
 
       const incomingCapture = parseIncomingCapture();
       let bootState = state;
-      let nextCaptures = storedCaptures.map(normalizeCapture);
+      let nextCaptures = storedCaptures;
 
       if (incomingCapture?.text) {
         const capture = await createCaptureRecord({
@@ -276,7 +271,7 @@ export default function App() {
 
   useEffect(() => {
     async function handleExtensionCapture(event: MessageEvent) {
-      if (event.data?.type !== CAPTURE_MESSAGE_TYPE && event.data?.type !== LEGACY_CAPTURE_MESSAGE_TYPE) return;
+      if (event.data?.type !== CAPTURE_MESSAGE_TYPE) return;
       const incomingCapture = event.data.payload as ExternalCapturePayload;
       const text = incomingCapture?.text?.trim();
       if (!text) return;
@@ -507,9 +502,8 @@ export default function App() {
   }
 
   async function updateCapture(nextCapture: CaptureItem) {
-    const normalized = normalizeCapture(nextCapture);
-    await db.captures.put(normalized);
-    setCaptures((items) => items.map((item) => (item.id === normalized.id ? normalized : item)));
+    await db.captures.put(nextCapture);
+    setCaptures((items) => items.map((item) => (item.id === nextCapture.id ? nextCapture : item)));
   }
 
   async function updateTopic(nextTopic: TopicItem) {
@@ -591,7 +585,7 @@ export default function App() {
   async function markTopicStudied(topic: TopicItem) {
     const capturesForTopic = topicCaptures(topic, captures);
     const updatedCaptures: CaptureItem[] = capturesForTopic.map((capture) =>
-      normalizeStatus(capture.status) === "practiced" ? capture : { ...capture, status: "studied" }
+      capture.status === "practiced" ? capture : { ...capture, status: "studied" }
     );
     const nextTopic: TopicItem = {
       ...topic,

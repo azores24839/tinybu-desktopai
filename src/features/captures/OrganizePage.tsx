@@ -3,7 +3,7 @@ import { ChevronLeft } from "lucide-react";
 import { AppHeader } from "../../components/AppHeader";
 import { EmptyState } from "../../components/EmptyState";
 import type { CaptureItem, TopicItem } from "../../types";
-import { normalizeStatus, sourceLabel, suggestedGroups } from "./captureUtils";
+import { sourceLabel, suggestedGroups } from "./captureUtils";
 
 type OrganizePageProps = {
   captures: CaptureItem[];
@@ -25,7 +25,7 @@ export function OrganizePage({
   const [selectedGroupName, setSelectedGroupName] = useState(groups[0]?.name ?? "");
   const [topicName, setTopicName] = useState(groups[0]?.name ?? "New Topic");
   const selectedGroup = groups.find((group) => group.name === selectedGroupName) ?? groups[0];
-  const unsorted = captures.filter((capture) => !capture.topicId && normalizeStatus(capture.status) !== "archived");
+  const unsorted = captures.filter((capture) => !capture.topicId && capture.status !== "archived");
 
   useEffect(() => {
     if (selectedGroup) {

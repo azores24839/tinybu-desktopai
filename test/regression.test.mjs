@@ -12,17 +12,8 @@ import {
 } from "../apps/api/providerRouting.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const legacyNamePattern = /\b(?:NOMI|Nomi|nomi|NORI|Nori|nori|Mirror|mirror)[A-Za-z0-9_-]*/g;
-const ignoredLegacyNameDirs = new Set([".git", "dist", "node_modules", "src-tauri/target"]);
-const legacyNameAllowlist = new Map([
-  ["apps/api/server.mjs", new Set(["nomi"])],
-  ["docs/architecture.md", new Set(["nomi-desktop"])],
-  ["docs/current-core-capabilities.md", new Set(["nomiCapture", "nomi-desktop", "mirrorCards", "Mirror"])],
-  ["docs/ui-function-inventory.md", new Set(["nomiCapture"])],
-  ["src/App.tsx", new Set(["nomiCapture", "NOMI_CAPTURE"])],
-  ["src/lib/db.ts", new Set(["nomi", "nomi-desktop", "mirrorCards"])],
-  ["src/lib/secureKey.ts", new Set(["nomi-dev-openai-key"])]
-]);
+const retiredProductNamePattern = /\b(?:NOMI|Nomi|nomi|NORI|Nori|nori|Mirror|mirror)[A-Za-z0-9_-]*/g;
+const ignoredRetiredNameDirs = new Set([".git", "dist", "node_modules", "src-tauri/target"]);
 
 async function loadTsModule(relativePath) {
   const filePath = resolve(root, relativePath);
@@ -45,7 +36,7 @@ async function listProjectFiles(dir = root, prefix = "") {
   for (const entry of entries) {
     const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
-      if (!ignoredLegacyNameDirs.has(relativePath) && !ignoredLegacyNameDirs.has(entry.name)) {
+      if (!ignoredRetiredNameDirs.has(relativePath) && !ignoredRetiredNameDirs.has(entry.name)) {
         files.push(...(await listProjectFiles(resolve(dir, entry.name), relativePath)));
       }
       continue;
@@ -57,18 +48,14 @@ async function listProjectFiles(dir = root, prefix = "") {
   return files;
 }
 
-test("legacy Nomi, Nori, and Mirror names stay confined to compatibility allowlist", async () => {
+test("retired product names are absent from project files", async () => {
   const files = await listProjectFiles();
   const violations = [];
 
   for (const relativePath of files) {
     const source = await readFile(resolve(root, relativePath), "utf8");
-    const allowed = legacyNameAllowlist.get(relativePath) ?? new Set();
-    for (const match of source.matchAll(legacyNamePattern)) {
-      const token = match[0];
-      if (!allowed.has(token)) {
-        violations.push(`${relativePath}: ${token}`);
-      }
+    for (const match of source.matchAll(retiredProductNamePattern)) {
+      violations.push(`${relativePath}: ${match[0]}`);
     }
   }
 

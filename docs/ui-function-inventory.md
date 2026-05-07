@@ -140,7 +140,7 @@ TinyBu 是一个桌面端 AI 外语表达伙伴。核心目标是帮助用户把
 
 外部内容能力：
 
-- 当前代码支持通过 URL query 中的 `tinybuCapture` 接收外部 capture payload，并保留旧 `nomiCapture` 作为兼容入口。
+- 当前代码支持通过 URL query 中的 `tinybuCapture` 接收外部 capture payload。
 - payload 可包含 kind、title、url、text、capturedAt。
 - 支持来源类型：selection、article、youtube、video、manual。
 - 如果检测到外部 capture，会直接进入 Watch Room。

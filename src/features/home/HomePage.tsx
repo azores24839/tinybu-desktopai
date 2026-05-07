@@ -1,7 +1,7 @@
 import { ChevronRight, Crown, Sparkles } from "lucide-react";
 import { AppHeader } from "../../components/AppHeader";
 import { uiCopy } from "../../lib/uiCopy";
-import { normalizeStatus, suggestedGroups } from "../captures/captureUtils";
+import { suggestedGroups } from "../captures/captureUtils";
 import type { AppStateRecord, CaptureItem, MemoryItem, PracticeSession, Screen, TopicItem } from "../../types";
 
 export function HomePage({
@@ -31,7 +31,7 @@ export function HomePage({
   const profileSummary = `${appState.profile.targetLanguage} · ${appState.profile.level} · ${appState.profile.supportPreference}`;
   const activeSessions = sessions.filter((session) => session.status === "active");
   const suggested = suggestedGroups(captures);
-  const waitingCaptures = captures.filter((capture) => normalizeStatus(capture.status) !== "archived" && !capture.topicId);
+  const waitingCaptures = captures.filter((capture) => capture.status !== "archived" && !capture.topicId);
   const readyTopics = topics.filter((topic) => topic.status === "ready");
   const practiceTopics = topics.filter((topic) => topic.status === "in-progress");
   const latestMemory = [...memories].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];

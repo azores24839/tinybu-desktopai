@@ -43,20 +43,13 @@ export function sourceLabel(kind: ExternalCaptureKind) {
   return "Pasted text";
 }
 
-export function normalizeStatus(status: CaptureItem["status"]): CaptureStatus {
-  if (status === "new") return "unsorted";
-  if (status === "in-practice") return "studied";
-  if (status === "completed") return "practiced";
-  return status;
-}
-
 export function captureText(capture: CaptureItem) {
   return capture.sourceText || capture.fragments.map((fragment) => fragment.text).join("\n");
 }
 
 export function suggestedGroups(captures: CaptureItem[]) {
   const groups = captures
-    .filter((capture) => !capture.topicId && normalizeStatus(capture.status) !== "archived")
+    .filter((capture) => !capture.topicId && capture.status !== "archived")
     .reduce<Record<string, CaptureItem[]>>((acc, capture) => {
       const name = capture.topic || "Fresh Captures";
       acc[name] = [...(acc[name] ?? []), capture];

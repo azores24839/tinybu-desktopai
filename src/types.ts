@@ -38,7 +38,6 @@ export type ExternalCaptureKind = "selection" | "article" | "youtube" | "video" 
 export type PracticeStage = "select" | "answer" | "review";
 export type PracticeQuestionType = "understanding" | "opinion" | "personal" | "expression";
 export type CaptureStatus = "unsorted" | "suggested" | "in-topic" | "studied" | "practiced" | "archived";
-export type LegacyCaptureStatus = "new" | "in-practice" | "completed";
 export type TopicStatus = "ready" | "in-progress" | "practiced";
 export type RescueType =
   | "start"
@@ -147,7 +146,7 @@ export interface CaptureItem {
   capturedAt: string;
   fragments: CaptureFragment[];
   topicId?: string;
-  status: CaptureStatus | LegacyCaptureStatus;
+  status: CaptureStatus;
 }
 
 export interface TopicItem {

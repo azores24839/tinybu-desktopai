@@ -4,7 +4,7 @@ import { EmptyState } from "../../components/EmptyState";
 import type { CaptureItem, ExpressionRecord, TopicItem } from "../../types";
 import { ScreenshotPreviewBlock } from "../screenshots/ScreenshotPreviewBlock";
 import { ScreenshotQuestionPanel } from "../screenshots/ScreenshotQuestionPanel";
-import { captureStatusLabels, normalizeStatus, sourceLabel } from "../captures/captureUtils";
+import { captureStatusLabels, sourceLabel } from "../captures/captureUtils";
 
 type StudyRoomPageProps = {
   topic: TopicItem;
@@ -57,7 +57,7 @@ export function StudyRoomPage({
           {captures.map((capture) => (
             <button key={capture.id} className={current?.id === capture.id ? "source-nav-row active" : "source-nav-row"} onClick={() => setActiveCapture(capture)}>
               <strong>{capture.title}</strong>
-              <span>{sourceLabel(capture.sourceKind)} · {captureStatusLabels[normalizeStatus(capture.status)]}</span>
+              <span>{sourceLabel(capture.sourceKind)} · {captureStatusLabels[capture.status]}</span>
             </button>
           ))}
         </aside>

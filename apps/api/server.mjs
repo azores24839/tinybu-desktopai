@@ -16,8 +16,6 @@ const anthropicAuthToken = process.env.ANTHROPIC_AUTH_TOKEN;
 const anthropicBaseUrl = process.env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com";
 const apiTimeoutMs = Number(process.env.API_TIMEOUT_MS ?? 300000);
 const taskPath = "/v1/tinybu/task";
-const legacyTaskPath = "/v1/nomi/task";
-const taskPaths = new Set([taskPath, legacyTaskPath]);
 const defaultModel =
   process.env.ANTHROPIC_MODEL ??
   process.env.ANTHROPIC_DEFAULT_SONNET_MODEL ??
@@ -683,7 +681,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method !== "POST" || !taskPaths.has(req.url ?? "")) {
+  if (req.method !== "POST" || req.url !== taskPath) {
     sendJson(res, 404, { error: "Not found" });
     return;
   }
