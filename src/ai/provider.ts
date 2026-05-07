@@ -20,6 +20,7 @@ import type {
   TalkTurnOutput
 } from "../types";
 import { loadUserApiKey } from "../lib/secureKey";
+import { isOpenRouterApiKey, modelForTask, normalizeOpenRouterModel, shouldUseOpenRouter } from "./providerRouting";
 import { jsonSchemas, taskPrompts } from "./prompts";
 import {
   expressionCardRules,
@@ -40,29 +41,6 @@ type TaskName = keyof typeof taskPrompts;
 type ImageTaskPayload = { imageDataUrl?: string; [key: string]: unknown };
 const QUICK_PET_CHAT_PROMPT =
   "TinyBu desktop buddy. Reply in the user's language. Max 35 Chinese chars or 18 English words. No markdown.";
-
-function modelForTask(task: TaskName, appState: AppStateRecord) {
-  return task === "screenshotCapture" || task === "screenshotQuestion"
-    ? appState.settings.visionModel || appState.settings.aiModel
-    : appState.settings.aiModel;
-}
-
-function isOpenRouterApiKey(apiKey: string) {
-  return /^sk-or-/i.test(apiKey.trim());
-}
-
-function normalizeOpenRouterModel(model: string) {
-  const trimmed = model.trim();
-  const aliases: Record<string, string> = {
-    "MiniMax-M2.7": "minimax/minimax-m2.7",
-    "minimax-m2.7": "minimax/minimax-m2.7",
-    "MiniMax M2.7": "minimax/minimax-m2.7",
-    "MiniMax-M2": "minimax/minimax-m2",
-    "minimax-m2": "minimax/minimax-m2",
-    "MiniMax M2": "minimax/minimax-m2"
-  };
-  return aliases[trimmed] ?? trimmed;
-}
 
 async function loadRequiredUserApiKey() {
   const apiKey = await loadUserApiKey();
@@ -424,11 +402,6 @@ async function callQuickPetChatCloudProxy(
   );
 
   return { reply: quickReplyText(await parseOpenAiText(response)) };
-}
-
-function shouldUseOpenRouter(task: TaskName, appState: AppStateRecord) {
-  const baseUrl = appState.settings.openRouterBaseUrl;
-  return Boolean(baseUrl) && modelForTask(task, appState).includes("/");
 }
 
 async function callUserKey<T>(task: TaskName, payload: unknown, appState: AppStateRecord) {

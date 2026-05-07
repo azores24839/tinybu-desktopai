@@ -40,6 +40,24 @@ test("provider routing sends provider-qualified Qwen models to OpenRouter", () =
   assert.equal(shouldUseOpenRouterModel("openai/gpt-4o-mini", { anthropicAuthToken: "user-minimax-key" }), true);
 });
 
+test("frontend provider routing picks task models and OpenRouter mode predictably", async () => {
+  const { isOpenRouterApiKey, modelForTask, normalizeOpenRouterModel, shouldUseOpenRouter } = await loadTsModule("src/ai/providerRouting.ts");
+  const appState = {
+    settings: {
+      aiModel: "MiniMax-M2.7",
+      visionModel: "qwen/qwen-vl-max",
+      openRouterBaseUrl: "https://openrouter.ai/api/v1"
+    }
+  };
+
+  assert.equal(modelForTask("practiceQuestions", appState), "MiniMax-M2.7");
+  assert.equal(modelForTask("screenshotCapture", appState), "qwen/qwen-vl-max");
+  assert.equal(normalizeOpenRouterModel("MiniMax-M2.7"), "minimax/minimax-m2.7");
+  assert.equal(isOpenRouterApiKey(" sk-or-test "), true);
+  assert.equal(shouldUseOpenRouter("practiceQuestions", appState), false);
+  assert.equal(shouldUseOpenRouter("screenshotCapture", appState), true);
+});
+
 test("screenshot confirmation is only available while image data and OCR text are present", async () => {
   const { canConfirmScreenshotText } = await loadTsModule("src/features/screenshots/screenshotUtils.ts");
   const capture = {

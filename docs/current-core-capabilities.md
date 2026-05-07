@@ -264,6 +264,7 @@ Quick Chat 当前实现：
 - OpenRouter key（`sk-or-...`）强制走 OpenRouter Chat Completions。
 - 模型名包含 `/` 也会走 OpenRouter。
 - 截图相关 task 使用独立 vision model。
+- User API key 模式的前端模型选择和 OpenRouter 判断在 `src/ai/providerRouting.ts`，由回归测试覆盖。
 
 ### Cloud proxy
 
@@ -282,7 +283,7 @@ Quick Chat 当前实现：
   - MiniMax 模型名，如 `MiniMax-M2.7`，走 `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`。
   - Provider/model ID，如 `qwen/qwen3.6-35b-a3b`，走 OpenRouter。
   - 缺少对应 provider key 时会报明确配置错误，不再静默落到错误 provider。
-- 纯模型归一化和路由判断在 `apps/api/providerRouting.mjs`，由回归测试覆盖。
+- Cloud proxy 的纯模型归一化和路由判断在 `apps/api/providerRouting.mjs`，由回归测试覆盖。
 
 已实现 AI task：
 
