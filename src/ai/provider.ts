@@ -20,10 +20,17 @@ import type {
   TalkTurnOutput
 } from "../types";
 import { loadUserApiKey } from "../lib/secureKey";
-import { fetchWithTimeout } from "./fetchWithTimeout";
-import { callCloudProxy, callOpenAi, callOpenRouter, type ProviderTaskName } from "./providerClients";
-import { isOpenRouterApiKey, modelForTask, normalizeOpenRouterModel, shouldUseOpenRouter } from "./providerRouting";
-import { normalizeScreenshotRecognition, parseOpenAiText, quickReplyText } from "./responseParsing";
+import {
+  callCloudProxy,
+  callOpenAi,
+  callOpenRouter,
+  callQuickPetChatCloudProxy,
+  callQuickPetChatOpenAi,
+  callQuickPetChatOpenRouter,
+  type ProviderTaskName
+} from "./providerClients";
+import { isOpenRouterApiKey, shouldUseOpenRouter } from "./providerRouting";
+import { normalizeScreenshotRecognition } from "./responseParsing";
 import {
   expressionCardRules,
   memoryUpdateRules,
@@ -40,71 +47,11 @@ import {
 } from "./rules";
 
 type TaskName = ProviderTaskName;
-const QUICK_PET_CHAT_PROMPT =
-  "TinyBu desktop buddy. Reply in the user's language. Max 35 Chinese chars or 18 English words. No markdown.";
 
 async function loadRequiredUserApiKey() {
   const apiKey = await loadUserApiKey();
   if (!apiKey) throw new Error("No user API key saved");
   return apiKey;
-}
-
-async function callQuickPetChatOpenAi(
-  payload: { message: string; [key: string]: unknown },
-  appState: AppStateRecord,
-  apiKey: string
-): Promise<QuickPetChatOutput> {
-  const response = await fetchWithTimeout(
-    "https://api.openai.com/v1/responses",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: modelForTask("quickPetChat", appState),
-        instructions: QUICK_PET_CHAT_PROMPT,
-        input: String(payload.message),
-        max_output_tokens: 70
-      })
-    },
-    12000
-  );
-
-  return { reply: quickReplyText(await parseOpenAiText(response)) };
-}
-
-async function callQuickPetChatOpenRouter(
-  payload: { message: string; [key: string]: unknown },
-  appState: AppStateRecord,
-  apiKey: string
-): Promise<QuickPetChatOutput> {
-  const baseUrl = (appState.settings.openRouterBaseUrl || "https://openrouter.ai/api/v1").replace(/\/+$/, "");
-  const response = await fetchWithTimeout(
-    `${baseUrl}/chat/completions`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        "HTTP-Referer": window.location.origin,
-        "X-Title": "TinyBu Desktop"
-      },
-      body: JSON.stringify({
-        model: normalizeOpenRouterModel(modelForTask("quickPetChat", appState)),
-        messages: [
-          { role: "system", content: QUICK_PET_CHAT_PROMPT },
-          { role: "user", content: String(payload.message) }
-        ],
-        max_tokens: 70,
-        temperature: 0.35
-      })
-    },
-    12000
-  );
-
-  return { reply: quickReplyText(await parseOpenAiText(response)) };
 }
 
 async function callQuickPetChatUserKey(
@@ -115,30 +62,6 @@ async function callQuickPetChatUserKey(
   return isOpenRouterApiKey(apiKey) || shouldUseOpenRouter("quickPetChat", appState)
     ? callQuickPetChatOpenRouter(payload, appState, apiKey)
     : callQuickPetChatOpenAi(payload, appState, apiKey);
-}
-
-async function callQuickPetChatCloudProxy(
-  payload: { message: string; [key: string]: unknown },
-  appState: AppStateRecord
-): Promise<QuickPetChatOutput> {
-  const response = await fetchWithTimeout(
-    appState.settings.cloudProxyUrl,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        task: "quickPetChat",
-        model: modelForTask("quickPetChat", appState),
-        payload: {
-          message: payload.message,
-          fast: true
-        }
-      })
-    },
-    12000
-  );
-
-  return { reply: quickReplyText(await parseOpenAiText(response)) };
 }
 
 async function callUserKey<T>(task: TaskName, payload: unknown, appState: AppStateRecord) {
