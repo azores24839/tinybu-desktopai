@@ -1,12 +1,15 @@
 import type {
   CaptureFragment,
   CaptureItem,
+  ExpressionRecord,
+  MirrorOutput,
   PracticeAnswer,
   PracticeQuestion,
   PracticeQuestionsOutput,
   PracticeSession,
   PracticeTipOutput,
   PracticeTurnOutput,
+  ReviewRecord,
   TopicItem
 } from "../../types";
 
@@ -92,5 +95,106 @@ export function buildPracticeAnswer({
     answer,
     nomiReply: `${turn.encouragement} ${turn.response}`,
     createdAt: now()
+  };
+}
+
+export function selectPracticeReviewFragments(capturesForTopic: CaptureItem[], selectedFragmentIds: string[]) {
+  const selectedIds = new Set(selectedFragmentIds);
+  return capturesForTopic.flatMap((capture) => capture.fragments).filter((fragment) => selectedIds.has(fragment.id));
+}
+
+export function buildSavedPracticeExpressions({
+  reviewOutput,
+  topic,
+  createId,
+  now
+}: {
+  reviewOutput: MirrorOutput;
+  topic: TopicItem;
+  createId: () => string;
+  now: () => string;
+}): ExpressionRecord[] {
+  return reviewOutput.savedExpressions.map((item) => ({
+    id: createId(),
+    ...item,
+    sourceTitle: topic.name,
+    sourceContentId: topic.captureIds[0] ?? topic.id,
+    capturedAt: now(),
+    saved: true,
+    useLater: true,
+    usedInTalk: false,
+    userSentence: "",
+    practiceCount: 1,
+    learned: false,
+    category: "need-practice"
+  }));
+}
+
+export function buildPracticeReviewRecord({
+  reviewOutput,
+  session,
+  savedExpressions,
+  createId,
+  now
+}: {
+  reviewOutput: MirrorOutput;
+  session: PracticeSession;
+  savedExpressions: ExpressionRecord[];
+  createId: () => string;
+  now: () => string;
+}): ReviewRecord {
+  return {
+    id: createId(),
+    sessionId: session.id,
+    talkedAbout: reviewOutput.talkedAbout,
+    didWell: reviewOutput.didWell,
+    naturalExpressions: reviewOutput.naturalExpressions,
+    savedExpressionIds: savedExpressions.map((item) => item.id),
+    nextPractice: reviewOutput.nextPractice,
+    createdAt: now()
+  };
+}
+
+export function buildCompletedPracticeSession({
+  session,
+  answers,
+  review,
+  now
+}: {
+  session: PracticeSession;
+  answers: PracticeAnswer[];
+  review: ReviewRecord;
+  now: () => string;
+}): PracticeSession {
+  return {
+    ...session,
+    answers,
+    stage: "review",
+    reviewId: review.id,
+    status: "completed",
+    updatedAt: now(),
+    completedAt: now()
+  };
+}
+
+export function buildPracticedCaptures(capturesForTopic: CaptureItem[]) {
+  return capturesForTopic.map((capture) => ({ ...capture, status: "practiced" as const }));
+}
+
+export function buildPracticedTopic({
+  topic,
+  savedExpressionCount,
+  now
+}: {
+  topic: TopicItem;
+  savedExpressionCount: number;
+  now: () => string;
+}): TopicItem {
+  return {
+    ...topic,
+    status: "practiced",
+    savedExpressionCount: topic.savedExpressionCount + savedExpressionCount,
+    lastPracticedAt: now(),
+    updatedAt: now()
   };
 }

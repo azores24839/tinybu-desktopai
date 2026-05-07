@@ -42,7 +42,13 @@ import {
   buildPracticeQuestionWithTip,
   buildPracticeQuestions,
   buildPracticeSession,
-  selectPracticeFragments
+  buildCompletedPracticeSession,
+  buildPracticedCaptures,
+  buildPracticedTopic,
+  buildPracticeReviewRecord,
+  buildSavedPracticeExpressions,
+  selectPracticeFragments,
+  selectPracticeReviewFragments
 } from "./features/practice/practiceUtils";
 import { WelcomePage } from "./features/setup/WelcomePage";
 import { OnboardingPage } from "./features/setup/OnboardingPage";
@@ -683,9 +689,7 @@ export default function App() {
   async function finishPractice(session: PracticeSession, answers: PracticeAnswer[]) {
     const topic = topics.find((item) => item.id === session.topicId);
     const capturesForTopic = topicCaptures(topic, captures);
-    const selectedFragments = capturesForTopic
-      .flatMap((capture) => capture.fragments)
-      .filter((fragment) => session.selectedFragmentIds.includes(fragment.id));
+    const selectedFragments = selectPracticeReviewFragments(capturesForTopic, session.selectedFragmentIds);
     if (!topic || !selectedFragments.length) return;
 
     setBusyLabel("Generating Practice Review");
@@ -695,47 +699,27 @@ export default function App() {
       answers,
       appState
     });
-    const savedExpressions: ExpressionRecord[] = reviewOutput.savedExpressions.map((item) => ({
-      id: uid("expression"),
-      ...item,
-      sourceTitle: topic.name,
-      sourceContentId: topic.captureIds[0] ?? topic.id,
-      capturedAt: nowIso(),
-      saved: true,
-      useLater: true,
-      usedInTalk: false,
-      userSentence: "",
-      practiceCount: 1,
-      learned: false,
-      category: "need-practice"
-    }));
-    const review: ReviewRecord = {
-      id: uid("review"),
-      sessionId: session.id,
-      talkedAbout: reviewOutput.talkedAbout,
-      didWell: reviewOutput.didWell,
-      naturalExpressions: reviewOutput.naturalExpressions,
-      savedExpressionIds: savedExpressions.map((item) => item.id),
-      nextPractice: reviewOutput.nextPractice,
-      createdAt: nowIso()
-    };
-    const completedSession: PracticeSession = {
-      ...session,
+    const savedExpressions = buildSavedPracticeExpressions({
+      reviewOutput,
+      topic,
+      createId: () => uid("expression"),
+      now: nowIso
+    });
+    const review = buildPracticeReviewRecord({
+      reviewOutput,
+      session,
+      savedExpressions,
+      createId: () => uid("review"),
+      now: nowIso
+    });
+    const completedSession = buildCompletedPracticeSession({
+      session,
       answers,
-      stage: "review",
-      reviewId: review.id,
-      status: "completed",
-      updatedAt: nowIso(),
-      completedAt: nowIso()
-    };
-    const updatedCaptures = capturesForTopic.map((capture) => ({ ...capture, status: "practiced" as const }));
-    const nextTopic: TopicItem = {
-      ...topic,
-      status: "practiced",
-      savedExpressionCount: topic.savedExpressionCount + savedExpressions.length,
-      lastPracticedAt: nowIso(),
-      updatedAt: nowIso()
-    };
+      review,
+      now: nowIso
+    });
+    const updatedCaptures = buildPracticedCaptures(capturesForTopic);
+    const nextTopic = buildPracticedTopic({ topic, savedExpressionCount: savedExpressions.length, now: nowIso });
     const memoryUpdate = await updateMemory({
       mirror: reviewOutput,
       expressions: savedExpressions,
