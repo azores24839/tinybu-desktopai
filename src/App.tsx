@@ -6,23 +6,18 @@ import {
   Home,
   Inbox,
   KeyRound,
-  Lightbulb,
   NotebookTabs,
   Plus,
   RotateCcw,
-  Send,
   Settings,
   Wand2
 } from "lucide-react";
 import { demoContents } from "./data/demoContent";
-import { AppHeader } from "./components/AppHeader";
-import { EmptyState } from "./components/EmptyState";
 import { NomiOrb } from "./components/NomiOrb";
 import { clearLearningData, db, loadAppState, normalizeCapture, saveAppState } from "./lib/db";
 import { clearUserApiKey, loadUserApiKey, saveUserApiKey } from "./lib/secureKey";
 import { invokeTauri, listenTauri, type CaptureBridgeState } from "./lib/tauriBridge";
 import { defaultAppState, nowIso, uid } from "./lib/defaults";
-import { formatDate } from "./lib/date";
 import { uiCopy } from "./lib/uiCopy";
 import {
   captureText,
@@ -40,6 +35,15 @@ import { NotebookPage } from "./features/notebook/NotebookPage";
 import { MemoryPage } from "./features/memory/MemoryPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { HomePage } from "./features/home/HomePage";
+import { PracticePage } from "./features/practice/PracticePage";
+import { PracticeReviewPage } from "./features/practice/PracticeReviewPage";
+import {
+  buildPracticeAnswer,
+  buildPracticeQuestionWithTip,
+  buildPracticeQuestions,
+  buildPracticeSession,
+  selectPracticeFragments
+} from "./features/practice/practiceUtils";
 import { WelcomePage } from "./features/setup/WelcomePage";
 import { OnboardingPage } from "./features/setup/OnboardingPage";
 import { CompanionSetupPage } from "./features/setup/CompanionSetupPage";
@@ -65,7 +69,6 @@ import type {
   MemoryItem,
   NomiState,
   PracticeAnswer,
-  PracticeQuestion,
   PracticeSession,
   ReviewRecord,
   Screen,
@@ -589,34 +592,21 @@ export default function App() {
 
   async function startPracticeForTopic(topic: TopicItem) {
     const capturesForTopic = topicCaptures(topic, captures);
-    const selectedFragments = capturesForTopic.flatMap((capture) =>
-      capture.fragments.filter((fragment) => fragment.selected || fragment.recommended)
-    );
-    const fallbackFragments = capturesForTopic.flatMap((capture) => capture.fragments).slice(0, 6);
-    const fragments = selectedFragments.length ? selectedFragments : fallbackFragments;
+    const fragments = selectPracticeFragments(capturesForTopic);
     if (!fragments.length) return;
 
     setBusyLabel("Generating practice");
     setNomiState("thinking");
     const output = await generatePracticeQuestions({ fragments, appState });
-    const questions: PracticeQuestion[] = output.questions.slice(0, 5).map((question) => ({
-      id: uid("question"),
-      ...question,
-      tipLevel: 0
-    }));
-    const session: PracticeSession = {
-      id: uid("practice"),
-      captureId: capturesForTopic[0]?.id ?? "",
-      topicId: topic.id,
-      selectedFragmentIds: fragments.map((fragment) => fragment.id),
-      stage: "answer",
+    const questions = buildPracticeQuestions(output.questions, () => uid("question"));
+    const session = buildPracticeSession({
+      topic,
+      capturesForTopic,
+      fragments,
       questions,
-      answers: [],
-      currentQuestionIndex: 0,
-      status: "active",
-      createdAt: nowIso(),
-      updatedAt: nowIso()
-    };
+      createId: () => uid("practice"),
+      now: nowIso
+    });
     const nextTopic: TopicItem = { ...topic, status: "in-progress", updatedAt: nowIso() };
     await Promise.all([
       db.practiceSessions.put(session),
@@ -648,12 +638,7 @@ export default function App() {
       example: question.tipExample,
       appState
     });
-    const updatedQuestion = {
-      ...question,
-      tipLevel: nextLevel,
-      tipOutline: tip.outline || question.tipOutline,
-      tipExample: tip.example || question.tipExample
-    };
+    const updatedQuestion = buildPracticeQuestionWithTip({ question, tip, nextLevel });
     await updatePracticeSession({
       ...session,
       questions: session.questions.map((item) => (item.id === question.id ? updatedQuestion : item)),
@@ -674,13 +659,13 @@ export default function App() {
       questionIndex: session.currentQuestionIndex,
       appState
     });
-    const practiceAnswer: PracticeAnswer = {
-      id: uid("answer"),
-      questionId: question.id,
+    const practiceAnswer = buildPracticeAnswer({
+      question,
       answer,
-      nomiReply: `${turn.encouragement} ${turn.response}`,
-      createdAt: nowIso()
-    };
+      turn,
+      createId: () => uid("answer"),
+      now: nowIso
+    });
     const answers = [...session.answers, practiceAnswer];
     if (session.currentQuestionIndex >= session.questions.length - 1) {
       await finishPractice(session, answers);
@@ -1066,215 +1051,5 @@ export default function App() {
         </main>
       )}
     </div>
-  );
-}
-
-function PracticePage({
-  topic,
-  captures,
-  session,
-  input,
-  setInput,
-  requestTip,
-  submitAnswer,
-  endPractice
-}: {
-  topic: TopicItem;
-  captures: CaptureItem[];
-  session: PracticeSession;
-  input: string;
-  setInput: (value: string) => void;
-  requestTip: (session: PracticeSession) => void;
-  submitAnswer: (session: PracticeSession) => void;
-  endPractice: () => void;
-}) {
-  const question = session.questions[session.currentQuestionIndex];
-  const selectedFragments = captures
-    .flatMap((capture) => capture.fragments.map((fragment) => ({ ...fragment, captureTitle: capture.title })))
-    .filter((fragment) => session.selectedFragmentIds.includes(fragment.id));
-  const relatedIds = new Set(question?.relatedFragmentIds ?? []);
-  const lastAnswer = session.answers[session.answers.length - 1];
-
-  if (!question) {
-    return <EmptyState title="No practice question" body="Start Practice again from a topic." />;
-  }
-
-  return (
-    <section className="page">
-      <AppHeader title="Practice" description={topic.name}>
-        <button className="secondary" onClick={endPractice}>
-          End Practice
-        </button>
-      </AppHeader>
-
-      <div className="practice-layout">
-        <main className="practice-main">
-          <section className="panel question-card">
-            <span>
-              Question {session.currentQuestionIndex + 1} / {session.questions.length}
-            </span>
-            <h2>{question.question}</h2>
-            <p>Small goal: {topic.practiceGoal}</p>
-          </section>
-
-          <section className="panel chat-panel">
-            {session.answers.map((answer) => (
-              <div className="practice-message" key={answer.id}>
-                <div className="user-answer">
-                  <strong>You</strong>
-                  <p>{answer.answer}</p>
-                </div>
-                <div className="bu-feedback">
-                  <strong>TinyBu</strong>
-                  <p>{answer.nomiReply}</p>
-                  <button className="secondary">Save expression</button>
-                </div>
-              </div>
-            ))}
-            {lastAnswer && (
-              <div className="tiny-note">
-                <span>More natural</span>
-                <p>{lastAnswer.nomiReply}</p>
-              </div>
-            )}
-          </section>
-
-          <section className="answer-box">
-            <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder="Type your answer in the target language..." />
-            <div className="bottom-actions">
-              <button className="secondary" disabled={question.tipLevel >= 2} onClick={() => requestTip(session)}>
-                <Lightbulb size={18} />
-                Tips
-              </button>
-              <button className="primary" onClick={() => submitAnswer(session)}>
-                <Send size={18} />
-                Send
-              </button>
-              <button className="danger" onClick={endPractice}>
-                End Practice
-              </button>
-            </div>
-          </section>
-        </main>
-
-        <aside className="practice-support">
-          <section className="panel">
-            <div className="section-title">Topic</div>
-            <h3>{topic.name}</h3>
-            <p>{topic.summary}</p>
-          </section>
-          <section className="panel">
-            <div className="section-title">Progress</div>
-            <strong>{session.answers.length} completed</strong>
-          </section>
-          <section className="panel">
-            <div className="section-title">Tips</div>
-            {question.tipLevel === 0 && <p>Click Tips for a direction. Click once more for a complete reference sentence.</p>}
-            {question.tipLevel === 1 && <p>{question.tipOutline}</p>}
-            {question.tipLevel >= 2 && <p>{question.tipExample}</p>}
-          </section>
-          <section className="panel">
-            <div className="section-title">Source Summary</div>
-            <div className="mini-list">
-              {selectedFragments.slice(0, 5).map((fragment) => (
-                <span className={relatedIds.has(fragment.id) ? "active" : ""} key={fragment.id}>
-                  {fragment.text}
-                </span>
-              ))}
-            </div>
-          </section>
-        </aside>
-      </div>
-    </section>
-  );
-}
-
-function PracticeReviewPage({
-  topic,
-  review,
-  session,
-  expressions,
-  backToTopics,
-  openNotebook,
-  continuePractice
-}: {
-  topic: TopicItem;
-  review: ReviewRecord;
-  session?: PracticeSession;
-  expressions: ExpressionRecord[];
-  backToTopics: () => void;
-  openNotebook: () => void;
-  continuePractice: () => void;
-}) {
-  const saved = expressions.filter((expression) => review.savedExpressionIds.includes(expression.id));
-  return (
-    <section className="page">
-      <AppHeader title="Practice Review" description={topic.name}>
-        <button className="secondary" onClick={backToTopics}>
-          Back to Topics
-        </button>
-        <button className="primary" onClick={openNotebook}>
-          Save to Notebook
-        </button>
-      </AppHeader>
-
-      <section className="panel review-summary">
-        <div>
-          <p className="eyebrow">Completed {formatDate(review.createdAt)}</p>
-          <h2>{review.talkedAbout}</h2>
-          <p>{session?.answers.length ?? 0} questions completed.</p>
-        </div>
-      </section>
-
-      <div className="review-grid">
-        <section className="panel">
-          <div className="section-title">What You Practiced</div>
-          <p>{review.talkedAbout}</p>
-          <div className="mini-list">
-            {review.didWell.map((item) => (
-              <span key={item}>{item}</span>
-            ))}
-          </div>
-        </section>
-        <section className="panel">
-          <div className="section-title">Better Expressions</div>
-          {review.naturalExpressions.map((item) => (
-            <article className="natural-pair" key={`${item.original}-${item.improved}`}>
-              <span>User original</span>
-              <p>{item.original}</p>
-              <span>More natural</span>
-              <strong>{item.improved}</strong>
-              <button className="secondary">Save</button>
-            </article>
-          ))}
-        </section>
-      </div>
-
-      <div className="two-column">
-        <section className="panel">
-          <div className="section-title">Saved Suggestions</div>
-          <div className="mini-list">
-            {saved.slice(0, 5).map((expression) => (
-              <span key={expression.id}>{expression.pattern}</span>
-            ))}
-          </div>
-        </section>
-        <section className="panel">
-          <div className="section-title">Next Step</div>
-          <p>{review.nextPractice}</p>
-          <div className="button-row">
-            <button className="primary" onClick={openNotebook}>
-              Review in Notebook
-            </button>
-            <button className="secondary" onClick={continuePractice}>
-              Continue Practice
-            </button>
-            <button className="secondary" onClick={backToTopics}>
-              Start another Topic
-            </button>
-          </div>
-        </section>
-      </div>
-    </section>
   );
 }

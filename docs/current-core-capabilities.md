@@ -371,6 +371,7 @@ Tauri 侧：
 - `src/features/topics/`：Topics、Topic Detail、Study Room、topic 工具函数
 - `src/features/screenshots/`：截图导入 flow、预览、确认清图、截图问答
 - `src/features/home/`：Home 仪表盘
+- `src/features/practice/`：Practice、Practice Review 页面和练习数据构造工具
 - `src/features/setup/`：Welcome、Onboarding、Companion Setup
 - `src/features/notebook/`：Notebook 页面
 - `src/features/memory/`：Bu's Memory 页面
@@ -381,9 +382,9 @@ Tauri 侧：
 
 - 主路由和全局状态。
 - capture/topic/practice/review/memory 的业务 flow。
-- Practice / Practice Review 等尚未拆出的页面。
+- 页面组件大多已拆出，`App.tsx` 仍保留 flow 编排与少量顶层 shell。
 
 下一步低风险拆分建议：
 
-1. Practice 与 Practice Review 页面组件。
-2. 最后再拆 Practice flow 和 AI provider。
+1. 抽出 practice flow hook/helper，前提是先补更明确的回归检查。
+2. 拆 AI provider 为 provider-specific 模块。

@@ -39,6 +39,9 @@ src/features/screenshots/
 src/features/home/
   Home dashboard.
 
+src/features/practice/
+  Practice pages and pure practice data builders.
+
 src/features/setup/
   Welcome, Onboarding, and Companion Setup pages.
 
@@ -131,9 +134,8 @@ In `apps/api/server.mjs`, MiniMax model names should route to the Anthropic-comp
 
 ## Suggested Next Refactors
 
-Lowest-risk remaining UI extractions:
-
-1. Practice page and Practice Review page as UI-only moves.
+Lowest-risk UI extractions are mostly complete. The next steps touch business
+logic and should be paired with more explicit regression checks.
 
 Higher-risk refactors to postpone until the UI extractions are stable:
 

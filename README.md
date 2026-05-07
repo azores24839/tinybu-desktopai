@@ -51,6 +51,7 @@ src/features/captures/         Inbox, Organize, capture labels and text utilitie
 src/features/topics/           Topics, Topic Detail, Study Room
 src/features/screenshots/      Screenshot import flow, preview, confirmation, Q&A
 src/features/home/             Home dashboard
+src/features/practice/         Practice pages and practice data builders
 src/features/setup/            Welcome, onboarding, companion setup
 src/features/notebook/         Notebook page
 src/features/memory/           Bu's Memory page
