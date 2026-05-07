@@ -50,6 +50,7 @@ src/components/                Shared UI pieces, including TinyBu orb
 src/features/captures/         Inbox, Organize, capture labels and text utilities
 src/features/topics/           Topics, Topic Detail, Study Room
 src/features/screenshots/      Screenshot import flow, preview, confirmation, Q&A
+src/features/home/             Home dashboard
 src/features/setup/            Welcome, onboarding, companion setup
 src/features/notebook/         Notebook page
 src/features/memory/           Bu's Memory page

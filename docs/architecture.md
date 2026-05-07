@@ -36,6 +36,9 @@ src/features/screenshots/
   Screenshot preview records, screenshot import flow, confirm-text cleanup,
   screenshot preview UI, screenshot question UI.
 
+src/features/home/
+  Home dashboard.
+
 src/features/setup/
   Welcome, Onboarding, and Companion Setup pages.
 
@@ -130,8 +133,7 @@ In `apps/api/server.mjs`, MiniMax model names should route to the Anthropic-comp
 
 Lowest-risk remaining UI extractions:
 
-1. Home page.
-2. Practice page and Practice Review page as UI-only moves.
+1. Practice page and Practice Review page as UI-only moves.
 
 Higher-risk refactors to postpone until the UI extractions are stable:
 
