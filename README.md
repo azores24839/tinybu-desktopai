@@ -15,10 +15,11 @@ Browse / Capture
 -> Notebook / Bu's Memory
 ```
 
-For the full Chinese product / implementation summary, see:
+For the full Chinese product / implementation summary and architecture map, see:
 
 ```text
 docs/current-core-capabilities.md
+docs/architecture.md
 ```
 
 ## Current Core Capabilities
@@ -38,6 +39,28 @@ docs/current-core-capabilities.md
 - Desktop screenshot capture with transparent selection overlay, preview mode, optional AI OCR, screenshot Q&A, and diagnostic capture on OCR failure.
 - Desktop pet actions: copy capture, open main app, screenshot recognition, undo last capture, reset count, hide, and quick chat.
 - AI provider modes: local rules, user API key, and local cloud proxy.
+
+## Project Structure
+
+The frontend is being gradually split by feature so future changes stay local:
+
+```text
+src/App.tsx                    Main shell, routing, global state, remaining practice flows
+src/components/                Shared UI pieces
+src/features/captures/         Inbox, Organize, capture labels and text utilities
+src/features/topics/           Topics, Topic Detail, Study Room
+src/features/screenshots/      Screenshot import flow, preview, confirmation, Q&A
+src/features/notebook/         Notebook page
+src/features/memory/           Bu's Memory page
+src/features/settings/         Settings page
+src/lib/                       Defaults, persistence helpers, shared options/copy
+src/ai/                        Provider calls, prompts, schemas, rules fallback
+src-tauri/                     Desktop shell, screenshot capture, keychain, bridge
+apps/api/                      Local cloud proxy
+apps/extension/                Chrome MV3 capture extension
+```
+
+Current maintenance rule: keep feature work inside its feature folder when possible. Avoid broad refactors mixed with product changes.
 
 ## Run Web Dev Version
 
@@ -208,6 +231,8 @@ Behavior:
 - selected region is captured by Tauri;
 - screenshot Capture appears in Inbox;
 - AI OCR only runs if screenshot recognition is enabled in Settings.
+- after successful OCR, the screenshot image can be cleared with `Confirm text`; TinyBu keeps the extracted text and screenshot metadata.
+- if OCR is disabled or fails, the screenshot image is retained for preview, retry, or diagnosis.
 
 Vision model is configured separately from chat model:
 

@@ -36,7 +36,7 @@ TinyBu 不是课程型产品，而是一个把零散真实内容整理成主题�
 - Welcome：首次入口，支持 Start 和 Try Demo。
 - Onboarding：设置母语、目标语言、水平、目标、开口压力和支架偏好。
 - Companion Setup：设置 TinyBu 风格、反馈时机和语速。
-- Home：显示今日 captures、Suggested Topics、Continue Learning、Notebook Preview、Bu's Memory Preview。
+- Home：显示当前学习建议、Learning Queue 和 Practice Rhythm。
 - Inbox：三栏布局，支持搜索、状态筛选、来源筛选、capture 详情和快捷操作。
 - Organize：三栏布局，支持未整理 captures、AI suggested topics 和 topic editor。
 - Topics：左侧 Topic 列表，右侧 Topic 详情与 Study / Practice 入口。
@@ -132,8 +132,11 @@ Topic 已持久化为独立记录，包含：
 - 主 App 接收 `tinybu-screenshot-captured`，创建 screenshot Capture。
 - 默认是截图预览模式，不调用 AI、不产生识别费用。
 - Settings 开启截图识别后，使用 vision model 做 OCR 和屏幕理解。
+- 识别成功后，用户可通过 `Confirm text` 确认提取结果并清除持久化的截图图片。
+- 确认后长期保留的是提取文本、摘要、可见文字、页面类型、错误信息、交互元素和截图问答记录。
 - 支持截图问答，必要时会把图片一起发送给模型。
 - 识别失败会生成诊断 Capture，保留截图预览和错误原因。
+- 识别失败的诊断 Capture 会自动成为当前选中的 capture，方便用户查看失败原因。
 
 ## Study Room 与 Practice
 
@@ -275,7 +278,10 @@ Quick Chat 当前实现：
 - 普通学习 task 使用 JSON schema。
 - 截图类 task 支持图片输入。
 - `quickPetChat` 使用轻量纯文本路径，不走 JSON schema。
-- `MiniMax-M2.7` 会自动映射为 `minimax/minimax-m2.7`。
+- 同时配置 MiniMax/Anthropic-compatible token 和 OpenRouter key 时：
+  - MiniMax 模型名，如 `MiniMax-M2.7`，走 `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`。
+  - Provider/model ID，如 `qwen/qwen3.6-35b-a3b`，走 OpenRouter。
+  - 缺少对应 provider key 时会报明确配置错误，不再静默落到错误 provider。
 
 已实现 AI task：
 
@@ -316,6 +322,16 @@ Settings 当前包含：
 - Screenshot / vision model：`qwen/qwen3.6-35b-a3b`
 - OpenRouter base URL：`https://openrouter.ai/api/v1`
 
+推荐 MiniMax + OpenRouter 混合配置：
+
+- Provider mode：`Cloud proxy`
+- Chat / learning model：`MiniMax-M2.7`
+- Screenshot / vision model：`qwen/qwen3.6-35b-a3b`
+- 本地 proxy 环境变量：
+  - `ANTHROPIC_BASE_URL=https://api.minimaxi.com/anthropic`
+  - `ANTHROPIC_AUTH_TOKEN=your-minimax-key`
+  - `OPENROUTER_API_KEY=your-openrouter-key`
+
 ## 数据持久化
 
 前端使用 Dexie / IndexedDB：
@@ -339,8 +355,35 @@ Tauri 侧：
 
 - 截图 AI 识别默认关闭，需要在 Settings 中开启。
 - 纯本地 rules 模式不能做真实视觉 OCR。
+- 截图图片是 base64 data URL，保存在 IndexedDB capture 记录里；识别成功后建议确认文字并清图，避免长期占用本地存储。
 - 浏览器扩展对超长文章和字幕会裁剪。
 - YouTube transcript 捕捉在 transcript 面板打开时效果最好。
 - Cloud proxy 模式需要单独启动 `npm run api:dev` 并提供环境变量 key。
 - 当前没有流式输出；桌宠 quick chat 用短 prompt 和低 token 优化响应速度。
 - 早期 Watch / Talk / Mirror Card 文档属于历史草图，当前主实现以 Topic 工作台流程为准。
+
+## 当前代码结构状态
+
+截至 2026-05-07，前端已经从单一大 `App.tsx` 逐步拆分出以下模块：
+
+- `src/components/`：`AppHeader`、`EmptyState`
+- `src/features/captures/`：Inbox、Organize、capture 工具函数
+- `src/features/topics/`：Topics、Topic Detail、Study Room、topic 工具函数
+- `src/features/screenshots/`：截图导入 flow、预览、确认清图、截图问答
+- `src/features/notebook/`：Notebook 页面
+- `src/features/memory/`：Bu's Memory 页面
+- `src/features/settings/`：Settings 页面
+- `src/lib/appOptions.ts`、`src/lib/uiCopy.ts`：共享选项和 UI 文案
+
+仍在 `App.tsx` 的主要职责：
+
+- 主路由和全局状态。
+- capture/topic/practice/review/memory 的业务 flow。
+- Welcome / Onboarding / Companion Setup / Home / Practice / Practice Review 等尚未拆出的页面。
+
+下一步低风险拆分建议：
+
+1. Welcome / Onboarding / Companion Setup。
+2. Home。
+3. Practice 与 Practice Review 页面组件。
+4. 最后再拆 Practice flow 和 AI provider。
