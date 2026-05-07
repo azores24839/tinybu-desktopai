@@ -21,10 +21,9 @@ import type {
 } from "../types";
 import { loadUserApiKey } from "../lib/secureKey";
 import { fetchWithTimeout } from "./fetchWithTimeout";
+import { callCloudProxy, callOpenAi, callOpenRouter, type ProviderTaskName } from "./providerClients";
 import { isOpenRouterApiKey, modelForTask, normalizeOpenRouterModel, shouldUseOpenRouter } from "./providerRouting";
-import { buildOpenAiInput, buildOpenRouterMessages } from "./requestBuilders";
-import { normalizeScreenshotRecognition, parseOpenAiJson, parseOpenAiText, quickReplyText } from "./responseParsing";
-import { jsonSchemas, taskPrompts } from "./prompts";
+import { normalizeScreenshotRecognition, parseOpenAiText, quickReplyText } from "./responseParsing";
 import {
   expressionCardRules,
   memoryUpdateRules,
@@ -40,7 +39,7 @@ import {
   understandContentRules
 } from "./rules";
 
-type TaskName = keyof typeof taskPrompts;
+type TaskName = ProviderTaskName;
 const QUICK_PET_CHAT_PROMPT =
   "TinyBu desktop buddy. Reply in the user's language. Max 35 Chinese chars or 18 English words. No markdown.";
 
@@ -48,78 +47,6 @@ async function loadRequiredUserApiKey() {
   const apiKey = await loadUserApiKey();
   if (!apiKey) throw new Error("No user API key saved");
   return apiKey;
-}
-
-async function callOpenAi<T>(
-  task: TaskName,
-  payload: unknown,
-  appState: AppStateRecord,
-  providedApiKey?: string
-): Promise<T> {
-  const apiKey = providedApiKey ?? (await loadRequiredUserApiKey());
-
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: modelForTask(task, appState),
-      instructions: taskPrompts[task],
-      input: buildOpenAiInput(task, payload),
-      text: {
-        format: {
-          type: "json_schema",
-          ...jsonSchemas[task],
-          strict: true
-        }
-      },
-      max_output_tokens: task === "screenshotCapture" || task === "screenshotQuestion" ? 1600 : 900
-    })
-  });
-
-  return parseOpenAiJson(response) as Promise<T>;
-}
-
-async function callOpenRouter<T>(
-  task: TaskName,
-  payload: unknown,
-  appState: AppStateRecord,
-  providedApiKey?: string
-): Promise<T> {
-  const apiKey = providedApiKey ?? (await loadRequiredUserApiKey());
-
-  const baseUrl = (appState.settings.openRouterBaseUrl || "https://openrouter.ai/api/v1").replace(/\/+$/, "");
-  const schema = jsonSchemas[task];
-  const model = normalizeOpenRouterModel(modelForTask(task, appState));
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": window.location.origin,
-      "X-Title": "TinyBu Desktop"
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: `${taskPrompts[task]}\nReturn only valid JSON.` },
-        ...buildOpenRouterMessages(task, payload)
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: schema.name,
-          strict: true,
-          schema: schema.schema
-        }
-      },
-      max_tokens: task === "screenshotCapture" || task === "screenshotQuestion" ? 1600 : 900
-    })
-  });
-
-  return parseOpenAiJson(response) as Promise<T>;
 }
 
 async function callQuickPetChatOpenAi(
@@ -219,24 +146,6 @@ async function callUserKey<T>(task: TaskName, payload: unknown, appState: AppSta
   return isOpenRouterApiKey(apiKey) || shouldUseOpenRouter(task, appState)
     ? callOpenRouter<T>(task, payload, appState, apiKey)
     : callOpenAi<T>(task, payload, appState, apiKey);
-}
-
-async function callCloudProxy<T>(
-  task: TaskName,
-  payload: unknown,
-  appState: AppStateRecord
-): Promise<T> {
-  const response = await fetch(appState.settings.cloudProxyUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      task,
-      model: modelForTask(task, appState),
-      payload
-    })
-  });
-
-  return parseOpenAiJson(response) as Promise<T>;
 }
 
 async function withFallback<T>(

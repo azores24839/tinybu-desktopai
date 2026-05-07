@@ -266,6 +266,7 @@ Quick Chat 当前实现：
 - 截图相关 task 使用独立 vision model。
 - User API key 模式的前端模型选择和 OpenRouter 判断在 `src/ai/providerRouting.ts`，由回归测试覆盖。
 - 前端 OpenAI/OpenRouter 请求 payload 构造在 `src/ai/requestBuilders.ts`，由回归测试覆盖。
+- 前端 OpenAI/OpenRouter/Cloud proxy client 在 `src/ai/providerClients.ts`。
 
 ### Cloud proxy
 
