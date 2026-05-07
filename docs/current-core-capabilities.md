@@ -366,10 +366,11 @@ Tauri 侧：
 
 截至 2026-05-07，前端已经从单一大 `App.tsx` 逐步拆分出以下模块：
 
-- `src/components/`：`AppHeader`、`EmptyState`
+- `src/components/`：`AppHeader`、`EmptyState`、`NomiOrb`
 - `src/features/captures/`：Inbox、Organize、capture 工具函数
 - `src/features/topics/`：Topics、Topic Detail、Study Room、topic 工具函数
 - `src/features/screenshots/`：截图导入 flow、预览、确认清图、截图问答
+- `src/features/setup/`：Welcome、Onboarding、Companion Setup
 - `src/features/notebook/`：Notebook 页面
 - `src/features/memory/`：Bu's Memory 页面
 - `src/features/settings/`：Settings 页面
@@ -379,11 +380,10 @@ Tauri 侧：
 
 - 主路由和全局状态。
 - capture/topic/practice/review/memory 的业务 flow。
-- Welcome / Onboarding / Companion Setup / Home / Practice / Practice Review 等尚未拆出的页面。
+- Home / Practice / Practice Review 等尚未拆出的页面。
 
 下一步低风险拆分建议：
 
-1. Welcome / Onboarding / Companion Setup。
-2. Home。
-3. Practice 与 Practice Review 页面组件。
-4. 最后再拆 Practice flow 和 AI provider。
+1. Home。
+2. Practice 与 Practice Review 页面组件。
+3. 最后再拆 Practice flow 和 AI provider。

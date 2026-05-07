@@ -23,7 +23,7 @@ src/App.tsx
   Main shell, screen routing, global state, app-level business flows.
 
 src/components/
-  Small shared UI components.
+  Small shared UI components, including TinyBu orb.
 
 src/features/captures/
   Inbox, Organize, capture labels, text splitting, status normalization,
@@ -35,6 +35,9 @@ src/features/topics/
 src/features/screenshots/
   Screenshot preview records, screenshot import flow, confirm-text cleanup,
   screenshot preview UI, screenshot question UI.
+
+src/features/setup/
+  Welcome, Onboarding, and Companion Setup pages.
 
 src/features/notebook/
   Notebook page.
@@ -127,9 +130,8 @@ In `apps/api/server.mjs`, MiniMax model names should route to the Anthropic-comp
 
 Lowest-risk remaining UI extractions:
 
-1. Welcome, Onboarding, and Companion Setup pages.
-2. Home page.
-3. Practice page and Practice Review page as UI-only moves.
+1. Home page.
+2. Practice page and Practice Review page as UI-only moves.
 
 Higher-risk refactors to postpone until the UI extractions are stable:
 

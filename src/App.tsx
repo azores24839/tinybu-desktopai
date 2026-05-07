@@ -20,12 +20,12 @@ import {
 import { demoContents } from "./data/demoContent";
 import { AppHeader } from "./components/AppHeader";
 import { EmptyState } from "./components/EmptyState";
+import { NomiOrb } from "./components/NomiOrb";
 import { clearLearningData, db, loadAppState, normalizeCapture, saveAppState } from "./lib/db";
 import { clearUserApiKey, loadUserApiKey, saveUserApiKey } from "./lib/secureKey";
 import { invokeTauri, listenTauri, type CaptureBridgeState } from "./lib/tauriBridge";
 import { defaultAppState, nowIso, uid } from "./lib/defaults";
 import { formatDate } from "./lib/date";
-import { goalOptions, languageOptions, targetLanguageOptions } from "./lib/appOptions";
 import { uiCopy } from "./lib/uiCopy";
 import {
   captureText,
@@ -43,6 +43,9 @@ import { StudyRoomPage } from "./features/topics/StudyRoomPage";
 import { NotebookPage } from "./features/notebook/NotebookPage";
 import { MemoryPage } from "./features/memory/MemoryPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
+import { WelcomePage } from "./features/setup/WelcomePage";
+import { OnboardingPage } from "./features/setup/OnboardingPage";
+import { CompanionSetupPage } from "./features/setup/CompanionSetupPage";
 import { useScreenshotCaptureFlow } from "./features/screenshots/useScreenshotCaptureFlow";
 import {
   generatePracticeQuestions,
@@ -93,27 +96,6 @@ function weekStart() {
   date.setHours(0, 0, 0, 0);
   date.setDate(date.getDate() - date.getDay());
   return date;
-}
-
-function NomiOrb({ state }: { state: NomiState }) {
-  const label: Record<NomiState, string> = {
-    idle: "Idle",
-    listening: "Listening",
-    speaking: "Speaking",
-    thinking: "Thinking",
-    encouraging: "Encouraging",
-    celebrating: "Celebrating"
-  };
-
-  return (
-    <div className={`nomi-orb ${state}`} aria-label={`TinyBu ${label[state]}`}>
-      <div className="nomi-face">
-        <span className="eye left" />
-        <span className="eye right" />
-        <span className="mouth" />
-      </div>
-    </div>
-  );
 }
 
 export default function App() {
@@ -1087,207 +1069,6 @@ export default function App() {
         </main>
       )}
     </div>
-  );
-}
-
-function WelcomePage({ start, demo }: { start: () => void; demo: () => void }) {
-  return (
-    <section className="welcome-layout">
-      <div className="hero-copy">
-        <div className="brand-mark">
-          <NomiOrb state="speaking" />
-          <span>TinyBu</span>
-        </div>
-        <h1>Turn real captures into language practice.</h1>
-        <p>把网页、视频、文章和截图里的零散外语内容，整理成可以理解、练习和沉淀的学习工作台。</p>
-        <div className="hero-actions">
-          <button className="primary" onClick={start}>
-            Start with TinyBu <ChevronRight size={18} />
-          </button>
-          <button className="secondary" onClick={demo}>
-            Try Demo
-          </button>
-        </div>
-      </div>
-      <div className="preview-window">
-        <div className="preview-toolbar">
-          <span />
-          <span />
-          <span />
-        </div>
-        <div className="preview-content">
-          <div className="preview-sidebar" />
-          <div className="preview-card wide" />
-          <div className="preview-card" />
-          <div className="preview-card" />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function OnboardingPage({
-  initialProfile,
-  submit,
-  skip
-}: {
-  initialProfile: UserProfile;
-  submit: (profile: UserProfile) => void;
-  skip: () => void;
-}) {
-  const [profile, setProfile] = useState<UserProfile>(initialProfile);
-  const toggleGoal = (goal: string) => {
-    setProfile((current) => ({
-      ...current,
-      goals: current.goals.includes(goal) ? current.goals.filter((item) => item !== goal) : [...current.goals, goal]
-    }));
-  };
-
-  return (
-    <section className="setup-card">
-      <div className="setup-header">
-        <NomiOrb state="encouraging" />
-        <div>
-          <p className="eyebrow">TinyBu setup</p>
-          <h1>先告诉 TinyBu 你想怎么学。</h1>
-        </div>
-      </div>
-      <div className="form-grid">
-        <label>
-          Native language
-          <select value={profile.nativeLanguage} onChange={(event) => setProfile({ ...profile, nativeLanguage: event.target.value })}>
-            {languageOptions.map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Target language
-          <select value={profile.targetLanguage} onChange={(event) => setProfile({ ...profile, targetLanguage: event.target.value })}>
-            {targetLanguageOptions.map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Level
-          <select value={profile.level} onChange={(event) => setProfile({ ...profile, level: event.target.value as UserProfile["level"] })}>
-            <option>A1</option>
-            <option>A2</option>
-            <option>B1</option>
-            <option>B2</option>
-          </select>
-        </label>
-        <label>
-          Support style
-          <select
-            value={profile.supportPreference}
-            onChange={(event) => setProfile({ ...profile, supportPreference: event.target.value as UserProfile["supportPreference"] })}
-          >
-            <option>Gentle</option>
-            <option>Balanced</option>
-            <option>Direct</option>
-          </select>
-        </label>
-      </div>
-      <div className="chip-field">
-        {goalOptions.map((goal) => (
-          <button key={goal} className={profile.goals.includes(goal) ? "chip selected" : "chip"} onClick={() => toggleGoal(goal)}>
-            {goal}
-          </button>
-        ))}
-      </div>
-      <label>
-        Speaking pressure: {profile.anxiety}
-        <input
-          type="range"
-          min="1"
-          max="5"
-          value={profile.anxiety}
-          onChange={(event) => setProfile({ ...profile, anxiety: Number(event.target.value) })}
-        />
-      </label>
-      <div className="bottom-actions">
-        <button className="secondary" onClick={skip}>
-          Skip
-        </button>
-        <button className="primary" onClick={() => submit(profile)}>
-          Continue
-        </button>
-      </div>
-    </section>
-  );
-}
-
-function CompanionSetupPage({
-  initialCompanion,
-  submit,
-  skip
-}: {
-  initialCompanion: CompanionProfile;
-  submit: (companion: CompanionProfile) => void;
-  skip: () => void;
-}) {
-  const [companion, setCompanion] = useState(initialCompanion);
-  return (
-    <section className="setup-card">
-      <div className="setup-header">
-        <NomiOrb state="speaking" />
-        <div>
-          <p className="eyebrow">Companion</p>
-          <h1>选择 TinyBu 的陪伴方式。</h1>
-        </div>
-      </div>
-      <div className="form-grid">
-        <label>
-          Name
-          <input value={companion.name} onChange={(event) => setCompanion({ ...companion, name: event.target.value })} />
-        </label>
-        <label>
-          Style
-          <select
-            value={companion.style}
-            onChange={(event) => setCompanion({ ...companion, style: event.target.value as CompanionProfile["style"] })}
-          >
-            <option>Warm Friend</option>
-            <option>Gentle Coach</option>
-            <option>Native Buddy</option>
-            <option>Calm Listener</option>
-          </select>
-        </label>
-        <label>
-          Feedback timing
-          <select
-            value={companion.feedbackTiming}
-            onChange={(event) => setCompanion({ ...companion, feedbackTiming: event.target.value as CompanionProfile["feedbackTiming"] })}
-          >
-            <option value="after-talk">After I talk</option>
-            <option value="when-stuck">When I get stuck</option>
-            <option value="light-live">Light live support</option>
-            <option value="direct-natural">Direct natural rewrite</option>
-          </select>
-        </label>
-        <label>
-          Speaking pace
-          <select
-            value={companion.speakingPace}
-            onChange={(event) => setCompanion({ ...companion, speakingPace: event.target.value as CompanionProfile["speakingPace"] })}
-          >
-            <option>slow</option>
-            <option>normal</option>
-            <option>fast</option>
-          </select>
-        </label>
-      </div>
-      <div className="bottom-actions">
-        <button className="secondary" onClick={skip}>
-          Skip
-        </button>
-        <button className="primary" onClick={() => submit(companion)}>
-          Enter TinyBu
-        </button>
-      </div>
-    </section>
   );
 }
 
