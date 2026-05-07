@@ -45,6 +45,7 @@ import {
   talkTurnRules,
   understandContentRules
 } from "./rules";
+import { buildScreenshotCapturePayload, buildScreenshotQuestionPayload, type ScreenshotQuestionSource } from "./screenshotPayloads";
 
 type TaskName = ProviderTaskName;
 
@@ -117,14 +118,7 @@ export async function recognizeScreenshotCapture(args: {
     throw new Error("截图识别需要启用 API 模式。");
   }
 
-  const payload = {
-    imageDataUrl: args.imageDataUrl,
-    width: args.width,
-    height: args.height,
-    level: args.appState.profile.level,
-    targetLanguage: args.appState.profile.targetLanguage,
-    nativeLanguage: args.appState.profile.nativeLanguage
-  };
+  const payload = buildScreenshotCapturePayload(args);
 
   const recognition = await (args.appState.settings.aiProviderMode === "cloud-proxy"
     ? callCloudProxy("screenshotCapture", payload, args.appState)
@@ -135,16 +129,7 @@ export async function recognizeScreenshotCapture(args: {
 
 export async function answerScreenshotQuestion(args: {
   question: string;
-  screenshot: {
-    imageDataUrl?: string;
-    title: string;
-    sourceText: string;
-    summary?: string;
-    screenType?: string;
-    visibleText?: string[];
-    errorMessages?: string[];
-    interactiveElements?: string[];
-  };
+  screenshot: ScreenshotQuestionSource;
   appState: AppStateRecord;
 }): Promise<ScreenshotQuestionOutput> {
   if (args.appState.settings.aiProviderMode === "rules") {
@@ -155,20 +140,7 @@ export async function answerScreenshotQuestion(args: {
     };
   }
 
-  const visualQuestion = /右|左|上|下|按钮|图标|颜色|红色|蓝色|位置|where|button|icon|color|right|left/i.test(args.question);
-  const payload = {
-    question: args.question,
-    title: args.screenshot.title,
-    sourceText: args.screenshot.sourceText,
-    summary: args.screenshot.summary,
-    screenType: args.screenshot.screenType,
-    visibleText: args.screenshot.visibleText ?? [],
-    errorMessages: args.screenshot.errorMessages ?? [],
-    interactiveElements: args.screenshot.interactiveElements ?? [],
-    imageDataUrl: visualQuestion ? args.screenshot.imageDataUrl : undefined,
-    nativeLanguage: args.appState.profile.nativeLanguage,
-    targetLanguage: args.appState.profile.targetLanguage
-  };
+  const payload = buildScreenshotQuestionPayload(args);
 
   return args.appState.settings.aiProviderMode === "cloud-proxy"
     ? callCloudProxy("screenshotQuestion", payload, args.appState)

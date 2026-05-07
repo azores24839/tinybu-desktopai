@@ -105,6 +105,39 @@ test("AI request builders preserve text payloads and screenshot image inputs", a
   assert.deepEqual(openRouterMessages[0].content[1], { type: "image_url", image_url: { url: imageDataUrl, detail: "high" } });
 });
 
+test("screenshot AI payloads only include images for visual layout questions", async () => {
+  const { buildScreenshotCapturePayload, buildScreenshotQuestionPayload, isVisualScreenshotQuestion } = await loadTsModule("src/ai/screenshotPayloads.ts");
+  const appState = {
+    profile: {
+      level: "B1",
+      nativeLanguage: "中文",
+      targetLanguage: "English"
+    }
+  };
+  const imageDataUrl = "data:image/png;base64,abc";
+
+  assert.deepEqual(buildScreenshotCapturePayload({ imageDataUrl, width: 320, height: 180, appState }), {
+    imageDataUrl,
+    width: 320,
+    height: 180,
+    level: "B1",
+    targetLanguage: "English",
+    nativeLanguage: "中文"
+  });
+
+  assert.equal(isVisualScreenshotQuestion("右上角的按钮是什么？"), true);
+  assert.equal(isVisualScreenshotQuestion("这段文字是什么意思？"), false);
+
+  const screenshot = {
+    imageDataUrl,
+    title: "Screenshot",
+    sourceText: "保存失败",
+    visibleText: ["保存失败"]
+  };
+  assert.equal(buildScreenshotQuestionPayload({ question: "右上角的按钮是什么？", screenshot, appState }).imageDataUrl, imageDataUrl);
+  assert.equal(buildScreenshotQuestionPayload({ question: "这段文字是什么意思？", screenshot, appState }).imageDataUrl, undefined);
+});
+
 test("screenshot confirmation is only available while image data and OCR text are present", async () => {
   const { canConfirmScreenshotText } = await loadTsModule("src/features/screenshots/screenshotUtils.ts");
   const capture = {
