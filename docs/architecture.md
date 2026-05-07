@@ -60,6 +60,9 @@ src/lib/
 
 src/ai/
   Prompts, JSON schemas, rules fallback, provider calls, response normalization.
+
+apps/api/
+  Local cloud proxy plus provider routing helpers.
 ```
 
 ## Current Health
@@ -132,7 +135,7 @@ Cloud proxy mode is the recommended mode for mixed provider routing:
 - Qwen vision via `OPENROUTER_API_KEY`.
 - OpenAI models via `OPENAI_API_KEY`.
 
-In `apps/api/server.mjs`, MiniMax model names should route to the Anthropic-compatible endpoint when a token is configured. Provider/model IDs such as `qwen/...` should route to OpenRouter.
+In `apps/api/server.mjs`, MiniMax model names should route to the Anthropic-compatible endpoint when a token is configured. Provider/model IDs such as `qwen/...` should route to OpenRouter. Pure model normalization and routing helpers live in `apps/api/providerRouting.mjs`.
 
 ## Suggested Next Refactors
 

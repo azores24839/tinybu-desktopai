@@ -9,7 +9,7 @@ import {
   normalizeAnthropicModel,
   normalizeOpenRouterModel,
   shouldUseOpenRouterModel
-} from "../apps/api/server.mjs";
+} from "../apps/api/providerRouting.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 

@@ -59,7 +59,7 @@ src/features/settings/         Settings page
 src/lib/                       Defaults, persistence helpers, shared options/copy
 src/ai/                        Provider calls, prompts, schemas, rules fallback
 src-tauri/                     Desktop shell, screenshot capture, keychain, bridge
-apps/api/                      Local cloud proxy
+apps/api/                      Local cloud proxy and provider routing helpers
 apps/extension/                Chrome MV3 capture extension
 ```
 

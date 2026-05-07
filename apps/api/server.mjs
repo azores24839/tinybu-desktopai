@@ -1,5 +1,12 @@
 import http from "node:http";
 import { pathToFileURL } from "node:url";
+import {
+  isAnthropicCompatibleModel,
+  isProviderQualifiedModel,
+  normalizeAnthropicModel,
+  normalizeOpenRouterModel,
+  shouldUseOpenRouterModel
+} from "./providerRouting.mjs";
 
 const port = Number(process.env.PORT ?? 8787);
 const openAiApiKey = process.env.OPENAI_API_KEY;
@@ -13,47 +20,6 @@ const defaultModel =
   process.env.ANTHROPIC_DEFAULT_SONNET_MODEL ??
   process.env.OPENAI_MODEL ??
   "MiniMax-M2.7";
-
-export function normalizeOpenRouterModel(model = "") {
-  const trimmed = model.trim();
-  const aliases = {
-    "MiniMax-M2.7": "minimax/minimax-m2.7",
-    "minimax-m2.7": "minimax/minimax-m2.7",
-    "MiniMax M2.7": "minimax/minimax-m2.7",
-    "MiniMax-M2": "minimax/minimax-m2",
-    "minimax-m2": "minimax/minimax-m2",
-    "MiniMax M2": "minimax/minimax-m2"
-  };
-  return aliases[trimmed] ?? trimmed;
-}
-
-export function normalizeAnthropicModel(model = "") {
-  const trimmed = model.trim();
-  const aliases = {
-    "minimax/minimax-m2.7": "MiniMax-M2.7",
-    "minimax-m2.7": "MiniMax-M2.7",
-    "MiniMax M2.7": "MiniMax-M2.7",
-    "minimax/minimax-m2": "MiniMax-M2",
-    "minimax-m2": "MiniMax-M2",
-    "MiniMax M2": "MiniMax-M2"
-  };
-  return aliases[trimmed] ?? trimmed;
-}
-
-export function isAnthropicCompatibleModel(model = "") {
-  const trimmed = model.trim().toLowerCase();
-  return trimmed.startsWith("minimax") || trimmed.startsWith("claude") || trimmed.startsWith("anthropic/");
-}
-
-export function shouldUseOpenRouterModel(model = "", options = {}) {
-  const normalized = normalizeOpenRouterModel(model);
-  const token = options.anthropicAuthToken ?? anthropicAuthToken;
-  return normalized.includes("/") && (!token || !isAnthropicCompatibleModel(normalized));
-}
-
-export function isProviderQualifiedModel(model = "") {
-  return normalizeOpenRouterModel(model).includes("/");
-}
 
 const taskPrompts = {
   contentUnderstanding:
@@ -736,13 +702,13 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      if (openRouterApiKey && shouldUseOpenRouterModel(model)) {
+      if (openRouterApiKey && shouldUseOpenRouterModel(model, { anthropicAuthToken })) {
         const { response, data } = await callQuickPetChatOpenRouter(model, payload);
         sendJson(res, response.status, data);
         return;
       }
 
-      if (shouldUseOpenRouterModel(model) && !openRouterApiKey) {
+      if (shouldUseOpenRouterModel(model, { anthropicAuthToken }) && !openRouterApiKey) {
         sendJson(res, 500, { error: `Configure OPENROUTER_API_KEY before using ${normalizeOpenRouterModel(model)}.` });
         return;
       }
@@ -763,13 +729,13 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (openRouterApiKey && shouldUseOpenRouterModel(model)) {
+    if (openRouterApiKey && shouldUseOpenRouterModel(model, { anthropicAuthToken })) {
       const { response, data } = await callOpenRouter(task, model, payload);
       sendJson(res, response.status, data);
       return;
     }
 
-    if (shouldUseOpenRouterModel(model) && !openRouterApiKey) {
+    if (shouldUseOpenRouterModel(model, { anthropicAuthToken }) && !openRouterApiKey) {
       sendJson(res, 500, { error: `Configure OPENROUTER_API_KEY before using ${normalizeOpenRouterModel(model)}.` });
       return;
     }

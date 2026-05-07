@@ -282,6 +282,7 @@ Quick Chat 当前实现：
   - MiniMax 模型名，如 `MiniMax-M2.7`，走 `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`。
   - Provider/model ID，如 `qwen/qwen3.6-35b-a3b`，走 OpenRouter。
   - 缺少对应 provider key 时会报明确配置错误，不再静默落到错误 provider。
+- 纯模型归一化和路由判断在 `apps/api/providerRouting.mjs`，由回归测试覆盖。
 
 已实现 AI task：
 
