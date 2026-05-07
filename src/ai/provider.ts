@@ -20,6 +20,7 @@ import type {
   TalkTurnOutput
 } from "../types";
 import { loadUserApiKey } from "../lib/secureKey";
+import { fetchWithTimeout } from "./fetchWithTimeout";
 import { isOpenRouterApiKey, modelForTask, normalizeOpenRouterModel, shouldUseOpenRouter } from "./providerRouting";
 import { buildOpenAiInput, buildOpenRouterMessages } from "./requestBuilders";
 import { normalizeScreenshotRecognition, parseOpenAiJson, parseOpenAiText, quickReplyText } from "./responseParsing";
@@ -47,15 +48,6 @@ async function loadRequiredUserApiKey() {
   const apiKey = await loadUserApiKey();
   if (!apiKey) throw new Error("No user API key saved");
   return apiKey;
-}
-
-function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number) {
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
-
-  return fetch(url, { ...options, signal: controller.signal }).finally(() => {
-    window.clearTimeout(timer);
-  });
 }
 
 async function callOpenAi<T>(
