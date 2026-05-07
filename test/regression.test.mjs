@@ -84,6 +84,27 @@ test("AI response parsing handles wrapped JSON, compact replies, and screenshot 
   assert.deepEqual(recognition.interactiveElements, ["重试"]);
 });
 
+test("AI request builders preserve text payloads and screenshot image inputs", async () => {
+  const { buildOpenAiInput, buildOpenRouterMessages } = await loadTsModule("src/ai/requestBuilders.ts");
+
+  assert.equal(buildOpenAiInput("practiceQuestions", { topic: "travel" }), "{\"topic\":\"travel\"}");
+  assert.deepEqual(buildOpenRouterMessages("practiceQuestions", { topic: "travel" }), [
+    { role: "user", content: "{\"topic\":\"travel\"}" }
+  ]);
+
+  const imageDataUrl = "data:image/png;base64,abc";
+  const openAiInput = buildOpenAiInput("screenshotCapture", { imageDataUrl, width: 10, height: 20 });
+  assert.equal(openAiInput[0].content[0].type, "input_text");
+  assert.equal(JSON.parse(openAiInput[0].content[0].text).width, 10);
+  assert.match(JSON.parse(openAiInput[0].content[0].text).instruction, /OCR every readable text/);
+  assert.deepEqual(openAiInput[0].content[1], { type: "input_image", image_url: imageDataUrl, detail: "high" });
+
+  const openRouterMessages = buildOpenRouterMessages("screenshotQuestion", { imageDataUrl, question: "What is this?" });
+  assert.equal(openRouterMessages[0].content[0].type, "text");
+  assert.match(JSON.parse(openRouterMessages[0].content[0].text).instruction, /Answer the user's question/);
+  assert.deepEqual(openRouterMessages[0].content[1], { type: "image_url", image_url: { url: imageDataUrl, detail: "high" } });
+});
+
 test("screenshot confirmation is only available while image data and OCR text are present", async () => {
   const { canConfirmScreenshotText } = await loadTsModule("src/features/screenshots/screenshotUtils.ts");
   const capture = {

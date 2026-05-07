@@ -21,6 +21,7 @@ import type {
 } from "../types";
 import { loadUserApiKey } from "../lib/secureKey";
 import { isOpenRouterApiKey, modelForTask, normalizeOpenRouterModel, shouldUseOpenRouter } from "./providerRouting";
+import { buildOpenAiInput, buildOpenRouterMessages } from "./requestBuilders";
 import { normalizeScreenshotRecognition, parseOpenAiJson, parseOpenAiText, quickReplyText } from "./responseParsing";
 import { jsonSchemas, taskPrompts } from "./prompts";
 import {
@@ -39,7 +40,6 @@ import {
 } from "./rules";
 
 type TaskName = keyof typeof taskPrompts;
-type ImageTaskPayload = { imageDataUrl?: string; [key: string]: unknown };
 const QUICK_PET_CHAT_PROMPT =
   "TinyBu desktop buddy. Reply in the user's language. Max 35 Chinese chars or 18 English words. No markdown.";
 
@@ -47,82 +47,6 @@ async function loadRequiredUserApiKey() {
   const apiKey = await loadUserApiKey();
   if (!apiKey) throw new Error("No user API key saved");
   return apiKey;
-}
-
-function buildOpenAiInput(task: TaskName, payload: unknown) {
-  if (task !== "screenshotCapture" && task !== "screenshotQuestion") return JSON.stringify(payload);
-
-  const screenshotPayload = payload as ImageTaskPayload;
-  const { imageDataUrl, ...textPayload } = screenshotPayload;
-  const content: Array<
-    { type: "input_text"; text: string } | { type: "input_image"; image_url?: string; detail?: "high" }
-  > = [
-    {
-      type: "input_text",
-      text: JSON.stringify({
-        ...textPayload,
-        instruction:
-          task === "screenshotCapture"
-            ? "OCR every readable text string. Do not filter by usefulness or language."
-            : "Answer the user's question about this screenshot."
-      })
-    }
-  ];
-
-  if (imageDataUrl) {
-    content.push({
-      type: "input_image",
-      image_url: imageDataUrl,
-      detail: "high"
-    });
-  }
-
-  return [
-    {
-      role: "user",
-      content
-    }
-  ];
-}
-
-function buildOpenRouterMessages(task: TaskName, payload: unknown) {
-  if (task !== "screenshotCapture" && task !== "screenshotQuestion") {
-    return [
-      {
-        role: "user",
-        content: JSON.stringify(payload)
-      }
-    ];
-  }
-
-  const screenshotPayload = payload as ImageTaskPayload;
-  const { imageDataUrl, ...textPayload } = screenshotPayload;
-  const content: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "high" } }> = [
-    {
-      type: "text",
-      text: JSON.stringify({
-        ...textPayload,
-        instruction:
-          task === "screenshotCapture"
-            ? "OCR every readable text string. Do not filter by usefulness or language."
-            : "Answer the user's question about this screenshot."
-      })
-    }
-  ];
-
-  if (imageDataUrl) {
-    content.push({
-      type: "image_url",
-      image_url: { url: imageDataUrl, detail: "high" }
-    });
-  }
-
-  return [
-    {
-      role: "user",
-      content
-    }
-  ];
 }
 
 function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number) {

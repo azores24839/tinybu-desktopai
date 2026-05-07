@@ -60,7 +60,7 @@ src/lib/
 
 src/ai/
   Prompts, JSON schemas, rules fallback, provider calls, frontend routing helpers,
-  response parsing and normalization.
+  request builders, response parsing and normalization.
 
 apps/api/
   Local cloud proxy plus provider routing helpers.
@@ -73,7 +73,7 @@ The project is in workable shape and has improved maintainability after recent f
 Remaining hotspots:
 
 - `src/App.tsx` is still large and owns too many business flows.
-- `src/ai/provider.ts` is large and mixes provider routing, request construction, parsing, and task helpers.
+- `src/ai/provider.ts` is large and still mixes provider calls and task helpers.
 - `src/styles.css` is large and global.
 - There is a small Node-based regression suite for provider routing, screenshot confirmation, and practice data builders.
 
