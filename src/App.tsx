@@ -840,7 +840,7 @@ export default function App() {
       )}
 
       {shellScreens.includes(screen) ? (
-        <div className="desktop-shell">
+        <div className="desktop-shell home-shell">
           <aside className="sidebar">
             <button className="brand-button" onClick={() => navigate("home")}>
               <TinyBuOrb state={companionState} />
@@ -865,9 +865,12 @@ export default function App() {
               <button className={screen === "memory" ? "active" : ""} onClick={() => navigate("memory")}>
                 <Brain size={18} /> {copy.nav.memory}
               </button>
+              <button className={screen === "settings" ? "active" : ""} onClick={() => navigate("settings")}>
+                <Settings size={18} /> {copy.nav.settings}
+              </button>
             </nav>
-            <button className={screen === "settings" ? "settings-link active" : "settings-link"} onClick={() => navigate("settings")}>
-              <Settings size={18} /> {copy.nav.settings}
+            <button className="settings-link upgrade-link" onClick={() => navigate("settings")}>
+              {copy.home.upgrade}
             </button>
           </aside>
 

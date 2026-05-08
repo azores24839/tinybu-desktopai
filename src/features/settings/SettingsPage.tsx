@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AppHeader } from "../../components/AppHeader";
 import { interfaceLanguageOptions, languageOptions, targetLanguageOptions } from "../../lib/appOptions";
 import { uiCopy } from "../../lib/uiCopy";
-import type { AppStateRecord, UserProfile } from "../../types";
+import type { AiProviderMode, AppStateRecord, SupportPreference, UserProfile } from "../../types";
 
 type SettingsPageProps = {
   appState: AppStateRecord;
@@ -16,6 +16,58 @@ type SettingsPageProps = {
   clearAllData: () => void;
   resetOnboarding: () => void;
 };
+
+type OptionControlProps<T extends string> = {
+  label: string;
+  value: T;
+  options: readonly T[];
+  onChange: (value: T) => void;
+  columns?: "two" | "three" | "auto";
+  labels?: Partial<Record<T, string>>;
+};
+
+function OptionControl<T extends string>({ label, value, options, onChange, columns = "auto", labels = {} }: OptionControlProps<T>) {
+  return (
+    <div className="settings-control">
+      <span>{label}</span>
+      <div className={`settings-pill-grid ${columns}`}>
+        {options.map((option) => (
+          <button
+            key={option}
+            type="button"
+            className={`settings-pill${option === value ? " selected" : ""}`}
+            onClick={() => onChange(option)}
+          >
+            {labels[option] ?? option}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type SettingsSelectProps = {
+  label: string;
+  value: string;
+  options: readonly string[];
+  onChange: (value: string) => void;
+};
+
+function SettingsSelect({ label, value, options, onChange }: SettingsSelectProps) {
+  return (
+    <label className="settings-select-field">
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => (
+          <option key={option}>{option}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+const supportOptions: SupportPreference[] = ["Gentle", "Balanced", "Direct"];
+const providerOptions: AiProviderMode[] = ["rules", "user-key", "cloud-proxy"];
 
 export function SettingsPage({
   appState,
@@ -35,86 +87,65 @@ export function SettingsPage({
   const copy = uiCopy[draft.profile.interfaceLanguage].settings;
 
   return (
-    <section className="page">
+    <section className="page settings-page">
       <AppHeader title={copy.title} description={copy.description} />
-      <div className="settings-grid">
-        <section className="panel">
+      <div className="settings-workbench">
+        <section className="panel settings-card settings-language-card">
           <h2>{copy.language}</h2>
-          <label>
-            {copy.interfaceLanguage}
-            <select
-              value={draft.profile.interfaceLanguage}
-              onChange={(event) =>
-                setDraft({ ...draft, profile: { ...draft.profile, interfaceLanguage: event.target.value as UserProfile["interfaceLanguage"] } })
-              }
-            >
-              {interfaceLanguageOptions.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {copy.sourceLanguage}
-            <select value={draft.profile.nativeLanguage} onChange={(event) => setDraft({ ...draft, profile: { ...draft.profile, nativeLanguage: event.target.value } })}>
-              {languageOptions.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {copy.targetLanguage}
-            <select value={draft.profile.targetLanguage} onChange={(event) => setDraft({ ...draft, profile: { ...draft.profile, targetLanguage: event.target.value } })}>
-              {targetLanguageOptions.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {copy.supportStrength}
-            <select
-              value={draft.settings.supportStrength}
-              onChange={(event) =>
-                setDraft({ ...draft, settings: { ...draft.settings, supportStrength: event.target.value as AppStateRecord["settings"]["supportStrength"] } })
-              }
-            >
-              <option>Gentle</option>
-              <option>Balanced</option>
-              <option>Direct</option>
-            </select>
-          </label>
+          <OptionControl<UserProfile["interfaceLanguage"]>
+            label={copy.interfaceLanguage}
+            value={draft.profile.interfaceLanguage}
+            options={interfaceLanguageOptions}
+            columns="two"
+            onChange={(interfaceLanguage) => setDraft({ ...draft, profile: { ...draft.profile, interfaceLanguage } })}
+          />
+          <SettingsSelect
+            label={copy.sourceLanguage}
+            value={draft.profile.nativeLanguage}
+            options={languageOptions}
+            onChange={(nativeLanguage) => setDraft({ ...draft, profile: { ...draft.profile, nativeLanguage } })}
+          />
+          <SettingsSelect
+            label={copy.targetLanguage}
+            value={draft.profile.targetLanguage}
+            options={targetLanguageOptions}
+            onChange={(targetLanguage) => setDraft({ ...draft, profile: { ...draft.profile, targetLanguage } })}
+          />
+          <OptionControl
+            label={copy.supportStrength}
+            value={draft.settings.supportStrength}
+            options={supportOptions}
+            columns="three"
+            onChange={(supportStrength) => setDraft({ ...draft, settings: { ...draft.settings, supportStrength } })}
+          />
         </section>
-        <section className="panel">
+        <section className="panel settings-card settings-ai-card">
           <h2>API settings</h2>
-          <label>
-            Provider mode
-            <select
-              value={draft.settings.aiProviderMode}
-              onChange={(event) =>
-                setDraft({ ...draft, settings: { ...draft.settings, aiProviderMode: event.target.value as AppStateRecord["settings"]["aiProviderMode"] } })
-              }
-            >
-              <option value="rules">Rules fallback</option>
-              <option value="user-key">User API key</option>
-              <option value="cloud-proxy">Cloud proxy</option>
-            </select>
-          </label>
-          <label>
+          <OptionControl
+            label="Provider mode"
+            value={draft.settings.aiProviderMode}
+            options={providerOptions}
+            columns="three"
+            labels={{ rules: "Rules", "user-key": "API key", "cloud-proxy": "Cloud" }}
+            onChange={(aiProviderMode) => setDraft({ ...draft, settings: { ...draft.settings, aiProviderMode } })}
+          />
+          <label className="settings-field">
             Chat / learning model
             <input value={draft.settings.aiModel} onChange={(event) => setDraft({ ...draft, settings: { ...draft.settings, aiModel: event.target.value } })} />
           </label>
-          <label>
+          <label className="settings-field">
             Screenshot / vision model
             <input value={draft.settings.visionModel} onChange={(event) => setDraft({ ...draft, settings: { ...draft.settings, visionModel: event.target.value } })} />
           </label>
-          <label>
+          <label className="settings-field">
             OpenRouter base URL
             <input value={draft.settings.openRouterBaseUrl} onChange={(event) => setDraft({ ...draft, settings: { ...draft.settings, openRouterBaseUrl: event.target.value } })} />
           </label>
-          <label>
+          <label className="settings-field">
             Cloud proxy URL
             <input value={draft.settings.cloudProxyUrl} onChange={(event) => setDraft({ ...draft, settings: { ...draft.settings, cloudProxyUrl: event.target.value } })} />
           </label>
-          <label>
+          <label className="settings-field">
             API key
             <input type="password" value={apiKeyDraft} onChange={(event) => setApiKeyDraft(event.target.value)} placeholder={draft.settings.apiKeySaved ? "Saved" : "Paste key"} />
           </label>
@@ -128,34 +159,36 @@ export function SettingsPage({
             </button>
           </div>
         </section>
-        <section className="panel">
-          <h2>Data / local storage</h2>
-          <button className="secondary" onClick={clearMemory}>
-            Clear Bu&apos;s Memory
-          </button>
-          <button className="danger" onClick={clearAllData}>
-            Clear learning data
-          </button>
-          <button className="secondary" onClick={resetOnboarding}>
-            Reset onboarding
-          </button>
-        </section>
-        <section className="panel">
-          <h2>Desktop / extension</h2>
-          <p>Desktop capture and browser extension captures land in Inbox automatically.</p>
-          <label className="check-row">
-            <input
-              type="checkbox"
-              checked={draft.settings.screenshotRecognitionEnabled}
-              onChange={(event) =>
-                setDraft({ ...draft, settings: { ...draft.settings, screenshotRecognitionEnabled: event.target.checked } })
-              }
-            />
-            Enable screenshot recognition
-          </label>
-        </section>
+        <div className="settings-side-stack">
+          <section className="panel settings-card settings-desktop-card">
+            <h2>Desktop / extension</h2>
+            <p>Desktop capture and browser extension captures land in Inbox automatically.</p>
+            <label className="settings-toggle-row">
+              <input
+                type="checkbox"
+                checked={draft.settings.screenshotRecognitionEnabled}
+                onChange={(event) =>
+                  setDraft({ ...draft, settings: { ...draft.settings, screenshotRecognitionEnabled: event.target.checked } })
+                }
+              />
+              <span>Enable screenshot recognition</span>
+            </label>
+          </section>
+          <section className="panel settings-card settings-data-card">
+            <h2>Data / local storage</h2>
+            <button className="secondary" onClick={clearMemory}>
+              Clear Bu&apos;s Memory
+            </button>
+            <button className="danger" onClick={clearAllData}>
+              Clear learning data
+            </button>
+            <button className="secondary" onClick={resetOnboarding}>
+              Reset onboarding
+            </button>
+          </section>
+        </div>
       </div>
-      <div className="bottom-actions">
+      <div className="bottom-actions settings-actions">
         <button className="primary" onClick={() => saveSettings(draft, apiKeyDraft)}>
           {copy.save}
         </button>
