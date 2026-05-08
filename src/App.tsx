@@ -909,7 +909,7 @@ export default function App() {
                 deleteCapture={deleteCapture}
                 createTopicFromCaptures={createTopicFromCaptures}
                 addCapturesToTopic={addCapturesToTopic}
-                organize={() => navigate("organize")}
+                saveExpressionFromCapture={saveExpressionFromCapture}
               />
             )}
             {screen === "organize" && (
