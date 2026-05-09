@@ -1431,7 +1431,13 @@ a {
   font-size: 15px;
 }
 
-.inbox-layout,
+.inbox-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
 .organize-layout {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr) 340px;
@@ -2817,7 +2823,6 @@ body.tinybu-pet-body #root {
     padding-left: 18px;
   }
 
-  .inbox-layout,
   .organize-layout,
   .study-layout {
     grid-template-columns: 210px minmax(0, 1fr) 300px;
