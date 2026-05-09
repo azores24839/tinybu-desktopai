@@ -515,7 +515,7 @@ export default function App() {
     await updateState((state) => ({ ...state, activeCaptureId: capture.id }));
   }
 
-  async function createTopicFromCaptures(captureIds: string[], name?: string) {
+  async function createTopicFromCaptures(captureIds: string[], name?: string, practiceGoal?: string) {
     const selectedCaptures = captures.filter((capture) => captureIds.includes(capture.id));
     if (!selectedCaptures.length) return;
     const first = selectedCaptures[0];
@@ -525,7 +525,7 @@ export default function App() {
       summary: first.summary || selectedCaptures.map((capture) => capture.title).join(", "),
       captureIds: selectedCaptures.map((capture) => capture.id),
       tags: Array.from(new Set(selectedCaptures.flatMap((capture) => capture.keywords ?? []).slice(0, 4))),
-      practiceGoal: inferPracticeGoal(selectedCaptures),
+      practiceGoal: practiceGoal?.trim() || inferPracticeGoal(selectedCaptures),
       status: "ready",
       savedExpressionCount: 0,
       createdAt: nowIso(),

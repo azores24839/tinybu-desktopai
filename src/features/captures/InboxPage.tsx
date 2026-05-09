@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Archive, MoreVertical, Search, Trash2, X } from "lucide-react";
+import { Archive, ChevronRight, MoreVertical, RotateCw, Search, Trash2 } from "lucide-react";
 import { AppHeader } from "../../components/AppHeader";
 import { EmptyState } from "../../components/EmptyState";
 import { formatDate } from "../../lib/date";
@@ -16,7 +16,7 @@ type InboxPageProps = {
   confirmScreenshotText: (capture: CaptureItem) => void;
   archiveCapture: (capture: CaptureItem) => void;
   deleteCapture: (id: string) => void;
-  createTopicFromCaptures: (captureIds: string[], name?: string) => void;
+  createTopicFromCaptures: (captureIds: string[], name?: string, practiceGoal?: string) => void;
   addCapturesToTopic: (captureIds: string[], topic: TopicItem) => void;
   saveExpressionFromCapture: (capture: CaptureItem, expression: string) => void;
 };
@@ -49,6 +49,8 @@ export function InboxPage({
   const [reviewGroupId, setReviewGroupId] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [targetTopicId, setTargetTopicId] = useState("");
+  const [topicNameDraft, setTopicNameDraft] = useState("");
+  const [learningFocusDraft, setLearningFocusDraft] = useState("");
 
   const suggestedCaptures = captures.filter((capture) => !capture.topicId && capture.status === "suggested");
   const needsReview = captures.filter((capture) => !capture.topicId && capture.status === "unsorted");
@@ -71,6 +73,9 @@ export function InboxPage({
     }))
     .filter((group) => group.captures.length);
   const visibleGroups = activeGroup ? [activeGroup] : filteredGroups;
+  const activeGroupCaptures = activeGroup?.captures.filter((capture) => matchesQuery(capture, query)) ?? [];
+  const allActiveCapturesSelected =
+    !!activeGroupCaptures.length && activeGroupCaptures.every((capture) => selectedIds.includes(capture.id));
   const selectedCapture =
     activeCapture && visibleCaptures.some((capture) => capture.id === activeCapture.id)
       ? activeCapture
@@ -90,15 +95,24 @@ export function InboxPage({
   const startGroupReview = (group: LearningGroup) => {
     setReviewGroupId(group.id);
     setSelectedIds(group.captures.map((capture) => capture.id));
+    setTopicNameDraft(group.name);
+    setLearningFocusDraft(group.practiceGoal);
   };
 
   const leaveGroupReview = () => {
     setReviewGroupId("");
     setSelectedIds([]);
+    setTopicNameDraft("");
+    setLearningFocusDraft("");
   };
 
   const toggleSelected = (id: string) => {
     setSelectedIds((items) => (items.includes(id) ? items.filter((item) => item !== id) : [...items, id]));
+  };
+
+  const toggleAllActiveCaptures = () => {
+    if (!activeGroup) return;
+    setSelectedIds(allActiveCapturesSelected ? [] : activeGroup.captures.map((capture) => capture.id));
   };
 
   return (
@@ -139,7 +153,7 @@ export function InboxPage({
         </label>
       </div>
 
-      <div className={queue === "suggested" ? "inbox-folder-layout" : "inbox-layout"}>
+      <div className={queue === "suggested" ? `inbox-folder-layout${activeGroup ? " has-captures" : ""}` : "inbox-layout"}>
         <main className="capture-column">
           {queue === "suggested" && (
             <section className="capture-section">
@@ -156,8 +170,8 @@ export function InboxPage({
                         className={`learning-folder-card tone-${index % 3}${activeGroup?.id === group.id ? " active" : ""}`}
                         onClick={() => startGroupReview(group)}
                       >
-                        <svg className="folder-shape" viewBox="0 0 616 500" preserveAspectRatio="none" aria-hidden="true">
-                          <path d="M48 0H230C266 0 286 18 312 58C337 96 370 112 424 112H552C587 112 616 141 616 176V436C616 471 587 500 552 500H40C18 500 0 482 0 460V48C0 22 22 0 48 0Z" />
+                        <svg className="folder-shape" viewBox="0 0 250 200" preserveAspectRatio="none" aria-hidden="true">
+                          <path d="M20 0H94C109 0 118 6 128 18C139 31 151 33 172 33H224C238 33 250 45 250 59V174C250 188 238 200 224 200H16C7 200 0 193 0 184V20C0 9 9 0 20 0Z" />
                         </svg>
                         <button className="folder-menu" title="More" onClick={(event) => event.stopPropagation()}>
                           <MoreVertical size={18} />
@@ -183,19 +197,21 @@ export function InboxPage({
                   {activeGroup && (
                     <div className="folder-setup">
                       <div>
-                        <h3>Topic Setup</h3>
+                        <h3>Topic description</h3>
                         <p>Keep the captures that belong together, then create one topic for the whole group.</p>
                       </div>
-                      <div>
-                        <h3>Topic name</h3>
-                        <span className="topic-suggestion">{activeGroup.name}</span>
+                      <div className="topic-field-row">
+                        <label>
+                          Topic name
+                          <input value={topicNameDraft} onChange={(event) => setTopicNameDraft(event.target.value)} />
+                        </label>
+                        <label>
+                          Learning Focus
+                          <input value={learningFocusDraft} onChange={(event) => setLearningFocusDraft(event.target.value)} />
+                        </label>
                       </div>
-                      <div>
-                        <h3>Learning Focus</h3>
-                        <span className="topic-suggestion">{activeGroup.practiceGoal}</span>
-                      </div>
-                      <div className="stack-actions">
-                        <button className="primary" onClick={() => createTopicFromCaptures(selectedIds, activeGroup.name)}>
+                      <div className="setup-actions">
+                        <button className="primary" onClick={() => createTopicFromCaptures(selectedIds, topicNameDraft || activeGroup.name, learningFocusDraft || activeGroup.practiceGoal)}>
                           Create Topic
                         </button>
                         <button className="secondary" onClick={() => setSelectedIds(activeGroup.captures.map((capture) => capture.id))}>
@@ -237,29 +253,39 @@ export function InboxPage({
 
         {activeGroup && queue === "suggested" && (
           <aside key={activeGroup.id} className="folder-drawer">
-            <div className="folder-drawer-header">
-              <div>
-                <p className="eyebrow">Captures</p>
-                <h2>{activeGroup.name}</h2>
-              </div>
-              <button className="quick-icon-button" onClick={leaveGroupReview} title="Close">
-                <X size={18} />
+            <div className="folder-drawer-title">
+              <button
+                className="drawer-collapse-button"
+                onClick={leaveGroupReview}
+                title="Back to folders"
+              >
+                <ChevronRight size={18} />
+              </button>
+              <span>Captures</span>
+            </div>
+            <div className="capture-select-toolbar">
+              <label className="capture-check-label">
+                <input type="checkbox" checked={allActiveCapturesSelected} onChange={toggleAllActiveCaptures} />
+                Select All
+              </label>
+              <button className="quick-icon-button" onClick={() => setSelectedIds(activeGroup.captures.map((capture) => capture.id))} title="Refresh selection">
+                <RotateCw size={16} />
               </button>
             </div>
 
-            <div className="meta-row">
-              <span>{activeGroup.captures.length} captures</span>
-              <span>{activeGroup.practiceGoal}</span>
-            </div>
-
             <div className="group-capture-list">
-              <div className="section-title">Captures</div>
-              {activeGroup.captures.filter((capture) => matchesQuery(capture, query)).map((capture) => (
-                <label key={capture.id} className={selectedIds.includes(capture.id) ? "select-row selected" : "select-row"}>
+              {activeGroupCaptures.map((capture) => (
+                <label key={capture.id} className="capture-select-card-row">
                   <input type="checkbox" checked={selectedIds.includes(capture.id)} onChange={() => toggleSelected(capture.id)} />
-                  <div>
-                    <strong>{capture.title}</strong>
-                    <span>{sourceLabel(capture.sourceKind)} · {formatDate(capture.capturedAt)}</span>
+                  <div className={selectedIds.includes(capture.id) ? "capture-review-card selected" : "capture-review-card"}>
+                    <h3>{capture.title}</h3>
+                    <p>{capture.summary || capture.fragments[0]?.text}</p>
+                    <div className="meta-row">
+                      <span>{capture.fragments.length} sources</span>
+                      <span>0 saved</span>
+                      <span>{formatDate(capture.capturedAt)}</span>
+                      <span>Ready to study</span>
+                    </div>
                   </div>
                 </label>
               ))}
