@@ -6,6 +6,9 @@ import { formatDate } from "../../lib/date";
 import type { CaptureItem, CaptureStatus, TopicItem } from "../../types";
 import { ScreenshotPreviewBlock } from "../screenshots/ScreenshotPreviewBlock";
 import { captureStatusLabels, captureText, inferPracticeGoal, sourceLabel } from "./captureUtils";
+import { NeedsReviewPanel } from "./NeedsReviewPanel";
+import { UnsortedPanel } from "./UnsortedPanel";
+import { demoReviewCaptures } from "../../data/demoContent";
 
 type InboxPageProps = {
   captures: CaptureItem[];
@@ -53,16 +56,17 @@ export function InboxPage({
   const [learningFocusDraft, setLearningFocusDraft] = useState("");
 
   const suggestedCaptures = captures.filter((capture) => !capture.topicId && capture.status === "suggested");
-  const needsReview = captures.filter((capture) => !capture.topicId && capture.status === "unsorted");
-  const ready = captures.filter((capture) => capture.topicId && capture.status !== "archived");
+  const needsReview = captures.filter((capture) => capture.status === "needs_review");
+  const unsorted = captures.filter((capture) => !capture.topicId && capture.status === "unsorted");
   const archived = captures.filter((capture) => capture.status === "archived");
+  const reviewCaptures = needsReview.length ? needsReview : demoReviewCaptures;
   const learningGroups = useMemo(() => buildLearningGroups(suggestedCaptures), [suggestedCaptures]);
   const activeGroup = learningGroups.find((group) => group.id === reviewGroupId);
   const selectedTopic = topics.find((topic) => topic.id === targetTopicId) ?? topics[0];
   const queueCaptures: Record<InboxQueue, CaptureItem[]> = {
     suggested: suggestedCaptures,
     "needs-review": needsReview,
-    ready,
+    ready: unsorted,
     archived
   };
   const visibleCaptures = queueCaptures[queue].filter((capture) => matchesQuery(capture, query));
@@ -88,8 +92,8 @@ export function InboxPage({
 
   const queues: { id: InboxQueue; label: string; count: number }[] = [
     { id: "suggested", label: "Suggested Groups", count: learningGroups.length },
-    { id: "needs-review", label: "Needs Review", count: needsReview.length },
-    { id: "ready", label: "In Topics", count: ready.length }
+    { id: "needs-review", label: "Needs Review", count: reviewCaptures.length },
+    { id: "ready", label: "Unsorted", count: unsorted.length }
   ];
 
   const startGroupReview = (group: LearningGroup) => {
@@ -113,6 +117,36 @@ export function InboxPage({
   const toggleAllActiveCaptures = () => {
     if (!activeGroup) return;
     setSelectedIds(allActiveCapturesSelected ? [] : activeGroup.captures.map((capture) => capture.id));
+  };
+
+  const handleReviewConfirm = (capture: CaptureItem, editedText: string) => {
+    const updated = { ...capture };
+    if (editedText) {
+      updated.extractedText = editedText;
+      updated.sourceText = editedText;
+    }
+    updated.status = "suggested";
+    updateCapture(updated);
+  };
+
+  const handleReviewRetry = (capture: CaptureItem) => {
+    console.log("Retry recognition for:", capture.id);
+  };
+
+  const handleReviewMoveToUnsorted = (capture: CaptureItem) => {
+    updateCapture({ ...capture, status: "unsorted" });
+  };
+
+  const handleReviewDiscard = (capture: CaptureItem) => {
+    deleteCapture(capture.id);
+  };
+
+  const handleReviewAddToTopic = (captureId: string, topic: TopicItem) => {
+    addCapturesToTopic([captureId], topic);
+  };
+
+  const handleReviewCreateTopic = (captureId: string, name: string, practiceGoal?: string) => {
+    createTopicFromCaptures([captureId], name, practiceGoal);
   };
 
   return (
@@ -153,9 +187,33 @@ export function InboxPage({
         </label>
       </div>
 
-      <div className={queue === "suggested" ? `inbox-folder-layout${activeGroup ? " has-captures" : ""}` : "inbox-layout"}>
-        <main className="capture-column">
-          {queue === "suggested" && (
+      {queue === "needs-review" && (
+        <NeedsReviewPanel
+          captures={reviewCaptures}
+          topics={topics}
+          onConfirm={handleReviewConfirm}
+          onRetry={handleReviewRetry}
+          onMoveToUnsorted={handleReviewMoveToUnsorted}
+          onDiscard={handleReviewDiscard}
+          onAddToTopic={handleReviewAddToTopic}
+          onCreateTopic={handleReviewCreateTopic}
+        />
+      )}
+
+      {queue === "ready" && (
+        <UnsortedPanel
+          captures={unsorted}
+          topics={topics}
+          onDelete={deleteCapture}
+          onAddToTopic={addCapturesToTopic}
+          onCreateTopic={createTopicFromCaptures}
+        />
+      )}
+
+      {queue !== "needs-review" && queue !== "ready" && (
+        <div className={queue === "suggested" ? `inbox-folder-layout${activeGroup ? " has-captures" : ""}` : "inbox-layout"}>
+          <main className="capture-column">
+            {queue === "suggested" && (
             <section className="capture-section">
               <div className="inbox-intro">
                 <h2>Folders</h2>
@@ -361,6 +419,7 @@ export function InboxPage({
           </aside>
         )}
       </div>
+      )}
     </section>
   );
 }

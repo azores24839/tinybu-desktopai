@@ -3,6 +3,7 @@ import type { CaptureItem, CaptureStatus, ExternalCaptureKind } from "../../type
 export const captureStatusLabels: Record<CaptureStatus, string> = {
   unsorted: "Unsorted",
   suggested: "Suggested",
+  needs_review: "Needs Review",
   "in-topic": "In Topic",
   studied: "Studied",
   practiced: "Practiced",

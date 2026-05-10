@@ -1,4 +1,4 @@
-import type { ContentItem } from "../types";
+import type { CaptureItem, ContentItem } from "../types";
 
 export const demoContents: ContentItem[] = [
   {
@@ -101,5 +101,64 @@ export const demoContents: ContentItem[] = [
         text: "Sometimes a place becomes memorable because of one small detail."
       }
     ]
+  }
+];
+
+export const demoReviewCaptures: CaptureItem[] = [
+  {
+    id: "review-001",
+    title: "Screenshot Capture",
+    sourceUrl: "",
+    sourceKind: "screenshot",
+    sourceText: "",
+    extractedText: "",
+    originalImageUrl: "/assets/screenshot-healthcare.png",
+    notice: "Text recognition is currently off. You can retry recognition, type the text manually, or move this capture to Unsorted.",
+    issueType: "ocr_off",
+    status: "needs_review",
+    capturedAt: new Date(new Date().setHours(9, 21, 0, 0)).toISOString(),
+    fragments: []
+  },
+  {
+    id: "review-002",
+    title: "Article Screenshot",
+    sourceUrl: "",
+    sourceKind: "screenshot",
+    sourceText: "",
+    extractedText: "The announcement of the merger raised concerns among local officials. Various issues, such as potential cost increases and service quality impacts, were highlighted.",
+    originalImageUrl: "/assets/screenshot-article.png",
+    notice: "Some words may be missing or inaccurate. Please check the extracted text before TinyBu organizes it.",
+    issueType: "low_confidence",
+    status: "needs_review",
+    capturedAt: new Date(new Date().setHours(10, 5, 0, 0)).toISOString(),
+    fragments: []
+  },
+  {
+    id: "review-003",
+    title: "YouTube Transcript",
+    sourceUrl: "",
+    sourceKind: "youtube",
+    sourceText: "To create realistic animation... To create realistic animation... start with facial motion... To create realistic animation, start with facial motion, blinking cycles, hair physics, and clothing simulation.",
+    originalText: "To create realistic animation... To create realistic animation... start with facial motion...",
+    extractedText: "To create realistic animation, start with facial motion, blinking cycles, hair physics, and clothing simulation.",
+    notice: "Some captions looked duplicated. Please confirm the useful text before organizing.",
+    issueType: "transcript_messy",
+    status: "needs_review",
+    capturedAt: new Date(new Date().setHours(11, 30, 0, 0)).toISOString(),
+    fragments: []
+  },
+  {
+    id: "review-004",
+    title: "Article Capture",
+    sourceUrl: "",
+    sourceKind: "article",
+    sourceText: "Sign in to continue reading. Subscribe now.",
+    originalText: "Sign in to continue reading. Subscribe now.",
+    extractedText: "Sign in to continue reading. Subscribe now.",
+    notice: "This capture looks too short. It may contain page UI instead of the article content.",
+    issueType: "extraction_issue",
+    status: "needs_review",
+    capturedAt: (() => { const d = new Date(); d.setDate(d.getDate() - 1); d.setHours(18, 40, 0, 0); return d.toISOString(); })(),
+    fragments: []
   }
 ];

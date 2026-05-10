@@ -37,7 +37,19 @@ export type AiProviderMode = "rules" | "user-key" | "cloud-proxy";
 export type ExternalCaptureKind = "selection" | "article" | "youtube" | "video" | "screenshot" | "manual";
 export type PracticeStage = "select" | "answer" | "review";
 export type PracticeQuestionType = "understanding" | "opinion" | "personal" | "expression";
-export type CaptureStatus = "unsorted" | "suggested" | "in-topic" | "studied" | "practiced" | "archived";
+export type CaptureStatus = "unsorted" | "suggested" | "needs_review" | "in-topic" | "studied" | "practiced" | "archived";
+
+export type ReviewIssueType =
+  | "ocr_off"
+  | "ocr_failed"
+  | "recognition_failed"
+  | "low_confidence"
+  | "text_too_short"
+  | "transcript_messy"
+  | "extraction_issue"
+  | "signin_page"
+  | "mixed_language"
+  | "empty_capture";
 export type TopicStatus = "ready" | "in-progress" | "practiced";
 export type RescueType =
   | "start"
@@ -147,6 +159,11 @@ export interface CaptureItem {
   fragments: CaptureFragment[];
   topicId?: string;
   status: CaptureStatus;
+  issueType?: ReviewIssueType;
+  extractedText?: string;
+  originalText?: string;
+  originalImageUrl?: string;
+  notice?: string;
 }
 
 export interface TopicItem {
