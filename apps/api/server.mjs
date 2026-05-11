@@ -1,4 +1,6 @@
 import http from "node:http";
+import https from "node:https";
+import crypto from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import { pathToFileURL } from "node:url";
 import {
@@ -21,7 +23,7 @@ const volcWsPath = "/v1/volc-ws";
 const volcAppId = process.env.VOLC_APP_ID ?? "";
 const volcAccessKey = process.env.VOLC_ACCESS_KEY ?? "";
 const volcResourceId = "volc.speech.dialog";
-const volcAppKey = "PlgvMcm7f3tQnJ6";
+const volcAppKey = "PlgvMymc7f3tQnJ6";
 const volcWsUrl = "wss://openspeech.bytedance.com/api/v3/realtime/dialogue";
 const defaultModel =
   process.env.ANTHROPIC_MODEL ??
@@ -951,16 +953,158 @@ server.on("upgrade", (request, socket, head) => {
 });
 
 wss.on("connection", (browserWs) => {
+
+function encodeWsFrame(payload, opcode = 2) {
+  const len = payload.length;
+  const maskKey = crypto.randomBytes(4);
+  let header;
+  if (len < 126) {
+    header = Buffer.alloc(6);
+    header[0] = 0x80 | opcode;
+    header[1] = len | 0x80;
+  } else if (len < 65536) {
+    header = Buffer.alloc(8);
+    header[0] = 0x80 | opcode;
+    header[1] = 126 | 0x80;
+    header.writeUInt16BE(len, 2);
+  } else {
+    header = Buffer.alloc(14);
+    header[0] = 0x80 | opcode;
+    header[1] = 127 | 0x80;
+    header.writeBigUInt64BE(BigInt(len), 2);
+  }
+  maskKey.copy(header, header.length - 4);
+  const masked = Buffer.alloc(len);
+  for (let i = 0; i < len; i++) {
+    masked[i] = payload[i] ^ maskKey[i % 4];
+  }
+  return Buffer.concat([header, masked]);
+}
+
+function parseWsFrames(data) {
+  const frames = [];
+  let pos = 0;
+  // Accumulate buffer for partial frames
+  parseWsFrames._buf = parseWsFrames._buf ? Buffer.concat([parseWsFrames._buf, data]) : Buffer.from(data);
+  const buf = parseWsFrames._buf;
+
+  while (pos < buf.length) {
+    if (pos + 2 > buf.length) break;
+    const firstByte = buf[pos];
+    const secondByte = buf[pos + 1];
+    const fin = (firstByte & 0x80) !== 0;
+    const opcode = firstByte & 0x0f;
+    const masked = (secondByte & 0x80) !== 0;
+    let payloadLen = secondByte & 0x7f;
+    let headerLen = 2;
+
+    if (payloadLen === 126) {
+      if (pos + 4 > buf.length) break;
+      payloadLen = buf.readUInt16BE(pos + 2);
+      headerLen = 4;
+    } else if (payloadLen === 127) {
+      if (pos + 10 > buf.length) break;
+      payloadLen = Number(buf.readBigUInt64BE(pos + 2));
+      headerLen = 10;
+    }
+
+    const maskLen = masked ? 4 : 0;
+    const totalLen = headerLen + maskLen + payloadLen;
+    if (pos + totalLen > buf.length) break;
+
+    const maskStart = pos + headerLen;
+    const payloadStart = maskStart + maskLen;
+    let payload = buf.slice(payloadStart, payloadStart + payloadLen);
+
+    if (masked) {
+      const mask = buf.slice(maskStart, maskStart + 4);
+      for (let i = 0; i < payload.length; i++) {
+        payload[i] ^= mask[i % 4];
+      }
+    }
+
+    frames.push({ fin, opcode, payload });
+    pos += totalLen;
+  }
+
+  parseWsFrames._buf = buf.slice(pos);
+  return frames;
+}
   if (!volcAppId || !volcAccessKey) {
     console.log("Volc WS: missing VOLC_APP_ID or VOLC_ACCESS_KEY env vars");
     browserWs.close(1011, "Server config missing");
     return;
   }
 
-  console.log("Volc WS: client connected, opening upstream...");
+  console.log(`Volc WS: connecting App-ID=${volcAppId} Token=${volcAccessKey.slice(0,8)}...`);
 
-  const upstream = new WebSocket(volcWsUrl, {
+  const pending = [];
+  let upstreamSocket = null;
+  let upstreamReady = false;
+  let sessionStarted = false;
+
+  function decodeV1Event(buf) {
+    if (buf.length < 8) return null;
+    const flags = buf[1] & 0x0f;
+    if (!(flags & 0x04)) return null;
+    const eventId = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7];
+    return eventId;
+  }
+
+  function flushNextToUpstream() {
+    if (!upstreamSocket || upstreamSocket.destroyed) return;
+    if (pending.length === 0) return;
+    const buf = pending.shift();
+    const ev = decodeV1Event(buf);
+    if (ev !== null) {
+      if (ev === 100 && !sessionStarted) {
+        // Flush StartSession even before SessionStarted
+      }
+    }
+    msgCount++;
+    const wsFrame = encodeWsFrame(buf);
+    const hex = buf.length <= 40 ? buf.toString("hex") : buf.slice(0, 40).toString("hex") + "...";
+    console.log(`Volc WS: sent #${msgCount} v1-len=${buf.length} ws-len=${wsFrame.length} hex=${hex}`);
+    upstreamSocket.write(wsFrame);
+  }
+
+  browserWs.on("message", (data, isBinary) => {
+    const buf = Buffer.from(data);
+    const ev = decodeV1Event(buf);
+    if (upstreamReady && upstreamSocket && !upstreamSocket.destroyed && sessionStarted) {
+      msgCount++;
+      if (msgCount <= 5) {
+        const hex = buf.length <= 40 ? buf.toString("hex") : buf.slice(0, 40).toString("hex") + "...";
+        console.log(`Volc WS: msg #${msgCount} len=${buf.length} hex=${hex}`);
+      }
+      upstreamSocket.write(encodeWsFrame(buf, isBinary ? 2 : 1));
+    } else {
+      pending.push(buf);
+    }
+  });
+
+  browserWs.on("close", () => {
+    upstreamReady = false;
+    if (upstreamSocket && !upstreamSocket.destroyed) upstreamSocket.destroy();
+  });
+
+  browserWs.on("error", () => {
+    upstreamReady = false;
+    if (upstreamSocket && !upstreamSocket.destroyed) upstreamSocket.destroy();
+  });
+
+  const wsKey = crypto.randomBytes(16).toString("base64");
+  let msgCount = 0;
+
+  const req = https.request({
+    hostname: "openspeech.bytedance.com",
+    path: "/api/v3/realtime/dialogue",
+    method: "GET",
     headers: {
+      "Connection": "Upgrade",
+      "Upgrade": "websocket",
+      "Sec-WebSocket-Version": "13",
+      "Sec-WebSocket-Key": wsKey,
       "X-Api-App-ID": volcAppId,
       "X-Api-Access-Key": volcAccessKey,
       "X-Api-Resource-Id": volcResourceId,
@@ -968,41 +1112,75 @@ wss.on("connection", (browserWs) => {
     },
   });
 
-  upstream.on("open", () => {
-    console.log("Volc WS: upstream connected");
+  req.on("upgrade", (res, socket, head) => {
+    console.log(`Volc WS: upstream connected (status ${res.statusCode})`);
+    socket.setNoDelay(true);
+    upstreamSocket = socket;
+    upstreamReady = true;
+
+    flushNextToUpstream();
+
+    socket.on("data", (data) => {
+      const frames = parseWsFrames(data);
+      for (const frame of frames) {
+        if (frame.opcode === 8) {
+          const code = frame.payload.length >= 2 ? frame.payload.readUInt16BE(0) : 0;
+          const reason = frame.payload.length > 2 ? frame.payload.slice(2).toString() : "";
+          console.log(`Volc WS: server closed (code=${code} reason=${reason.slice(0,100)})`);
+          browserWs.close();
+          return;
+        }
+        if (frame.opcode === 9) { socket.write(encodeWsFrame(Buffer.alloc(0), 10)); return; }
+
+        const ev = decodeV1Event(frame.payload);
+        if (ev === 50) {
+          console.log("Volc WS: received ConnectionStarted, flushing next...");
+          flushNextToUpstream();
+        } else if (ev === 150) {
+          console.log("Volc WS: received SessionStarted, flushing audio...");
+          sessionStarted = true;
+          while (pending.length > 0) flushNextToUpstream();
+        } else if (ev !== null && frame.opcode === 1) {
+          const text = frame.payload.toString().slice(0, 300);
+          console.log(`Volc WS: received text (ev=${ev}): ${text}`);
+        }
+
+        if (frame.opcode === 2 || frame.opcode === 1) {
+          if (browserWs.readyState === WebSocket.OPEN) {
+            browserWs.send(frame.payload, { binary: frame.opcode === 2 });
+          }
+        }
+      }
+    });
+
+    socket.on("close", () => {
+      console.log("Volc WS: upstream socket closed");
+      upstreamReady = false;
+      browserWs.close();
+    });
+
+    socket.on("error", (err) => {
+      console.log("Volc WS: upstream socket error:", err.message);
+      upstreamReady = false;
+      browserWs.close();
+    });
   });
 
-  upstream.on("message", (data, isBinary) => {
-    if (browserWs.readyState === WebSocket.OPEN) {
-      browserWs.send(data, { binary: isBinary });
-    }
-  });
-
-  upstream.on("error", (err) => {
+  req.on("error", (err) => {
     console.log("Volc WS: upstream error:", err.message);
     browserWs.close();
   });
 
-  upstream.on("close", (code, reason) => {
-    console.log(`Volc WS: upstream closed (${code})`);
-    browserWs.close();
+  req.on("response", (res) => {
+    let body = "";
+    res.on("data", (chunk) => { body += chunk; });
+    res.on("end", () => {
+      console.log(`Volc WS: upstream rejected (${res.statusCode}):`, body.slice(0, 200));
+      browserWs.close();
+    });
   });
 
-  browserWs.on("message", (data, isBinary) => {
-    if (upstream.readyState === WebSocket.OPEN) {
-      upstream.send(data, { binary: isBinary });
-    }
-  });
-
-  browserWs.on("close", () => {
-    if (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING) {
-      upstream.close();
-    }
-  });
-
-  browserWs.on("error", () => {
-    upstream.close();
-  });
+  req.end();
 });
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

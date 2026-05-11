@@ -17,6 +17,7 @@ export function useCallBu(topic: { title: string; summary: string }) {
   const audioQueueRef = useRef<ArrayBuffer[]>([]);
   const playingRef = useRef(false);
   const callingRef = useRef(false);
+  const sessionIdRef = useRef("");
   const stateRef = useRef<CallBuState>("idle");
 
   const updateState = useCallback((s: CallBuState) => {
@@ -125,6 +126,7 @@ export function useCallBu(topic: { title: string; summary: string }) {
       const frame = encodeFrame({
         messageType: 2,
         eventId: EVENT_ID.TaskRequest,
+        sessionId: sessionIdRef.current,
         payload: new Uint8Array(buf),
       });
       ws.send(frame);
@@ -265,8 +267,8 @@ export function useCallBu(topic: { title: string; summary: string }) {
       return;
     }
 
-    const connectId = crypto.randomUUID();
     const sessionId = crypto.randomUUID();
+    sessionIdRef.current = sessionId;
     const ws = new WebSocket(wsUrl);
     ws.binaryType = "arraybuffer";
     wsRef.current = ws;
@@ -275,7 +277,6 @@ export function useCallBu(topic: { title: string; summary: string }) {
       ws.send(encodeFrame({
         messageType: 1,
         eventId: EVENT_ID.StartConnection,
-        connectId,
         payload: "{}",
       }));
 
@@ -329,11 +330,10 @@ export function useCallBu(topic: { title: string; summary: string }) {
   const endCall = useCallback(() => {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
-      const sessionId = crypto.randomUUID();
       ws.send(encodeFrame({
         messageType: 1,
         eventId: EVENT_ID.FinishSession,
-        sessionId,
+        sessionId: sessionIdRef.current,
         payload: "{}",
       }));
       setTimeout(() => {
