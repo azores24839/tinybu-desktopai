@@ -15,26 +15,30 @@ export async function callOpenAi<T>(
   appState: AppStateRecord,
   apiKey: string
 ): Promise<T> {
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: modelForTask(task, appState),
-      instructions: taskPrompts[task],
-      input: buildOpenAiInput(task, payload),
-      text: {
-        format: {
-          type: "json_schema",
-          ...jsonSchemas[task],
-          strict: true
-        }
+  const response = await fetchWithTimeout(
+    "https://api.openai.com/v1/responses",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
       },
-      max_output_tokens: task === "screenshotCapture" || task === "screenshotQuestion" ? 1600 : 900
-    })
-  });
+      body: JSON.stringify({
+        model: modelForTask(task, appState),
+        instructions: taskPrompts[task],
+        input: buildOpenAiInput(task, payload),
+        text: {
+          format: {
+            type: "json_schema",
+            ...jsonSchemas[task],
+            strict: true
+          }
+        },
+        max_output_tokens: task === "screenshotCapture" || task === "screenshotQuestion" ? 1600 : 900
+      })
+    },
+    25000
+  );
 
   return parseOpenAiJson(response) as Promise<T>;
 }
@@ -48,31 +52,35 @@ export async function callOpenRouter<T>(
   const baseUrl = (appState.settings.openRouterBaseUrl || "https://openrouter.ai/api/v1").replace(/\/+$/, "");
   const schema = jsonSchemas[task];
   const model = normalizeOpenRouterModel(modelForTask(task, appState));
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": window.location.origin,
-      "X-Title": "TinyBu Desktop"
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: `${taskPrompts[task]}\nReturn only valid JSON.` },
-        ...buildOpenRouterMessages(task, payload)
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: schema.name,
-          strict: true,
-          schema: schema.schema
-        }
+  const response = await fetchWithTimeout(
+    `${baseUrl}/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": window.location.origin,
+        "X-Title": "TinyBu Desktop"
       },
-      max_tokens: task === "screenshotCapture" || task === "screenshotQuestion" ? 1600 : 900
-    })
-  });
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: `${taskPrompts[task]}\nReturn only valid JSON.` },
+          ...buildOpenRouterMessages(task, payload)
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: schema.name,
+            strict: true,
+            schema: schema.schema
+          }
+        },
+        max_tokens: task === "screenshotCapture" || task === "screenshotQuestion" ? 1600 : 900
+      })
+    },
+    25000
+  );
 
   return parseOpenAiJson(response) as Promise<T>;
 }
@@ -82,15 +90,19 @@ export async function callCloudProxy<T>(
   payload: unknown,
   appState: AppStateRecord
 ): Promise<T> {
-  const response = await fetch(appState.settings.cloudProxyUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      task,
-      model: modelForTask(task, appState),
-      payload
-    })
-  });
+  const response = await fetchWithTimeout(
+    appState.settings.cloudProxyUrl,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        task,
+        model: modelForTask(task, appState),
+        payload
+      })
+    },
+    25000
+  );
 
   return parseOpenAiJson(response) as Promise<T>;
 }
@@ -175,4 +187,100 @@ export async function callQuickPetChatCloudProxy(
   );
 
   return { reply: quickReplyText(await parseOpenAiText(response)) };
+}
+
+export async function callPracticeChatOpenAi(
+  payload: { userAnswer: string; topicName: string; chatHistory: Array<{ role: string; text: string }> },
+  appState: AppStateRecord,
+  apiKey: string
+): Promise<string> {
+  const historyText = payload.chatHistory
+    .slice(-6)
+    .map((msg) => `${msg.role === "bu" ? "TinyBu" : "User"}: ${msg.text}`)
+    .join("\n");
+  const input = `Topic: ${payload.topicName}\n\nChat history:\n${historyText}\n\nUser: ${payload.userAnswer}\n\nTinyBu:`;
+
+  const response = await fetchWithTimeout(
+    "https://api.openai.com/v1/responses",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: modelForTask("practiceChat", appState),
+        instructions: taskPrompts.practiceChat,
+        input,
+        max_output_tokens: 150
+      })
+    },
+    15000
+  );
+
+  return (await parseOpenAiText(response)).trim();
+}
+
+export async function callPracticeChatOpenRouter(
+  payload: { userAnswer: string; topicName: string; chatHistory: Array<{ role: string; text: string }> },
+  appState: AppStateRecord,
+  apiKey: string
+): Promise<string> {
+  const baseUrl = (appState.settings.openRouterBaseUrl || "https://openrouter.ai/api/v1").replace(/\/+$/, "");
+  const messages: Array<{ role: string; content: string }> = [
+    { role: "system", content: taskPrompts.practiceChat },
+    { role: "system", content: `Current topic: ${payload.topicName}` },
+    ...payload.chatHistory.slice(-6).map((msg) => ({
+      role: msg.role === "bu" ? "assistant" : "user",
+      content: msg.text
+    })),
+    { role: "user", content: payload.userAnswer }
+  ];
+
+  const response = await fetchWithTimeout(
+    `${baseUrl}/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": window.location.origin,
+        "X-Title": "TinyBu Desktop"
+      },
+      body: JSON.stringify({
+        model: normalizeOpenRouterModel(modelForTask("practiceChat", appState)),
+        messages,
+        max_tokens: 150,
+        temperature: 0.5
+      })
+    },
+    15000
+  );
+
+  return (await parseOpenAiText(response)).trim();
+}
+
+export async function callPracticeChatCloudProxy(
+  payload: { userAnswer: string; topicName: string; chatHistory: Array<{ role: string; text: string }> },
+  appState: AppStateRecord
+): Promise<string> {
+  const response = await fetchWithTimeout(
+    appState.settings.cloudProxyUrl,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        task: "practiceChat",
+        model: modelForTask("practiceChat", appState),
+        payload: {
+          userAnswer: payload.userAnswer,
+          topicName: payload.topicName,
+          chatHistory: payload.chatHistory.slice(-6)
+        }
+      })
+    },
+    15000
+  );
+
+  return (await parseOpenAiText(response)).trim();
 }

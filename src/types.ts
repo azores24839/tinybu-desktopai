@@ -8,6 +8,8 @@ export type Screen =
   | "topics"
   | "topic-detail"
   | "study-room"
+  | "practice-preparing"
+  | "practice-chat"
   | "practice"
   | "practice-review"
   | "notebook"
@@ -392,4 +394,11 @@ export interface PracticeTurnOutput {
 
 export interface QuickPetChatOutput {
   reply: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "bu" | "user";
+  text: string;
+  createdAt: string;
 }

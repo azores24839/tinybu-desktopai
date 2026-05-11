@@ -24,6 +24,9 @@ import {
   callCloudProxy,
   callOpenAi,
   callOpenRouter,
+  callPracticeChatCloudProxy,
+  callPracticeChatOpenAi,
+  callPracticeChatOpenRouter,
   callQuickPetChatCloudProxy,
   callQuickPetChatOpenAi,
   callQuickPetChatOpenRouter,
@@ -71,6 +74,16 @@ async function callQuickPetChatUserKey(
   return isOpenRouterApiKey(apiKey) || shouldUseOpenRouter("quickPetChat", appState)
     ? callQuickPetChatOpenRouter(payload, appState, apiKey)
     : callQuickPetChatOpenAi(payload, appState, apiKey);
+}
+
+async function callPracticeChatUserKey(
+  payload: { userAnswer: string; topicName: string; chatHistory: Array<{ role: string; text: string }> },
+  appState: AppStateRecord
+): Promise<string> {
+  const apiKey = await loadRequiredUserApiKey();
+  return isOpenRouterApiKey(apiKey) || shouldUseOpenRouter("practiceChat", appState)
+    ? callPracticeChatOpenRouter(payload, appState, apiKey)
+    : callPracticeChatOpenAi(payload, appState, apiKey);
 }
 
 async function callUserKey<T>(task: TaskName, payload: unknown, appState: AppStateRecord) {
@@ -365,6 +378,38 @@ export async function generateQuickPetChat(args: {
   return args.appState.settings.aiProviderMode === "cloud-proxy"
     ? callQuickPetChatCloudProxy(payload, args.appState)
     : callQuickPetChatUserKey(payload, args.appState);
+}
+
+export async function generatePracticeChat(args: {
+  userAnswer: string;
+  topicName: string;
+  chatHistory: Array<{ role: string; text: string }>;
+  appState: AppStateRecord;
+}): Promise<string> {
+  const payload = {
+    userAnswer: args.userAnswer,
+    topicName: args.topicName,
+    chatHistory: args.chatHistory.slice(-6)
+  };
+
+  const lang = args.appState.profile.interfaceLanguage;
+  const fallbackReply =
+    lang === "中文"
+      ? "说得不错！你还可以试试用更自然的说法来表达这个意思。"
+      : "Good try! Maybe you can express that idea in a more natural way.";
+
+  if (args.appState.settings.aiProviderMode === "rules") {
+    return fallbackReply;
+  }
+
+  try {
+    return args.appState.settings.aiProviderMode === "cloud-proxy"
+      ? await callPracticeChatCloudProxy(payload, args.appState)
+      : await callPracticeChatUserKey(payload, args.appState);
+  } catch (error) {
+    console.warn("Practice chat AI failed, using fallback", error);
+    return fallbackReply;
+  }
 }
 
 export async function generateReview(args: {

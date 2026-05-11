@@ -42,6 +42,20 @@ export const uiCopy = {
       targetLanguage: "目标语言",
       supportStrength: "支持强度",
       save: "保存设置"
+    },
+    practiceChat: {
+      preparingTitle: "准备练习中...",
+      preparingDescription: "TinyBu 正在为你准备",
+      stageReading: "正在读取你的保存片段",
+      stageIdeas: "正在寻找有用的想法",
+      stageQuestion: "正在准备第一个问题",
+      opening: "我们来轻松练习这个 Topic。你可以用自己的话回答，不需要很完美。",
+      firstQuestion: "这个 Topic 主要在讲什么？",
+      chatHeader: "练习对话",
+      chatSubtitle: "基于你保存的 Topic 的练习",
+      inputPlaceholder: "用目标语言输入你的回答...",
+      callBu: "打电话",
+      endPractice: "结束练习"
     }
   },
   English: {
@@ -85,6 +99,20 @@ export const uiCopy = {
       targetLanguage: "Target language",
       supportStrength: "Support strength",
       save: "Save Settings"
+    },
+    practiceChat: {
+      preparingTitle: "Preparing Practice...",
+      preparingDescription: "TinyBu is getting ready for you",
+      stageReading: "Reading your saved fragments",
+      stageIdeas: "Finding useful ideas",
+      stageQuestion: "Preparing your first question",
+      opening: "Let's practice this topic together. I'll ask you simple questions, and you can answer in your own words.",
+      firstQuestion: "What is this topic mainly about?",
+      chatHeader: "Practice Chat",
+      chatSubtitle: "Practice based on your saved topic",
+      inputPlaceholder: "Type your answer in the target language...",
+      callBu: "Call Bu",
+      endPractice: "End Practice"
     }
   }
 } satisfies Record<UserProfile["interfaceLanguage"], Record<string, unknown>>;

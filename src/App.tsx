@@ -36,6 +36,8 @@ import { SettingsPage } from "./features/settings/SettingsPage";
 import { HomePage } from "./features/home/HomePage";
 import { PracticePage } from "./features/practice/PracticePage";
 import { PracticeReviewPage } from "./features/practice/PracticeReviewPage";
+import { PracticePreparingPage } from "./features/practice/PracticePreparingPage";
+import { PracticeChatPage } from "./features/practice/PracticeChatPage";
 import {
   buildPracticeAnswer,
   buildPracticeQuestionWithTip,
@@ -54,6 +56,7 @@ import { OnboardingPage } from "./features/setup/OnboardingPage";
 import { CompanionSetupPage } from "./features/setup/CompanionSetupPage";
 import { useScreenshotCaptureFlow } from "./features/screenshots/useScreenshotCaptureFlow";
 import {
+  generatePracticeChat,
   generatePracticeQuestions,
   generatePracticeTip,
   generatePracticeTurn,
@@ -124,6 +127,9 @@ export default function App() {
   const [apiKeyDraft, setApiKeyDraft] = useState("");
   const [apiKeyStatus, setApiKeyStatus] = useState("");
   const [busyLabel, setBusyLabel] = useState("");
+  const [practiceChatFirstQuestion, setPracticeChatFirstQuestion] = useState("");
+  const practiceAiDone = useRef(false);
+  const preparingBarDone = useRef(false);
   const lastExternalCaptureSignature = useRef("");
   const bridgeImportingRef = useRef(false);
   const initialBridgeDrainRef = useRef(false);
@@ -603,30 +609,51 @@ export default function App() {
     const fragments = selectPracticeFragments(capturesForTopic);
     if (!fragments.length) return;
 
-    setBusyLabel("Generating practice");
-    setCompanionState("thinking");
-    const output = await generatePracticeQuestions({ fragments, appState });
-    const questions = buildPracticeQuestions(output.questions, () => uid("question"));
-    const session = buildPracticeSession({
-      topic,
-      capturesForTopic,
-      fragments,
-      questions,
-      createId: () => uid("practice"),
-      now: nowIso
+    practiceAiDone.current = false;
+    preparingBarDone.current = false;
+    setPracticeChatFirstQuestion("");
+    await persistState({ ...appState, activeTopicId: topic.id });
+    navigate("practice-preparing");
+
+    const copy = uiCopy[appState.profile.interfaceLanguage].practiceChat as Record<string, string>;
+    try {
+      const output = await generatePracticeQuestions({ fragments, appState });
+      setPracticeChatFirstQuestion(output.questions[0]?.question || copy.firstQuestion);
+    } catch {
+      setPracticeChatFirstQuestion(copy.firstQuestion);
+    }
+    practiceAiDone.current = true;
+    checkPracticeChatReady();
+  }
+
+  function checkPracticeChatReady() {
+    if (practiceAiDone.current && preparingBarDone.current) {
+      preparingBarDone.current = false;
+      practiceAiDone.current = false;
+      navigate("practice-chat");
+    }
+  }
+
+  function handlePreparingReady() {
+    preparingBarDone.current = true;
+    checkPracticeChatReady();
+  }
+
+  async function handlePracticeChatReply(
+    userAnswer: string,
+    chatHistory: Array<{ role: string; text: string }>
+  ): Promise<string> {
+    return generatePracticeChat({
+      userAnswer,
+      topicName: activeTopic?.name ?? "",
+      chatHistory,
+      appState
     });
-    const nextTopic: TopicItem = { ...topic, status: "in-progress", updatedAt: nowIso() };
-    await Promise.all([
-      db.practiceSessions.put(session),
-      db.topics.put(nextTopic),
-      saveAppState({ ...appState, activeTopicId: topic.id, activePracticeSessionId: session.id })
-    ]);
-    setPracticeSessions((items) => [session, ...items]);
-    setTopics((items) => items.map((item) => (item.id === topic.id ? nextTopic : item)));
-    setAppState((state) => ({ ...state, activeTopicId: topic.id, activePracticeSessionId: session.id }));
-    setBusyLabel("");
-    setCompanionState("listening");
-    navigate("practice");
+  }
+
+  function endPracticeChat() {
+    setPracticeChatFirstQuestion("");
+    navigate("topic-detail");
   }
 
   async function updatePracticeSession(session: PracticeSession) {
@@ -822,6 +849,8 @@ export default function App() {
     "topics",
     "topic-detail",
     "study-room",
+    "practice-preparing",
+    "practice-chat",
     "practice",
     "practice-review",
     "notebook",
@@ -854,7 +883,7 @@ export default function App() {
                 <Inbox size={18} /> {copy.nav.inbox}
               </button>
               <button
-                className={["topics", "topic-detail", "study-room", "practice", "practice-review"].includes(screen) ? "active" : ""}
+                className={["topics", "topic-detail", "study-room", "practice-preparing", "practice-chat", "practice", "practice-review"].includes(screen) ? "active" : ""}
                 onClick={() => navigate("topics")}
               >
                 <BookOpen size={18} /> {copy.nav.topics}
@@ -955,6 +984,22 @@ export default function App() {
                 askAboutScreenshot={askAboutScreenshot}
                 confirmScreenshotText={confirmScreenshotText}
                 screenshotQuestionBusy={screenshotQuestionBusy}
+              />
+            )}
+            {screen === "practice-preparing" && (
+              <PracticePreparingPage
+                interfaceLanguage={appState.profile.interfaceLanguage}
+                onReady={handlePreparingReady}
+              />
+            )}
+            {screen === "practice-chat" && activeTopic && practiceChatFirstQuestion && (
+              <PracticeChatPage
+                topic={activeTopic}
+                opening={copy.practiceChat.opening}
+                firstQuestion={practiceChatFirstQuestion}
+                onChatReply={handlePracticeChatReply}
+                onEnd={endPracticeChat}
+                interfaceLanguage={appState.profile.interfaceLanguage}
               />
             )}
             {screen === "practice" && activeTopic && activeSession && (

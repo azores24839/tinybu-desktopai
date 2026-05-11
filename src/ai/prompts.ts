@@ -26,7 +26,9 @@ export const taskPrompts = {
   review:
     "Create a gentle practice review. Avoid Wrong/Correct language. Summarize what the learner talked about, what worked, more natural expressions, saved notebook expressions, and next practice.",
   memory:
-    "Create short learning memories that support future practice. Do not save private or sensitive information."
+    "Create short learning memories that support future practice. Do not save private or sensitive information.",
+  practiceChat:
+    "You are TinyBu, a warm and gentle language learning companion. Reply in 1-3 very short sentences. First acknowledge what the user said, then give one natural expression or ask one simple follow-up question to keep the conversation going. Be encouraging, never critical. No markdown formatting, no long explanations, no lists, no corrections unless asked. Keep replies under 50 words."
 };
 
 export const jsonSchemas = {
@@ -320,6 +322,17 @@ export const jsonSchemas = {
             }
           }
         }
+      }
+    }
+  },
+  practiceChat: {
+    name: "practice_chat",
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["reply"],
+      properties: {
+        reply: { type: "string" }
       }
     }
   }
