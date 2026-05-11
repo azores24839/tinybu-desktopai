@@ -18,6 +18,7 @@ import { TinyBuOrb } from "./components/TinyBuOrb";
 import { ToastContainer } from "./components/ToastContainer";
 import { clearLearningData, db, loadAppState, saveAppState } from "./lib/db";
 import { clearUserApiKey, loadUserApiKey, saveUserApiKey } from "./lib/secureKey";
+import { showToast } from "./lib/toast";
 import { invokeTauri, listenTauri, type CaptureBridgeState } from "./lib/tauriBridge";
 import { defaultAppState, nowIso, uid } from "./lib/defaults";
 import { uiCopy } from "./lib/uiCopy";
@@ -27,6 +28,7 @@ import {
 import { InboxPage } from "./features/captures/InboxPage";
 import { OrganizePage } from "./features/captures/OrganizePage";
 import { useCaptures } from "./features/captures/useCaptures";
+import { saveExpressionFromCapture } from "./features/captures/saveExpression";
 import { topicCaptures, topicExpressions } from "./features/topics/topicUtils";
 import { useTopics } from "./features/topics/useTopics";
 import { TopicsPage } from "./features/topics/TopicsPage";
@@ -470,6 +472,7 @@ export default function App() {
   }
 
   async function requestTip(session: PracticeSession) {
+    try {
     const question = session.questions[session.currentQuestionIndex];
     if (!question || question.tipLevel >= 2) return;
     const nextLevel = question.tipLevel + 1;
@@ -488,9 +491,14 @@ export default function App() {
       updatedAt: nowIso()
     });
     setCompanionState("encouraging");
+    } catch (error) {
+      console.error("requestTip failed", error);
+      setCompanionState("listening");
+    }
   }
 
   async function submitPracticeAnswer(session: PracticeSession) {
+    try {
     const answer = practiceInput.trim();
     const question = session.questions[session.currentQuestionIndex];
     if (!answer || !question) return;
@@ -521,9 +529,14 @@ export default function App() {
       updatedAt: nowIso()
     });
     setCompanionState("listening");
+    } catch (error) {
+      console.error("submitPracticeAnswer failed", error);
+      setCompanionState("listening");
+    }
   }
 
   async function finishPractice(session: PracticeSession, answers: PracticeAnswer[]) {
+    try {
     const topic = topics.find((item) => item.id === session.topicId);
     const capturesForTopic = topicCaptures(topic, captures);
     const selectedFragments = selectPracticeReviewFragments(capturesForTopic, session.selectedFragmentIds);
@@ -580,30 +593,12 @@ export default function App() {
     setBusyLabel("");
     setCompanionState("celebrating");
     navigate("practice-review");
-  }
-
-  async function saveExpressionFromCapture(capture: CaptureItem, expression: string) {
-    const record: ExpressionRecord = {
-      id: uid("expression"),
-      original: expression,
-      meaning: capture.summary || "Saved from Study Room",
-      keywords: capture.keywords ?? [],
-      pattern: expression,
-      scene: capture.topic || "Study Room",
-      practiceStem: expression,
-      sourceTitle: capture.title,
-      sourceContentId: capture.id,
-      capturedAt: nowIso(),
-      saved: true,
-      useLater: true,
-      usedInTalk: false,
-      userSentence: "",
-      practiceCount: 0,
-      learned: false,
-      category: "captured"
-    };
-    await db.expressions.put(record);
-    setExpressions((items) => [record, ...items]);
+    } catch (error) {
+      console.error("finishPractice failed", error);
+      setBusyLabel("");
+      setCompanionState("idle");
+      showToast("Failed to save practice review. Your answers are still saved.");
+    }
   }
 
   async function saveSettings(nextState: AppStateRecord, key?: string) {
@@ -747,7 +742,7 @@ export default function App() {
                 deleteCapture={deleteCapture}
                 createTopicFromCaptures={createTopicFromCaptures}
                 addCapturesToTopic={addCapturesToTopic}
-                saveExpressionFromCapture={saveExpressionFromCapture}
+                saveExpressionFromCapture={(capture, expression) => saveExpressionFromCapture(capture, expression, setExpressions)}
               />
             )}
             {screen === "organize" && (
@@ -785,7 +780,7 @@ export default function App() {
                 setActiveCapture={async (capture) => {
                   await persistState({ ...appState, activeCaptureId: capture.id });
                 }}
-                saveExpression={saveExpressionFromCapture}
+                saveExpression={(capture, expression) => saveExpressionFromCapture(capture, expression, setExpressions)}
                 startPractice={() => startPracticeForTopic(activeTopic)}
                 back={() => navigate("topic-detail")}
                 screenshotQuestionInput={screenshotQuestionInput}
