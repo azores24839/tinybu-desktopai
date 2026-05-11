@@ -67,13 +67,17 @@ export function useCaptures({ appState, persistState }: UseCapturesArgs): UseCap
     }));
 
     if (!shortContent) {
-      const recommendation = await recommendFragments(fragments, args.appState);
-      const recommendedIds = new Set(recommendation.recommendedFragmentIds.slice(0, 6));
-      fragments = fragments.map((fragment) => ({
-        ...fragment,
-        selected: recommendedIds.has(fragment.id),
-        recommended: recommendedIds.has(fragment.id)
-      }));
+      try {
+        const recommendation = await recommendFragments(fragments, args.appState);
+        const recommendedIds = new Set(recommendation.recommendedFragmentIds.slice(0, 6));
+        fragments = fragments.map((fragment) => ({
+          ...fragment,
+          selected: recommendedIds.has(fragment.id),
+          recommended: recommendedIds.has(fragment.id)
+        }));
+      } catch (error) {
+        console.warn("recommendFragments failed, using short-content mode fallback", error);
+      }
     }
 
     return {

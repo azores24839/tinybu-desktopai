@@ -113,8 +113,10 @@ function weekStart() {
 export default function App() {
   const [screen, setScreen] = useState<Screen>("welcome");
   const [appState, setAppState] = useState<AppStateRecord>(defaultAppState);
+  const appStateRef = useRef(appState);
+  appStateRef.current = appState;
   const { captures, setCaptures, createCaptureRecord, updateCapture, openCapture, archiveCapture, deleteCapture } = useCaptures({
-    appState,
+    appState: appStateRef.current,
     persistState
   });
   const { topics, setTopics, updateTopic, createTopicFromCaptures, addCapturesToTopic, openTopic, markTopicStudied } = useTopics({
@@ -122,8 +124,10 @@ export default function App() {
     setCaptures,
     persistState,
     navigate,
-    appState
+    appState: appStateRef.current
   });
+  const topicsRef = useRef(topics);
+  topicsRef.current = topics;
   const [practiceSessions, setPracticeSessions] = useState<PracticeSession[]>([]);
   const [reviews, setReviews] = useState<ReviewRecord[]>([]);
   const [expressions, setExpressions] = useState<ExpressionRecord[]>([]);
@@ -181,7 +185,7 @@ export default function App() {
   const { practiceChatFirstQuestion, startPracticeForTopic, handlePreparingReady, handlePracticeChatReply, endPracticeChat } = usePracticeChat({
     captures,
     activeTopic,
-    appState,
+    appState: appStateRef.current,
     persistState,
     navigate
   });
@@ -263,7 +267,7 @@ export default function App() {
       active = false;
       unlisten();
     };
-  }, [appState]);
+  }, []);
 
   useEffect(() => {
     if (!appState.onboarded || initialBridgeDrainRef.current) return;
@@ -293,7 +297,7 @@ export default function App() {
       active = false;
       unlisten();
     };
-  }, [appState]);
+  }, []);
 
   useEffect(() => {
     async function handleExtensionCapture(event: MessageEvent) {
@@ -311,12 +315,12 @@ export default function App() {
         sourceKind: incomingCapture.kind || "selection",
         text,
         capturedAt: incomingCapture.capturedAt || nowIso(),
-        appState
+        appState: appStateRef.current
       });
       await db.captures.put(capture);
       setCaptures((items) => [capture, ...items]);
       await persistState({
-        ...appState,
+        ...appStateRef.current,
         onboarded: true,
         companionReady: true,
         activeCaptureId: capture.id,
@@ -330,7 +334,7 @@ export default function App() {
 
     window.addEventListener("message", handleExtensionCapture);
     return () => window.removeEventListener("message", handleExtensionCapture);
-  }, [appState]);
+  }, []);
 
   useEffect(() => {
     let unlisten = () => {};
@@ -340,7 +344,7 @@ export default function App() {
       unlisten = cleanup;
     });
     return () => unlisten();
-  }, [appState]);
+  }, []);
 
   async function importPendingBridgeCaptures() {
     if (bridgeImportingRef.current) return;
@@ -359,7 +363,7 @@ export default function App() {
             sourceKind: incomingCapture.kind || "selection",
             text,
             capturedAt: incomingCapture.capturedAt || nowIso(),
-            appState
+            appState: appStateRef.current
           })
         );
       }
@@ -367,7 +371,7 @@ export default function App() {
         await db.captures.bulkPut(importedCaptures);
         setCaptures((items) => [...importedCaptures, ...items]);
         await persistState({
-          ...appState,
+          ...appStateRef.current,
           onboarded: true,
           companionReady: true,
           activeCaptureId: importedCaptures[0].id
@@ -718,7 +722,7 @@ export default function App() {
                 openInbox={() => navigate("inbox")}
                 openTopic={openTopic}
                 continuePractice={async (session) => {
-                  const topic = topics.find((item) => item.id === session.topicId);
+    const topic = topicsRef.current.find((item) => item.id === session.topicId);
                   await persistState({
                     ...appState,
                     activeTopicId: topic?.id ?? appState.activeTopicId,
