@@ -4394,6 +4394,117 @@ body.tinybu-screenshot-body #root {
   cursor: not-allowed;
 }
 
+/* Call Bu Panel */
+.call-bu-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  animation: callFadeIn 0.3s ease;
+}
+
+@keyframes callFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.call-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  background: var(--subtle);
+}
+
+.call-status.listening {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.call-status.speaking {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.call-status.thinking,
+.call-status.connecting {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.call-status.error {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.call-status .spin {
+  animation: callSpin 1s linear infinite;
+}
+
+.call-status .pulse {
+  animation: callPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes callSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes callPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.call-status-text {
+  flex: 1;
+}
+
+.call-subtitles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.call-subtitle {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.call-subtitle.user {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.call-subtitle.bu {
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--brand);
+}
+
+.call-error {
+  font-size: 0.78rem;
+  color: #dc2626;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #fef2f2;
+  line-height: 1.4;
+}
+
+.bu-end-call-btn {
+  width: 100%;
+  font-size: 0.82rem;
+}
+
 /* Practice Chat Main */
 .practice-chat-main {
   display: flex;

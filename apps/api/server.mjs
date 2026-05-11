@@ -1,4 +1,5 @@
 import http from "node:http";
+import { WebSocketServer, WebSocket } from "ws";
 import { pathToFileURL } from "node:url";
 import {
   isAnthropicCompatibleModel,
@@ -16,6 +17,12 @@ const anthropicAuthToken = process.env.ANTHROPIC_AUTH_TOKEN;
 const anthropicBaseUrl = process.env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com";
 const apiTimeoutMs = Number(process.env.API_TIMEOUT_MS ?? 300000);
 const taskPath = "/v1/tinybu/task";
+const volcWsPath = "/v1/volc-ws";
+const volcAppId = process.env.VOLC_APP_ID ?? "";
+const volcAccessKey = process.env.VOLC_ACCESS_KEY ?? "";
+const volcResourceId = "volc.speech.dialog";
+const volcAppKey = "PlgvMcm7f3tQnJ6";
+const volcWsUrl = "wss://openspeech.bytedance.com/api/v3/realtime/dialogue";
 const defaultModel =
   process.env.ANTHROPIC_MODEL ??
   process.env.ANTHROPIC_DEFAULT_SONNET_MODEL ??
@@ -931,6 +938,73 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+const wss = new WebSocketServer({ noServer: true });
+
+server.on("upgrade", (request, socket, head) => {
+  if (request.url === volcWsPath) {
+    wss.handleUpgrade(request, socket, head, (browserWs) => {
+      wss.emit("connection", browserWs, request);
+    });
+  } else {
+    socket.destroy();
+  }
+});
+
+wss.on("connection", (browserWs) => {
+  if (!volcAppId || !volcAccessKey) {
+    console.log("Volc WS: missing VOLC_APP_ID or VOLC_ACCESS_KEY env vars");
+    browserWs.close(1011, "Server config missing");
+    return;
+  }
+
+  console.log("Volc WS: client connected, opening upstream...");
+
+  const upstream = new WebSocket(volcWsUrl, {
+    headers: {
+      "X-Api-App-ID": volcAppId,
+      "X-Api-Access-Key": volcAccessKey,
+      "X-Api-Resource-Id": volcResourceId,
+      "X-Api-App-Key": volcAppKey,
+    },
+  });
+
+  upstream.on("open", () => {
+    console.log("Volc WS: upstream connected");
+  });
+
+  upstream.on("message", (data, isBinary) => {
+    if (browserWs.readyState === WebSocket.OPEN) {
+      browserWs.send(data, { binary: isBinary });
+    }
+  });
+
+  upstream.on("error", (err) => {
+    console.log("Volc WS: upstream error:", err.message);
+    browserWs.close();
+  });
+
+  upstream.on("close", (code, reason) => {
+    console.log(`Volc WS: upstream closed (${code})`);
+    browserWs.close();
+  });
+
+  browserWs.on("message", (data, isBinary) => {
+    if (upstream.readyState === WebSocket.OPEN) {
+      upstream.send(data, { binary: isBinary });
+    }
+  });
+
+  browserWs.on("close", () => {
+    if (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING) {
+      upstream.close();
+    }
+  });
+
+  browserWs.on("error", () => {
+    upstream.close();
+  });
+});
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   server.listen(port, "127.0.0.1", () => {
     const providers = [];
@@ -939,6 +1013,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     if (openAiApiKey) providers.push("OpenAI");
     const provider = providers.length ? providers.join("+") : "OpenAI";
     console.log(`TinyBu proxy (${provider}) listening on http://127.0.0.1:${port}${taskPath}`);
+    if (volcAppId && volcAccessKey) console.log(`  Volc WS proxy on ws://127.0.0.1:${port}${volcWsPath}`);
     if (openRouterApiKey) console.log(`  OpenRouter model: ${defaultModel}`);
     if (anthropicAuthToken) console.log(`  Anthropic model: ${normalizeAnthropicModel(defaultModel)}`);
   });

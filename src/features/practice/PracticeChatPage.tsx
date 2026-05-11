@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Phone, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import { uiCopy } from "../../lib/uiCopy";
 import { uid, nowIso } from "../../lib/defaults";
 import type { ChatMessage, TopicItem, UserProfile } from "../../types";
+import { useCallBu } from "./useCallBu";
+import { CallBu } from "./CallBu";
 
 export function PracticeChatPage({
   topic,
@@ -20,6 +22,7 @@ export function PracticeChatPage({
   interfaceLanguage: UserProfile["interfaceLanguage"];
 }) {
   const copy = uiCopy[interfaceLanguage].practiceChat as Record<string, string>;
+  const { state: callState, error: callError, userText: callUserText, buText: callBuText, startCall, endCall } = useCallBu({ title: topic.name, summary: topic.summary });
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     { id: uid("msg"), role: "bu", text: opening, createdAt: nowIso() },
     { id: uid("msg"), role: "bu", text: firstQuestion, createdAt: nowIso() }
@@ -72,10 +75,7 @@ export function PracticeChatPage({
             <img src="/assets/tinybu-practice.png" alt="TinyBu" className="bu-card-image" />
             <h3>TinyBu</h3>
             <p className="bu-topic-name">{topic.name}</p>
-            <button className="primary bu-call-btn" disabled title="Coming soon">
-              <Phone size={18} />
-              {copy.callBu}
-            </button>
+            <CallBu state={callState} error={callError} userText={callUserText} buText={callBuText} onStart={startCall} onEnd={endCall} interfaceLanguage={interfaceLanguage} />
           </div>
         </aside>
 
