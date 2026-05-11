@@ -19,6 +19,10 @@ function removeToast(id: number) {
   notify();
 }
 
+export function dismissToast(id: number) {
+  removeToast(id);
+}
+
 export function showToast(message: string, type: ToastType = "error") {
   const id = ++toastId;
   toasts = [...toasts, { id, message, type }];

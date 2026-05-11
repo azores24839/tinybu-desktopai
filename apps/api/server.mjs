@@ -821,6 +821,37 @@ const server = http.createServer(async (req, res) => {
           sendJson(res, 500, { error: `Configure OPENROUTER_API_KEY before using ${normalizeOpenRouterModel(model)}.` });
           return;
         }
+
+        if (!openAiApiKey || isProviderQualifiedModel(model)) {
+          log("WARN", "practiceChat: no OPENAI_API_KEY or provider model with no route");
+          sendJson(res, 500, { error: "Configure OPENAI_API_KEY for OpenAI models or ANTHROPIC_AUTH_TOKEN / OPENROUTER_API_KEY for other models." });
+          return;
+        }
+
+        const input = `Topic: ${payload?.topicName || ""}\nUser: ${payload?.userAnswer || ""}`;
+        logReq("practiceChat → openai", input);
+        const response = await fetchWithTimeout("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${openAiApiKey}`
+          },
+          body: JSON.stringify({
+            model,
+            instructions: taskPrompts.practiceChat,
+            input,
+            max_output_tokens: 150
+          })
+        });
+        const data = await response.json();
+        logRes("practiceChat ← openai", response.status, data);
+        if (!response.ok) {
+          sendJson(res, response.status, data);
+          return;
+        }
+        const text = data.output_text ?? data.output?.[0]?.content?.[0]?.text ?? "";
+        sendJson(res, 200, { output_text: String(text).trim() });
+        return;
       }
 
       if (task === "quickPetChat") {

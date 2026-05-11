@@ -32,16 +32,21 @@ export function usePracticeChat({
   const [practiceChatFirstQuestion, setPracticeChatFirstQuestion] = useState("");
   const practiceAiDone = useRef(false);
   const preparingBarDone = useRef(false);
+  const startingPractice = useRef(false);
 
   function checkPracticeChatReady() {
     if (practiceAiDone.current && preparingBarDone.current) {
       preparingBarDone.current = false;
       practiceAiDone.current = false;
+      startingPractice.current = false;
       navigate("practice-chat");
     }
   }
 
   async function startPracticeForTopic(topic: TopicItem) {
+    if (startingPractice.current) return;
+    startingPractice.current = true;
+
     const capturesForTopic = topicCaptures(topic, captures);
     const fragments = selectPracticeFragments(capturesForTopic);
     if (!fragments.length) return;
@@ -82,6 +87,7 @@ export function usePracticeChat({
   }
 
   function endPracticeChat() {
+    startingPractice.current = false;
     setPracticeChatFirstQuestion("");
     navigate("topic-detail");
   }
