@@ -23,10 +23,10 @@ import { defaultAppState, nowIso, uid } from "./lib/defaults";
 import { uiCopy } from "./lib/uiCopy";
 import {
   captureText,
-  splitCaptureText
 } from "./features/captures/captureUtils";
 import { InboxPage } from "./features/captures/InboxPage";
 import { OrganizePage } from "./features/captures/OrganizePage";
+import { useCaptures } from "./features/captures/useCaptures";
 import { topicCaptures, topicExpressions } from "./features/topics/topicUtils";
 import { useTopics } from "./features/topics/useTopics";
 import { TopicsPage } from "./features/topics/TopicsPage";
@@ -62,13 +62,10 @@ import {
   generatePracticeTip,
   generatePracticeTurn,
   generateReview,
-  recommendFragments,
-  understandContent,
   updateMemory
 } from "./ai/provider";
 import type {
   AppStateRecord,
-  CaptureFragment,
   CaptureItem,
   CaptureStatus,
   CompanionProfile,
@@ -114,7 +111,10 @@ function weekStart() {
 export default function App() {
   const [screen, setScreen] = useState<Screen>("welcome");
   const [appState, setAppState] = useState<AppStateRecord>(defaultAppState);
-  const [captures, setCaptures] = useState<CaptureItem[]>([]);
+  const { captures, setCaptures, createCaptureRecord, updateCapture, openCapture, archiveCapture, deleteCapture } = useCaptures({
+    appState,
+    persistState
+  });
   const { topics, setTopics, updateTopic, createTopicFromCaptures, addCapturesToTopic, openTopic, markTopicStudied } = useTopics({
     captures,
     setCaptures,
@@ -186,6 +186,7 @@ export default function App() {
 
   useEffect(() => {
     async function boot() {
+      try {
       const [state, storedCaptures, storedTopics, storedSessions, storedReviews, storedExpressions, storedMemories] =
         await Promise.all([
           loadAppState(),
@@ -235,6 +236,11 @@ export default function App() {
       setExpressions(storedExpressions);
       setMemories(storedMemories);
       setScreen(bootState.onboarded ? (bootState.companionReady ? "home" : "companion") : "welcome");
+      } catch (error) {
+        console.error("boot() failed, starting with empty state", error);
+        setAppState(defaultAppState);
+        setScreen("welcome");
+      }
     }
 
     boot();
@@ -387,67 +393,6 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function createCaptureRecord(args: {
-    title: string;
-    sourceUrl: string;
-    sourceKind: ExternalCaptureKind;
-    text: string;
-    capturedAt?: string;
-    appState: AppStateRecord;
-    screenshot?: CaptureItem["screenshot"];
-  }): Promise<CaptureItem> {
-    const pieces = splitCaptureText(args.text);
-    const subtitleContent = args.sourceKind === "youtube" || args.sourceKind === "video";
-    const shortContent = subtitleContent || pieces.length <= 6;
-    const contentForUnderstanding = {
-      id: uid("content"),
-      title: args.title || "Untitled Capture",
-      topic: "",
-      sourceType: "external" as const,
-      sourceUrl: args.sourceUrl,
-      sourceKind: args.sourceKind,
-      transcript: pieces.map((text, index) => ({ id: uid(`line-${index}`), text })),
-      summary: "",
-      keywords: [],
-      questions: []
-    };
-    const understanding = await understandContent(contentForUnderstanding, args.appState);
-    let fragments: CaptureFragment[] = pieces.map((text, index) => ({
-      id: uid("fragment"),
-      text,
-      selected: shortContent,
-      recommended: shortContent,
-      sourceIndex: index
-    }));
-
-    if (!shortContent) {
-      const recommendation = await recommendFragments(fragments, args.appState);
-      const recommendedIds = new Set(recommendation.recommendedFragmentIds.slice(0, 6));
-      fragments = fragments.map((fragment) => ({
-        ...fragment,
-        selected: recommendedIds.has(fragment.id),
-        recommended: recommendedIds.has(fragment.id)
-      }));
-    }
-
-    return {
-      id: uid("capture"),
-      title: args.title || "Untitled Capture",
-      sourceUrl: args.sourceUrl,
-      sourceKind: args.sourceKind,
-      sourceText: args.text,
-      screenshot: args.screenshot,
-      topic: understanding.topic,
-      summary: understanding.summary,
-      keywords: understanding.keywords,
-      questions: understanding.questions,
-      suggestedExpressions: understanding.suggestedExpressions,
-      capturedAt: args.capturedAt ?? nowIso(),
-      fragments,
-      status: understanding.topic ? "suggested" : "unsorted"
-    };
-  }
-
   async function createAndStoreCapture(args: {
     title: string;
     sourceUrl: string;
@@ -517,24 +462,6 @@ export default function App() {
   async function submitCompanion(companion: CompanionProfile) {
     await updateState((state) => ({ ...state, companionReady: true, companion }));
     navigate("home");
-  }
-
-  async function updateCapture(nextCapture: CaptureItem) {
-    await db.captures.put(nextCapture);
-    setCaptures((items) => items.map((item) => (item.id === nextCapture.id ? nextCapture : item)));
-  }
-
-  async function openCapture(capture: CaptureItem) {
-    await updateState((state) => ({ ...state, activeCaptureId: capture.id }));
-  }
-
-  async function archiveCapture(capture: CaptureItem) {
-    await updateCapture({ ...capture, status: "archived" });
-  }
-
-  async function deleteCapture(id: string) {
-    await db.captures.delete(id);
-    setCaptures((items) => items.filter((item) => item.id !== id));
   }
 
   async function updatePracticeSession(session: PracticeSession) {
