@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { generatePracticeChat, generatePracticeQuestions } from "../../ai/provider";
+import { showToast } from "../../lib/toast";
 import { uiCopy } from "../../lib/uiCopy";
 import type { AppStateRecord, CaptureItem, Screen, TopicItem } from "../../types";
 import { selectPracticeFragments } from "./practiceUtils";
@@ -57,6 +58,7 @@ export function usePracticeChat({
       setPracticeChatFirstQuestion(output.questions[0]?.question || copy.firstQuestion);
     } catch {
       setPracticeChatFirstQuestion(copy.firstQuestion);
+      showToast("AI is unavailable. Using a default question instead.", "info");
     }
     practiceAiDone.current = true;
     checkPracticeChatReady();

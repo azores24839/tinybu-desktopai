@@ -13,7 +13,9 @@ import {
   Wand2
 } from "lucide-react";
 import { demoContents } from "./data/demoContent";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { TinyBuOrb } from "./components/TinyBuOrb";
+import { ToastContainer } from "./components/ToastContainer";
 import { clearLearningData, db, loadAppState, saveAppState } from "./lib/db";
 import { clearUserApiKey, loadUserApiKey, saveUserApiKey } from "./lib/secureKey";
 import { invokeTauri, listenTauri, type CaptureBridgeState } from "./lib/tauriBridge";
@@ -739,6 +741,7 @@ export default function App() {
   const copy = uiCopy[appState.profile.interfaceLanguage];
 
   return (
+    <ErrorBoundary>
     <div className="app">
       {busyLabel && (
         <div className="busy-banner">
@@ -964,5 +967,7 @@ export default function App() {
         </main>
       )}
     </div>
+    <ToastContainer />
+    </ErrorBoundary>
   );
 }

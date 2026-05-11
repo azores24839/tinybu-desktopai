@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { db } from "../../lib/db";
 import { nowIso, uid } from "../../lib/defaults";
+import { showToast } from "../../lib/toast";
 import type { AppStateRecord, CaptureItem, Screen, TopicItem } from "../../types";
 import { inferPracticeGoal } from "../captures/captureUtils";
 import { topicCaptures } from "./topicUtils";
@@ -34,56 +35,71 @@ export function useTopics({
   const [topics, setTopics] = useState<TopicItem[]>([]);
 
   async function updateTopic(nextTopic: TopicItem) {
-    await db.topics.put(nextTopic);
-    setTopics((items) => items.map((item) => (item.id === nextTopic.id ? nextTopic : item)));
+    try {
+      await db.topics.put(nextTopic);
+      setTopics((items) => items.map((item) => (item.id === nextTopic.id ? nextTopic : item)));
+    } catch (error) {
+      console.error("updateTopic failed", error);
+      showToast("Failed to save topic. Please try again.");
+    }
   }
 
   async function createTopicFromCaptures(captureIds: string[], name?: string, practiceGoal?: string) {
-    const selectedCaptures = captures.filter((capture) => captureIds.includes(capture.id));
-    if (!selectedCaptures.length) return;
-    const first = selectedCaptures[0];
-    const topic: TopicItem = {
-      id: uid("topic"),
-      name: name?.trim() || first.topic || "New Topic",
-      summary: first.summary || selectedCaptures.map((capture) => capture.title).join(", "),
-      captureIds: selectedCaptures.map((capture) => capture.id),
-      tags: Array.from(new Set(selectedCaptures.flatMap((capture) => capture.keywords ?? []).slice(0, 4))),
-      practiceGoal: practiceGoal?.trim() || inferPracticeGoal(selectedCaptures),
-      status: "ready",
-      savedExpressionCount: 0,
-      createdAt: nowIso(),
-      updatedAt: nowIso()
-    };
-    const updatedCaptures: CaptureItem[] = selectedCaptures.map((capture) => ({
-      ...capture,
-      topicId: topic.id,
-      topic: topic.name,
-      status: "in-topic"
-    }));
-    await Promise.all([db.topics.put(topic), db.captures.bulkPut(updatedCaptures)]);
-    setTopics((items) => [topic, ...items]);
-    setCaptures((items) => items.map((item) => updatedCaptures.find((c) => c.id === item.id) ?? item));
-    await persistState({ ...appState, activeTopicId: topic.id, activeCaptureId: updatedCaptures[0].id });
-    navigate("topic-detail");
+    try {
+      const selectedCaptures = captures.filter((capture) => captureIds.includes(capture.id));
+      if (!selectedCaptures.length) return;
+      const first = selectedCaptures[0];
+      const topic: TopicItem = {
+        id: uid("topic"),
+        name: name?.trim() || first.topic || "New Topic",
+        summary: first.summary || selectedCaptures.map((capture) => capture.title).join(", "),
+        captureIds: selectedCaptures.map((capture) => capture.id),
+        tags: Array.from(new Set(selectedCaptures.flatMap((capture) => capture.keywords ?? []).slice(0, 4))),
+        practiceGoal: practiceGoal?.trim() || inferPracticeGoal(selectedCaptures),
+        status: "ready",
+        savedExpressionCount: 0,
+        createdAt: nowIso(),
+        updatedAt: nowIso()
+      };
+      const updatedCaptures: CaptureItem[] = selectedCaptures.map((capture) => ({
+        ...capture,
+        topicId: topic.id,
+        topic: topic.name,
+        status: "in-topic"
+      }));
+      await Promise.all([db.topics.put(topic), db.captures.bulkPut(updatedCaptures)]);
+      setTopics((items) => [topic, ...items]);
+      setCaptures((items) => items.map((item) => updatedCaptures.find((c) => c.id === item.id) ?? item));
+      await persistState({ ...appState, activeTopicId: topic.id, activeCaptureId: updatedCaptures[0].id });
+      navigate("topic-detail");
+    } catch (error) {
+      console.error("createTopicFromCaptures failed", error);
+      showToast("Failed to create topic. Please try again.");
+    }
   }
 
   async function addCapturesToTopic(captureIds: string[], topic: TopicItem) {
-    const selectedCaptures = captures.filter((capture) => captureIds.includes(capture.id));
-    if (!selectedCaptures.length) return;
-    const nextTopic: TopicItem = {
-      ...topic,
-      captureIds: Array.from(new Set([...topic.captureIds, ...captureIds])),
-      updatedAt: nowIso()
-    };
-    const updatedCaptures = selectedCaptures.map((capture) => ({
-      ...capture,
-      topicId: topic.id,
-      topic: topic.name,
-      status: "in-topic" as const
-    }));
-    await Promise.all([db.topics.put(nextTopic), db.captures.bulkPut(updatedCaptures)]);
-    setTopics((items) => items.map((item) => (item.id === topic.id ? nextTopic : item)));
-    setCaptures((items) => items.map((item) => updatedCaptures.find((c) => c.id === item.id) ?? item));
+    try {
+      const selectedCaptures = captures.filter((capture) => captureIds.includes(capture.id));
+      if (!selectedCaptures.length) return;
+      const nextTopic: TopicItem = {
+        ...topic,
+        captureIds: Array.from(new Set([...topic.captureIds, ...captureIds])),
+        updatedAt: nowIso()
+      };
+      const updatedCaptures = selectedCaptures.map((capture) => ({
+        ...capture,
+        topicId: topic.id,
+        topic: topic.name,
+        status: "in-topic" as const
+      }));
+      await Promise.all([db.topics.put(nextTopic), db.captures.bulkPut(updatedCaptures)]);
+      setTopics((items) => items.map((item) => (item.id === topic.id ? nextTopic : item)));
+      setCaptures((items) => items.map((item) => updatedCaptures.find((c) => c.id === item.id) ?? item));
+    } catch (error) {
+      console.error("addCapturesToTopic failed", error);
+      showToast("Failed to add captures to topic. Please try again.");
+    }
   }
 
   async function openTopic(topic: TopicItem, next: Screen = "topic-detail") {
@@ -97,19 +113,24 @@ export function useTopics({
   }
 
   async function markTopicStudied(topic: TopicItem) {
-    const capturesForTopic = topicCaptures(topic, captures);
-    const updatedCaptures: CaptureItem[] = capturesForTopic.map((capture) =>
-      capture.status === "practiced" ? capture : { ...capture, status: "studied" }
-    );
-    const nextTopic: TopicItem = {
-      ...topic,
-      status: topic.status === "practiced" ? "practiced" : "in-progress",
-      lastStudiedAt: nowIso(),
-      updatedAt: nowIso()
-    };
-    await Promise.all([db.topics.put(nextTopic), db.captures.bulkPut(updatedCaptures)]);
-    setTopics((items) => items.map((item) => (item.id === topic.id ? nextTopic : item)));
-    setCaptures((items) => items.map((item) => updatedCaptures.find((c) => c.id === item.id) ?? item));
+    try {
+      const capturesForTopic = topicCaptures(topic, captures);
+      const updatedCaptures: CaptureItem[] = capturesForTopic.map((capture) =>
+        capture.status === "practiced" ? capture : { ...capture, status: "studied" }
+      );
+      const nextTopic: TopicItem = {
+        ...topic,
+        status: topic.status === "practiced" ? "practiced" : "in-progress",
+        lastStudiedAt: nowIso(),
+        updatedAt: nowIso()
+      };
+      await Promise.all([db.topics.put(nextTopic), db.captures.bulkPut(updatedCaptures)]);
+      setTopics((items) => items.map((item) => (item.id === topic.id ? nextTopic : item)));
+      setCaptures((items) => items.map((item) => updatedCaptures.find((c) => c.id === item.id) ?? item));
+    } catch (error) {
+      console.error("markTopicStudied failed", error);
+      showToast("Failed to update topic. Please try again.");
+    }
   }
 
   return { topics, setTopics, updateTopic, createTopicFromCaptures, addCapturesToTopic, openTopic, markTopicStudied };
