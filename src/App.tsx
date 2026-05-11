@@ -38,6 +38,7 @@ import { PracticePage } from "./features/practice/PracticePage";
 import { PracticeReviewPage } from "./features/practice/PracticeReviewPage";
 import { PracticePreparingPage } from "./features/practice/PracticePreparingPage";
 import { PracticeChatPage } from "./features/practice/PracticeChatPage";
+import { usePracticeChat } from "./features/practice/usePracticeChat";
 import {
   buildPracticeAnswer,
   buildPracticeQuestionWithTip,
@@ -56,8 +57,6 @@ import { OnboardingPage } from "./features/setup/OnboardingPage";
 import { CompanionSetupPage } from "./features/setup/CompanionSetupPage";
 import { useScreenshotCaptureFlow } from "./features/screenshots/useScreenshotCaptureFlow";
 import {
-  generatePracticeChat,
-  generatePracticeQuestions,
   generatePracticeTip,
   generatePracticeTurn,
   generateReview,
@@ -133,9 +132,6 @@ export default function App() {
   const [apiKeyDraft, setApiKeyDraft] = useState("");
   const [apiKeyStatus, setApiKeyStatus] = useState("");
   const [busyLabel, setBusyLabel] = useState("");
-  const [practiceChatFirstQuestion, setPracticeChatFirstQuestion] = useState("");
-  const practiceAiDone = useRef(false);
-  const preparingBarDone = useRef(false);
   const lastExternalCaptureSignature = useRef("");
   const bridgeImportingRef = useRef(false);
   const initialBridgeDrainRef = useRef(false);
@@ -176,6 +172,14 @@ export default function App() {
     setCompanionState,
     setScreenshotQuestionInput,
     setScreenshotQuestionBusy
+  });
+
+  const { practiceChatFirstQuestion, startPracticeForTopic, handlePreparingReady, handlePracticeChatReply, endPracticeChat } = usePracticeChat({
+    captures,
+    activeTopic,
+    appState,
+    persistState,
+    navigate
   });
 
   useEffect(() => {
@@ -529,58 +533,6 @@ export default function App() {
   async function deleteCapture(id: string) {
     await db.captures.delete(id);
     setCaptures((items) => items.filter((item) => item.id !== id));
-  }
-
-  async function startPracticeForTopic(topic: TopicItem) {
-    const capturesForTopic = topicCaptures(topic, captures);
-    const fragments = selectPracticeFragments(capturesForTopic);
-    if (!fragments.length) return;
-
-    practiceAiDone.current = false;
-    preparingBarDone.current = false;
-    setPracticeChatFirstQuestion("");
-    await persistState({ ...appState, activeTopicId: topic.id });
-    navigate("practice-preparing");
-
-    const copy = uiCopy[appState.profile.interfaceLanguage].practiceChat as Record<string, string>;
-    try {
-      const output = await generatePracticeQuestions({ fragments, appState });
-      setPracticeChatFirstQuestion(output.questions[0]?.question || copy.firstQuestion);
-    } catch {
-      setPracticeChatFirstQuestion(copy.firstQuestion);
-    }
-    practiceAiDone.current = true;
-    checkPracticeChatReady();
-  }
-
-  function checkPracticeChatReady() {
-    if (practiceAiDone.current && preparingBarDone.current) {
-      preparingBarDone.current = false;
-      practiceAiDone.current = false;
-      navigate("practice-chat");
-    }
-  }
-
-  function handlePreparingReady() {
-    preparingBarDone.current = true;
-    checkPracticeChatReady();
-  }
-
-  async function handlePracticeChatReply(
-    userAnswer: string,
-    chatHistory: Array<{ role: string; text: string }>
-  ): Promise<string> {
-    return generatePracticeChat({
-      userAnswer,
-      topicName: activeTopic?.name ?? "",
-      chatHistory,
-      appState
-    });
-  }
-
-  function endPracticeChat() {
-    setPracticeChatFirstQuestion("");
-    navigate("topic-detail");
   }
 
   async function updatePracticeSession(session: PracticeSession) {
