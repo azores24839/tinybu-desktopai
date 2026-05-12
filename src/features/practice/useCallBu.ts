@@ -4,7 +4,7 @@ import { encodeFrame, decodeFrame, EVENT_ID, SERVER_EVENT } from "../../lib/volc
 
 export type CallBuState = "idle" | "connecting" | "listening" | "thinking" | "speaking" | "ended" | "error";
 
-export function useCallBu(topic: { title: string; summary: string }) {
+export function useCallBu(topic: { title: string; summary: string }, targetLanguage: string, nativeLanguage: string) {
   const [state, setState] = useState<CallBuState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [userText, setUserText] = useState("");
@@ -297,8 +297,25 @@ export function useCallBu(topic: { title: string; summary: string }) {
           },
           dialog: {
             bot_name: "Bu",
-            system_role: `You are Bu, a gentle language practice buddy. Topic: ${topicTitle}. Summary: ${topicSummary}. Keep replies short (1-3 sentences) and friendly.`,
-            speaking_style: "You speak warmly and encouragingly, in short sentences.",
+            system_role: `You are Bu, a gentle AI language practice buddy.
+
+Topic: ${topicTitle}
+Context: ${topicSummary}
+
+The user's target language is ${targetLanguage}.
+The user's native language is ${nativeLanguage}.
+
+Help the user practice speaking naturally about this topic.
+Keep replies short (1-2 sentences) and ask simple follow-up questions.
+
+If the user uses the target language, continue in the target language and gently recast mistakes naturally.
+
+If the user switches to their native language, briefly support them in their native language, then guide them back to the target language.
+
+If the user struggles, give a short hint or example.
+
+Stay on topic and let the user speak more than you.`,
+            speaking_style: "Warm, supportive, natural, concise.",
             extra: { model: "1.2.1.1" },
           },
         }),

@@ -808,6 +808,8 @@ export default function App() {
                 onChatReply={handlePracticeChatReply}
                 onEnd={endPracticeChat}
                 interfaceLanguage={appState.profile.interfaceLanguage}
+                targetLanguage={appState.profile.targetLanguage}
+                nativeLanguage={appState.profile.nativeLanguage}
               />
             )}
             {screen === "practice" && activeTopic && activeSession && (

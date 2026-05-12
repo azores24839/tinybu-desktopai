@@ -12,7 +12,9 @@ export function PracticeChatPage({
   firstQuestion,
   onChatReply,
   onEnd,
-  interfaceLanguage
+  interfaceLanguage,
+  targetLanguage,
+  nativeLanguage
 }: {
   topic: TopicItem;
   opening: string;
@@ -20,9 +22,11 @@ export function PracticeChatPage({
   onChatReply: (userAnswer: string, chatHistory: Array<{ role: string; text: string }>) => Promise<string>;
   onEnd: () => void;
   interfaceLanguage: UserProfile["interfaceLanguage"];
+  targetLanguage: string;
+  nativeLanguage: string;
 }) {
   const copy = uiCopy[interfaceLanguage].practiceChat as Record<string, string>;
-  const { state: callState, error: callError, userText: callUserText, buText: callBuText, startCall, endCall } = useCallBu({ title: topic.name, summary: topic.summary });
+  const { state: callState, error: callError, userText: callUserText, buText: callBuText, startCall, endCall } = useCallBu({ title: topic.name, summary: topic.summary }, targetLanguage, nativeLanguage);
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     { id: uid("msg"), role: "bu", text: opening, createdAt: nowIso() },
     { id: uid("msg"), role: "bu", text: firstQuestion, createdAt: nowIso() }
