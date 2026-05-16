@@ -4,7 +4,7 @@
 >
 > 当前产品名是 TinyBu。当前主流程是：
 >
-> `Browse / Capture -> Inbox -> Organize -> Topics -> Study Room -> Practice -> Practice Review -> Notebook / Bu's Memory`
+> `Browse / Capture -> Inbox -> Organize -> Topics -> Study Room -> Practice Chat -> Practice Review -> Notebook / Bu's Memory`
 >
 > 当前权威产品与实现说明请以 `docs/current-core-capabilities.md` 为准。除非明确要参考早期草图，不应再按本文档设计或实现新页面。
 
@@ -422,18 +422,18 @@ AI 模式：
 - practice count
 - category
 
-### Talk Session
+### Practice Chat Review
 
-对话包含：
+练习复盘包含：
 
 - topic
-- content id
-- title
-- messages
-- rescue used
-- round count
-- status
-- created / ended time
+- diary summary
+- completed focus items
+- better expressions
+- saved words or chunks
+- next step
+- message count
+- created time
 
 ### Review
 

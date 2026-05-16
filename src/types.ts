@@ -10,7 +10,6 @@ export type Screen =
   | "study-room"
   | "practice-preparing"
   | "practice-chat"
-  | "practice"
   | "practice-review"
   | "notebook"
   | "memory"
@@ -37,7 +36,6 @@ export type CompanionState =
   | "celebrating";
 export type AiProviderMode = "rules" | "user-key" | "cloud-proxy";
 export type ExternalCaptureKind = "selection" | "article" | "youtube" | "video" | "screenshot" | "manual";
-export type PracticeStage = "select" | "answer" | "review";
 export type PracticeQuestionType = "understanding" | "opinion" | "personal" | "expression";
 export type CaptureStatus = "unsorted" | "suggested" | "needs_review" | "in-topic" | "studied" | "practiced" | "archived";
 
@@ -53,14 +51,6 @@ export type ReviewIssueType =
   | "mixed_language"
   | "empty_capture";
 export type TopicStatus = "ready" | "in-progress" | "practiced";
-export type RescueType =
-  | "start"
-  | "continue"
-  | "words"
-  | "simple"
-  | "with-me"
-  | "native-first";
-
 export interface UserProfile {
   nativeLanguage: string;
   targetLanguage: string;
@@ -102,7 +92,6 @@ export interface AppStateRecord {
   activeContentId: string;
   activeCaptureId: string;
   activeTopicId: string;
-  activePracticeSessionId: string;
   pastedTranscript: string;
   pastedSourceTitle: string;
   pastedSourceUrl: string;
@@ -225,73 +214,12 @@ export interface ExpressionRecord {
   category: "captured" | "my-sentence" | "pattern" | "need-practice" | "used";
 }
 
-export interface TalkMessage {
-  id: string;
-  role: "tinybu" | "user" | "rescue";
-  text: string;
-  createdAt: string;
-  rescueType?: RescueType;
-}
-
-export interface TalkSession {
-  id: string;
-  topic: string;
-  contentId: string;
-  title: string;
-  messages: TalkMessage[];
-  rescueUsed: RescueType[];
-  roundCount: number;
-  status: "active" | "ended";
-  createdAt: string;
-  endedAt?: string;
-}
-
-export interface ReviewRecord {
-  id: string;
-  sessionId: string;
-  talkedAbout: string;
-  didWell: string[];
-  naturalExpressions: Array<{
-    original: string;
-    improved: string;
-  }>;
-  savedExpressionIds: string[];
-  nextPractice: string;
-  createdAt: string;
-}
-
-export interface PracticeQuestion {
-  id: string;
+export interface PracticePlanQuestion {
   type: PracticeQuestionType;
   question: string;
   relatedFragmentIds: string[];
-  tipLevel: number;
   tipOutline: string;
   tipExample: string;
-}
-
-export interface PracticeAnswer {
-  id: string;
-  questionId: string;
-  answer: string;
-  tinybuReply: string;
-  createdAt: string;
-}
-
-export interface PracticeSession {
-  id: string;
-  captureId: string;
-  topicId?: string;
-  selectedFragmentIds: string[];
-  stage: PracticeStage;
-  questions: PracticeQuestion[];
-  answers: PracticeAnswer[];
-  currentQuestionIndex: number;
-  reviewId?: string;
-  status: "active" | "completed";
-  createdAt: string;
-  updatedAt: string;
-  completedAt?: string;
 }
 
 export interface MemoryItem {
@@ -341,55 +269,22 @@ export interface ScreenshotQuestionOutput {
   nextAction: string;
 }
 
-export interface TalkTurnOutput {
-  reply: string;
-  nextQuestion: string;
-  shouldSuggestRescue: boolean;
-  readyToEnd: boolean;
-}
-
-export interface RescueOutput {
-  lines: string[];
-}
-
-export interface ReviewOutput {
-  talkedAbout: string;
-  didWell: string[];
-  naturalExpressions: Array<{
-    original: string;
-    improved: string;
-  }>;
-  savedExpressions: Array<{
-    original: string;
-    meaning: string;
-    keywords: string[];
-    pattern: string;
-    scene: string;
-    practiceStem: string;
-  }>;
-  nextPractice: string;
-}
-
-export interface MemoryUpdateOutput {
-  memories: MemoryItem[];
-}
-
 export interface FragmentRecommendationOutput {
   recommendedFragmentIds: string[];
 }
 
 export interface PracticeQuestionsOutput {
-  questions: Omit<PracticeQuestion, "id" | "tipLevel">[];
+  questions: PracticePlanQuestion[];
 }
 
-export interface PracticeTipOutput {
-  outline?: string;
-  example?: string;
-}
-
-export interface PracticeTurnOutput {
-  encouragement: string;
-  response: string;
+export interface PracticePlan {
+  practiceGoal: string;
+  whatToCover: string[];
+  languageBank: {
+    usefulWords: string[];
+    usefulChunks: string[];
+  };
+  questions: PracticePlanQuestion[];
 }
 
 export interface QuickPetChatOutput {
@@ -401,4 +296,37 @@ export interface ChatMessage {
   role: "bu" | "user";
   text: string;
   createdAt: string;
+}
+
+export interface PracticeChatReview {
+  id: string;
+  topicId: string;
+  createdAt: string;
+  diarySummary: string;
+  completedFocusItemIds: string[];
+  focusItems: Array<{
+    id: string;
+    label: string;
+    completed: boolean;
+  }>;
+  betterExpressions: Array<{
+    original: string;
+    improved: string;
+    note: string;
+  }>;
+  savedWordsOrChunks: string[];
+  nextStep: string;
+  messageCount: number;
+  userMessageCount: number;
+}
+
+export interface PracticeChatReviewOutput {
+  diarySummary: string;
+  betterExpressions: Array<{
+    original: string;
+    improved: string;
+    note: string;
+  }>;
+  savedWordsOrChunks: string[];
+  nextStep: string;
 }

@@ -41,7 +41,6 @@ export const defaultAppState: AppStateRecord = {
   activeContentId: "demo-productivity",
   activeCaptureId: "",
   activeTopicId: "",
-  activePracticeSessionId: "",
   pastedTranscript: "",
   pastedSourceTitle: "",
   pastedSourceUrl: "",

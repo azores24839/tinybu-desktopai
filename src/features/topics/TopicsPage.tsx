@@ -83,7 +83,7 @@ export function TopicsPage({ topics, captures, expressions, openTopic, startPrac
                 <button className="primary" onClick={() => openTopic(selectedTopic, "study-room")}>
                   Open Study Room
                 </button>
-                <button className="secondary" onClick={() => startPractice(selectedTopic)}>
+                <button className="secondary" onClick={() => startPractice(selectedTopic)} disabled={!sources.length}>
                   Start Practice
                 </button>
                 <button className="secondary" onClick={() => openTopic(selectedTopic)}>

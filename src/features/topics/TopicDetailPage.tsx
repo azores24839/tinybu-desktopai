@@ -3,13 +3,14 @@ import { ChevronLeft, Save } from "lucide-react";
 import { AppHeader } from "../../components/AppHeader";
 import { formatDate } from "../../lib/date";
 import { nowIso } from "../../lib/defaults";
-import type { CaptureItem, ExpressionRecord, TopicItem } from "../../types";
+import type { CaptureItem, ExpressionRecord, PracticeChatReview, TopicItem } from "../../types";
 import { sourceLabel } from "../captures/captureUtils";
 
 type TopicDetailPageProps = {
   topic: TopicItem;
   captures: CaptureItem[];
   expressions: ExpressionRecord[];
+  practiceChatReviews: PracticeChatReview[];
   updateTopic: (topic: TopicItem) => void;
   openStudyRoom: () => void;
   startPractice: () => void;
@@ -20,6 +21,7 @@ export function TopicDetailPage({
   topic,
   captures,
   expressions,
+  practiceChatReviews,
   updateTopic,
   openStudyRoom,
   startPractice,
@@ -27,6 +29,7 @@ export function TopicDetailPage({
 }: TopicDetailPageProps) {
   const [name, setName] = useState(topic.name);
   const [summary, setSummary] = useState(topic.summary);
+  const hasSources = captures.length > 0;
 
   useEffect(() => {
     setName(topic.name);
@@ -71,6 +74,9 @@ export function TopicDetailPage({
       <div className="two-column">
         <section className="panel">
           <div className="section-title">Sources</div>
+          {!hasSources && (
+            <p className="empty-note">No source material yet. Add captures to this topic before practicing.</p>
+          )}
           {captures.map((capture) => (
             <label className="source-row" key={capture.id}>
               <input type="checkbox" defaultChecked />
@@ -101,12 +107,34 @@ export function TopicDetailPage({
             <button className="primary" onClick={openStudyRoom}>
               Open Study Room
             </button>
-            <button className="secondary" onClick={startPractice}>
+            <button className="secondary" onClick={startPractice} disabled={!hasSources}>
               Start Practice
             </button>
           </div>
         </section>
       </div>
+
+      {practiceChatReviews.length > 0 && (
+        <section className="panel history-section">
+          <div className="section-title">History</div>
+          {practiceChatReviews.map((review) => (
+            <div key={review.id} className="history-item">
+              <div className="history-item-header">
+                <span className="history-date">{formatDate(review.createdAt)}</span>
+                <span className="history-messages">{review.userMessageCount} messages</span>
+              </div>
+              <p className="history-summary">{review.diarySummary}</p>
+              {review.betterExpressions.length > 0 && (
+                <div className="history-expressions">
+                  {review.betterExpressions.slice(0, 2).map((expr, i) => (
+                    <span key={i} className="history-expression">{expr.improved}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
     </section>
   );
 }

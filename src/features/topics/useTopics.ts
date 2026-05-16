@@ -36,8 +36,17 @@ export function useTopics({
 
   async function updateTopic(nextTopic: TopicItem) {
     try {
-      await db.topics.put(nextTopic);
+      const renamedCaptures = captures
+        .filter((capture) => capture.topicId === nextTopic.id && capture.topic !== nextTopic.name)
+        .map((capture) => ({ ...capture, topic: nextTopic.name }));
+      await db.transaction("rw", db.topics, db.captures, async () => {
+        await db.topics.put(nextTopic);
+        if (renamedCaptures.length) await db.captures.bulkPut(renamedCaptures);
+      });
       setTopics((items) => items.map((item) => (item.id === nextTopic.id ? nextTopic : item)));
+      if (renamedCaptures.length) {
+        setCaptures((items) => items.map((item) => renamedCaptures.find((capture) => capture.id === item.id) ?? item));
+      }
     } catch (error) {
       console.error("updateTopic failed", error);
       showToast("Failed to save topic. Please try again.");
@@ -67,7 +76,10 @@ export function useTopics({
         topic: topic.name,
         status: "in-topic"
       }));
-      await Promise.all([db.topics.put(topic), db.captures.bulkPut(updatedCaptures)]);
+      await db.transaction("rw", db.topics, db.captures, async () => {
+        await db.topics.put(topic);
+        await db.captures.bulkPut(updatedCaptures);
+      });
       setTopics((items) => [topic, ...items]);
       setCaptures((items) => items.map((item) => updatedCaptures.find((c) => c.id === item.id) ?? item));
       await persistState({ ...appState, activeTopicId: topic.id, activeCaptureId: updatedCaptures[0].id });
@@ -93,7 +105,10 @@ export function useTopics({
         topic: topic.name,
         status: "in-topic" as const
       }));
-      await Promise.all([db.topics.put(nextTopic), db.captures.bulkPut(updatedCaptures)]);
+      await db.transaction("rw", db.topics, db.captures, async () => {
+        await db.topics.put(nextTopic);
+        await db.captures.bulkPut(updatedCaptures);
+      });
       setTopics((items) => items.map((item) => (item.id === topic.id ? nextTopic : item)));
       setCaptures((items) => items.map((item) => updatedCaptures.find((c) => c.id === item.id) ?? item));
     } catch (error) {
@@ -124,7 +139,10 @@ export function useTopics({
         lastStudiedAt: nowIso(),
         updatedAt: nowIso()
       };
-      await Promise.all([db.topics.put(nextTopic), db.captures.bulkPut(updatedCaptures)]);
+      await db.transaction("rw", db.topics, db.captures, async () => {
+        await db.topics.put(nextTopic);
+        if (updatedCaptures.length) await db.captures.bulkPut(updatedCaptures);
+      });
       setTopics((items) => items.map((item) => (item.id === topic.id ? nextTopic : item)));
       setCaptures((items) => items.map((item) => updatedCaptures.find((c) => c.id === item.id) ?? item));
     } catch (error) {

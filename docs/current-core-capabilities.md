@@ -2,11 +2,13 @@
 
 本文档记录当前代码中已经落地的核心能力，用于产品、设计和开发对齐。
 
+Practice 的单一事实来源见 `docs/practice-flow.md`。
+
 ## 一句话定位
 
 TinyBu 是一个 desktop-first 的 AI 语言学习工作台。它把浏览器选中文本、文章、视频 transcript、粘贴内容、剪贴板片段和桌面截图，转化为：
 
-`Inbox -> Organize -> Topics -> Study Room -> Practice -> Practice Review -> Notebook / Bu's Memory`
+`Inbox -> Organize -> Topics -> Study Room -> Practice Chat -> Practice Review -> Notebook / Bu's Memory`
 
 TinyBu 不是课程型产品，而是一个把零散真实内容整理成主题，再进入理解、表达练习和记忆沉淀的学习工作台。
 
@@ -19,7 +21,7 @@ TinyBu 不是课程型产品，而是一个把零散真实内容整理成主题�
 5. Topics 展示所有 Topic，用户进入 Topic Detail。
 6. Topic Detail 展示 Sources、Learning Overview、Practice goals，并进入 Study Room 或直接 Start Practice。
 7. Study Room 先帮助用户理解 Topic 下的 source，展示原文、摘要、关键问题和 Useful Expressions。
-8. Practice 围绕 Topic 做低压力表达练习。
+8. Practice Chat 围绕 Topic 做低压力对话练习。
 9. Practice Review 展示练习总结、更自然表达、保存建议和下一步。
 10. Notebook 保存用户真正想带走的表达，Bu's Memory 记录长期学习状态。
 
@@ -29,7 +31,7 @@ TinyBu 不是课程型产品，而是一个把零散真实内容整理成主题�
 
 - 固定左侧 Sidebar：`Home`、`Inbox`、`Topics`、`Notebook`、`Bu's Memory`、`Settings`
 - `Organize` 是 Inbox 内子页面。
-- `Topic Detail`、`Study Room`、`Practice`、`Practice Review` 是 Topic 内流程页，不出现在一级导航。
+- `Topic Detail`、`Study Room`、`Practice Chat`、`Practice Review` 是 Topic 内流程页，不出现在一级导航。
 
 当前页面：
 
@@ -42,7 +44,7 @@ TinyBu 不是课程型产品，而是一个把零散真实内容整理成主题�
 - Topics：左侧 Topic 列表，右侧 Topic 详情与 Study / Practice 入口。
 - Topic Detail：展示 topic 信息、sources 和 learning overview。
 - Study Room：三栏布局，包含 source navigator、main study area 和 useful expressions。
-- Practice：左右双栏，左侧练习对话，右侧 topic/source/tips/saved support。
+- Practice Chat：三栏沉浸式对话练习，左侧 language bank/source，中间 conversation，右侧 practice goal/focus。
 - Practice Review：练习总结、better expressions、saved suggestions 和 next step。
 - Notebook：三栏表达库，按 All / By Topic / Recently Saved / Review Later 查看。
 - Bu's Memory：学习伙伴式 dashboard，展示兴趣、困难、表达方向和建议。
@@ -69,12 +71,6 @@ Capture 支持来源：
 - `studied`：已在 Study Room 学习过。
 - `practiced`：已完成表达练习。
 - `archived`：归档。
-
-代码保留旧状态兼容：
-
-- `new -> unsorted`
-- `in-practice -> studied`
-- `completed -> practiced`
 
 ### Topic
 
@@ -149,20 +145,15 @@ Study Room 用于先理解 Topic：
 - 右栏 Useful Expressions：expression、meaning、when to use、example、Save to Notebook。
 - 底部 / 顶部可 Start Practice。
 
-### Practice
+### Practice Chat
 
-Practice 围绕 Topic 生成 3-5 个表达问题：
+Practice Chat 是唯一的 Topic 练习流程：
 
-- 每次显示一个问题。
-- 用户输入目标语言回答。
-- TinyBu 给出轻量回应。
-- 右侧展示 Topic 摘要、本轮进度、source summary、Tips。
-
-Tips 逻辑：
-
-- 第一次点击：给思路 / 回答方向。
-- 第二次点击：给一句完整参考答案。
-- 第三次不再展开。
+- 进入前根据 Topic 下的 selected / recommended fragments 生成 practice plan。
+- 三栏展示 language bank、original source、conversation、practice goal 和 what to cover。
+- 用户与 TinyBu 进行低压力对话练习。
+- TinyBu 每次回应只给短反馈、自然表达或一个跟进问题。
+- 空 Topic 会保留，但不能开始练习，需先添加 Capture。
 
 ### Practice Review
 
@@ -174,7 +165,7 @@ Tips 逻辑：
 - Saved Suggestions。
 - Next Step。
 
-Review 会保存表达到 Notebook，并更新 Bu's Memory。
+Review 保存到 Topic History，并更新 Topic 的 `status`、`lastPracticedAt` 和相关 Capture 的 `practiced` 状态。
 
 ## Notebook 与 Bu's Memory
 
@@ -294,10 +285,8 @@ Quick Chat 当前实现：
 - `contentUnderstanding`
 - `recommendFragments`
 - `practiceQuestions`
-- `practiceTip`
-- `practiceTurn`
-- `review`
-- `memory`
+- `practiceChat`
+- `practiceChatReview`
 - `screenshotCapture`
 - `screenshotQuestion`
 - `quickPetChat`
@@ -346,11 +335,9 @@ Settings 当前包含：
 - appState
 - captures
 - topics
-- practiceSessions
-- reviews
 - expressions
-- talkSessions
 - memories
+- practiceChatReviews
 
 Tauri 侧：
 

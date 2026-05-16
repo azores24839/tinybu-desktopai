@@ -2,13 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   Brain,
-  ChevronLeft,
   Home,
   Inbox,
-  KeyRound,
   NotebookTabs,
-  Plus,
-  RotateCcw,
   Settings,
   Wand2
 } from "lucide-react";
@@ -20,7 +16,7 @@ import { clearLearningData, db, loadAppState, saveAppState } from "./lib/db";
 import { clearUserApiKey, loadUserApiKey, saveUserApiKey } from "./lib/secureKey";
 import { showToast } from "./lib/toast";
 import { invokeTauri, listenTauri, type CaptureBridgeState } from "./lib/tauriBridge";
-import { defaultAppState, nowIso, uid } from "./lib/defaults";
+import { defaultAppState, nowIso } from "./lib/defaults";
 import { uiCopy } from "./lib/uiCopy";
 import {
   captureText,
@@ -38,47 +34,23 @@ import { NotebookPage } from "./features/notebook/NotebookPage";
 import { MemoryPage } from "./features/memory/MemoryPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { HomePage } from "./features/home/HomePage";
-import { PracticePage } from "./features/practice/PracticePage";
 import { PracticeReviewPage } from "./features/practice/PracticeReviewPage";
 import { PracticePreparingPage } from "./features/practice/PracticePreparingPage";
 import { PracticeChatPage } from "./features/practice/PracticeChatPage";
 import { usePracticeChat } from "./features/practice/usePracticeChat";
-import {
-  buildPracticeAnswer,
-  buildPracticeQuestionWithTip,
-  buildPracticeQuestions,
-  buildPracticeSession,
-  buildCompletedPracticeSession,
-  buildPracticedCaptures,
-  buildPracticedTopic,
-  buildPracticeReviewRecord,
-  buildSavedPracticeExpressions,
-  selectPracticeFragments,
-  selectPracticeReviewFragments
-} from "./features/practice/practiceUtils";
 import { WelcomePage } from "./features/setup/WelcomePage";
 import { OnboardingPage } from "./features/setup/OnboardingPage";
 import { CompanionSetupPage } from "./features/setup/CompanionSetupPage";
 import { useScreenshotCaptureFlow } from "./features/screenshots/useScreenshotCaptureFlow";
-import {
-  generatePracticeTip,
-  generatePracticeTurn,
-  generateReview,
-  updateMemory
-} from "./ai/provider";
 import type {
   AppStateRecord,
   CaptureItem,
-  CaptureStatus,
   CompanionProfile,
   ExpressionRecord,
   ExternalCaptureKind,
   ExternalCapturePayload,
   MemoryItem,
   CompanionState,
-  PracticeAnswer,
-  PracticeSession,
-  ReviewRecord,
   Screen,
   ScreenshotCapturePayload,
   TopicItem,
@@ -103,19 +75,12 @@ function parseIncomingCapture(): ExternalCapturePayload | null {
   }
 }
 
-function weekStart() {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() - date.getDay());
-  return date;
-}
-
 export default function App() {
   const [screen, setScreen] = useState<Screen>("welcome");
   const [appState, setAppState] = useState<AppStateRecord>(defaultAppState);
   const appStateRef = useRef(appState);
   appStateRef.current = appState;
-  const { captures, setCaptures, createCaptureRecord, updateCapture, openCapture, archiveCapture, deleteCapture } = useCaptures({
+  const { captures, setCaptures, createCaptureRecord, updateCapture, openCapture, archiveCapture } = useCaptures({
     appState: appStateRef.current,
     persistState
   });
@@ -128,12 +93,9 @@ export default function App() {
   });
   const topicsRef = useRef(topics);
   topicsRef.current = topics;
-  const [practiceSessions, setPracticeSessions] = useState<PracticeSession[]>([]);
-  const [reviews, setReviews] = useState<ReviewRecord[]>([]);
   const [expressions, setExpressions] = useState<ExpressionRecord[]>([]);
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [companionState, setCompanionState] = useState<CompanionState>("idle");
-  const [practiceInput, setPracticeInput] = useState("");
   const [screenshotQuestionInput, setScreenshotQuestionInput] = useState("");
   const [screenshotQuestionBusy, setScreenshotQuestionBusy] = useState(false);
   const [homePasteDraft, setHomePasteDraft] = useState("");
@@ -155,18 +117,6 @@ export default function App() {
       captures[0],
     [activeTopic, appState.activeCaptureId, captures]
   );
-  const activeSession = useMemo(
-    () =>
-      practiceSessions.find((session) => session.id === appState.activePracticeSessionId) ??
-      practiceSessions.find((session) => session.topicId === activeTopic?.id && session.status === "active") ??
-      practiceSessions[0],
-    [activeTopic?.id, appState.activePracticeSessionId, practiceSessions]
-  );
-  const activeReview = useMemo(
-    () => reviews.find((review) => review.id === activeSession?.reviewId) ?? reviews[0],
-    [activeSession?.reviewId, reviews]
-  );
-
   const { importScreenshotCapture, confirmScreenshotText, askAboutScreenshot } = useScreenshotCaptureFlow({
     appState,
     screenshotQuestionBusy,
@@ -182,8 +132,23 @@ export default function App() {
     setScreenshotQuestionBusy
   });
 
-  const { practiceChatFirstQuestion, startPracticeForTopic, handlePreparingReady, handlePracticeChatReply, endPracticeChat } = usePracticeChat({
+  const {
+    practicePlan,
+    practiceChatFirstQuestion,
+    practiceChatReview,
+    topicPracticeChatReviews,
+    startPracticeForTopic,
+    handlePreparingReady,
+    handlePracticeChatReply,
+    finishPracticeChatWithReview,
+    endPracticeChatWithoutSaving,
+    saveReviewAndGoToTopic,
+    saveReviewAndPracticeAgain,
+    loadTopicPracticeChatReviews
+  } = usePracticeChat({
     captures,
+    setCaptures,
+    setTopics,
     activeTopic,
     appState: appStateRef.current,
     persistState,
@@ -193,13 +158,11 @@ export default function App() {
   useEffect(() => {
     async function boot() {
       try {
-      const [state, storedCaptures, storedTopics, storedSessions, storedReviews, storedExpressions, storedMemories] =
+      const [state, storedCaptures, storedTopics, storedExpressions, storedMemories] =
         await Promise.all([
           loadAppState(),
           db.captures.orderBy("capturedAt").reverse().toArray(),
           db.topics.orderBy("updatedAt").reverse().toArray(),
-          db.practiceSessions.orderBy("updatedAt").reverse().toArray(),
-          db.reviews.orderBy("createdAt").reverse().toArray(),
           db.expressions.orderBy("capturedAt").reverse().toArray(),
           db.memories.orderBy("updatedAt").reverse().toArray()
         ]);
@@ -237,8 +200,6 @@ export default function App() {
       setHomePasteDraft(bootState.pastedTranscript);
       setCaptures(nextCaptures);
       setTopics(storedTopics);
-      setPracticeSessions(storedSessions);
-      setReviews(storedReviews);
       setExpressions(storedExpressions);
       setMemories(storedMemories);
       setScreen(bootState.onboarded ? (bootState.companionReady ? "home" : "companion") : "welcome");
@@ -470,141 +431,6 @@ export default function App() {
     navigate("home");
   }
 
-  async function updatePracticeSession(session: PracticeSession) {
-    await db.practiceSessions.put(session);
-    setPracticeSessions((items) => items.map((item) => (item.id === session.id ? session : item)));
-  }
-
-  async function requestTip(session: PracticeSession) {
-    try {
-    const question = session.questions[session.currentQuestionIndex];
-    if (!question || question.tipLevel >= 2) return;
-    const nextLevel = question.tipLevel + 1;
-    setCompanionState("thinking");
-    const tip = await generatePracticeTip({
-      question: question.question,
-      tipLevel: nextLevel,
-      outline: question.tipOutline,
-      example: question.tipExample,
-      appState
-    });
-    const updatedQuestion = buildPracticeQuestionWithTip({ question, tip, nextLevel });
-    await updatePracticeSession({
-      ...session,
-      questions: session.questions.map((item) => (item.id === question.id ? updatedQuestion : item)),
-      updatedAt: nowIso()
-    });
-    setCompanionState("encouraging");
-    } catch (error) {
-      console.error("requestTip failed", error);
-      setCompanionState("listening");
-    }
-  }
-
-  async function submitPracticeAnswer(session: PracticeSession) {
-    try {
-    const answer = practiceInput.trim();
-    const question = session.questions[session.currentQuestionIndex];
-    if (!answer || !question) return;
-    setPracticeInput("");
-    setCompanionState("thinking");
-    const turn = await generatePracticeTurn({
-      answer,
-      question: question.question,
-      questionIndex: session.currentQuestionIndex,
-      appState
-    });
-    const practiceAnswer = buildPracticeAnswer({
-      question,
-      answer,
-      turn,
-      createId: () => uid("answer"),
-      now: nowIso
-    });
-    const answers = [...session.answers, practiceAnswer];
-    if (session.currentQuestionIndex >= session.questions.length - 1) {
-      await finishPractice(session, answers);
-      return;
-    }
-    await updatePracticeSession({
-      ...session,
-      answers,
-      currentQuestionIndex: session.currentQuestionIndex + 1,
-      updatedAt: nowIso()
-    });
-    setCompanionState("listening");
-    } catch (error) {
-      console.error("submitPracticeAnswer failed", error);
-      setCompanionState("listening");
-    }
-  }
-
-  async function finishPractice(session: PracticeSession, answers: PracticeAnswer[]) {
-    try {
-    const topic = topics.find((item) => item.id === session.topicId);
-    const capturesForTopic = topicCaptures(topic, captures);
-    const selectedFragments = selectPracticeReviewFragments(capturesForTopic, session.selectedFragmentIds);
-    if (!topic || !selectedFragments.length) return;
-
-    setBusyLabel("Generating Practice Review");
-    const reviewOutput = await generateReview({
-      title: topic.name,
-      fragments: selectedFragments,
-      answers,
-      appState
-    });
-    const savedExpressions = buildSavedPracticeExpressions({
-      reviewOutput,
-      topic,
-      createId: () => uid("expression"),
-      now: nowIso
-    });
-    const review = buildPracticeReviewRecord({
-      reviewOutput,
-      session,
-      savedExpressions,
-      createId: () => uid("review"),
-      now: nowIso
-    });
-    const completedSession = buildCompletedPracticeSession({
-      session,
-      answers,
-      review,
-      now: nowIso
-    });
-    const updatedCaptures = buildPracticedCaptures(capturesForTopic);
-    const nextTopic = buildPracticedTopic({ topic, savedExpressionCount: savedExpressions.length, now: nowIso });
-    const memoryUpdate = await updateMemory({
-      review: reviewOutput,
-      expressions: savedExpressions,
-      appState
-    });
-
-    await Promise.all([
-      db.reviews.put(review),
-      db.expressions.bulkPut(savedExpressions),
-      db.memories.bulkPut(memoryUpdate.memories),
-      db.practiceSessions.put(completedSession),
-      db.captures.bulkPut(updatedCaptures),
-      db.topics.put(nextTopic)
-    ]);
-    setReviews((items) => [review, ...items]);
-    setExpressions((items) => [...savedExpressions, ...items]);
-    setMemories((items) => [...memoryUpdate.memories, ...items]);
-    setPracticeSessions((items) => items.map((item) => (item.id === session.id ? completedSession : item)));
-    setCaptures((items) => items.map((item) => updatedCaptures.find((capture) => capture.id === item.id) ?? item));
-    setTopics((items) => items.map((item) => (item.id === topic.id ? nextTopic : item)));
-    setBusyLabel("");
-    setCompanionState("celebrating");
-    navigate("practice-review");
-    } catch (error) {
-      console.error("finishPractice failed", error);
-      setBusyLabel("");
-      setCompanionState("idle");
-      showToast("Failed to save practice review. Your answers are still saved.");
-    }
-  }
-
   async function saveSettings(nextState: AppStateRecord, key?: string) {
     setApiKeyStatus("");
     if (key?.trim()) {
@@ -632,11 +458,32 @@ export default function App() {
     await clearLearningData();
     setCaptures([]);
     setTopics([]);
-    setPracticeSessions([]);
-    setReviews([]);
     setExpressions([]);
     setMemories([]);
-    await persistState({ ...appState, activeCaptureId: "", activeTopicId: "", activePracticeSessionId: "" });
+    await persistState({ ...appState, activeCaptureId: "", activeTopicId: "" });
+  }
+
+  async function deleteCaptureAndSyncTopics(id: string) {
+    const relatedTopics = topicsRef.current.filter((topic) => topic.captureIds.includes(id));
+    const nextTopics = relatedTopics.map((topic) => ({
+      ...topic,
+      captureIds: topic.captureIds.filter((captureId) => captureId !== id),
+      updatedAt: nowIso()
+    }));
+
+    try {
+      await db.transaction("rw", db.captures, db.topics, async () => {
+        await db.captures.delete(id);
+        if (nextTopics.length) await db.topics.bulkPut(nextTopics);
+      });
+      setCaptures((items) => items.filter((item) => item.id !== id));
+      if (nextTopics.length) {
+        setTopics((items) => items.map((item) => nextTopics.find((topic) => topic.id === item.id) ?? item));
+      }
+    } catch (error) {
+      console.error("deleteCaptureAndSyncTopics failed", error);
+      showToast("Failed to delete capture. Please try again.");
+    }
   }
 
   async function updateExpression(record: ExpressionRecord) {
@@ -649,6 +496,12 @@ export default function App() {
     setExpressions((items) => items.filter((item) => item.id !== id));
   }
 
+  useEffect(() => {
+    if (screen === "topic-detail" && activeTopic) {
+      loadTopicPracticeChatReviews(activeTopic.id);
+    }
+  }, [screen, activeTopic?.id]);
+
   const shellScreens: Screen[] = [
     "home",
     "inbox",
@@ -657,8 +510,6 @@ export default function App() {
     "topic-detail",
     "study-room",
     "practice-preparing",
-    "practice-chat",
-    "practice",
     "practice-review",
     "notebook",
     "memory",
@@ -676,7 +527,21 @@ export default function App() {
         </div>
       )}
 
-      {shellScreens.includes(screen) ? (
+      {screen === "practice-chat" && activeTopic && practiceChatFirstQuestion ? (
+        <PracticeChatPage
+          topic={activeTopic}
+          captures={topicCaptures(activeTopic, captures)}
+          practicePlan={practicePlan}
+          opening={copy.practiceChat.opening}
+          firstQuestion={practiceChatFirstQuestion}
+          onChatReply={handlePracticeChatReply}
+          onEndWithReview={finishPracticeChatWithReview}
+          onExit={endPracticeChatWithoutSaving}
+          interfaceLanguage={appState.profile.interfaceLanguage}
+          targetLanguage={appState.profile.targetLanguage}
+          nativeLanguage={appState.profile.nativeLanguage}
+        />
+      ) : shellScreens.includes(screen) ? (
         <div className="desktop-shell home-shell">
           <aside className="sidebar">
             <button className="brand-button" onClick={() => navigate("home")}>
@@ -691,7 +556,7 @@ export default function App() {
                 <Inbox size={18} /> {copy.nav.inbox}
               </button>
               <button
-                className={["topics", "topic-detail", "study-room", "practice-preparing", "practice-chat", "practice", "practice-review"].includes(screen) ? "active" : ""}
+                className={["topics", "topic-detail", "study-room", "practice-preparing", "practice-review", "practice-chat-review"].includes(screen) ? "active" : ""}
                 onClick={() => navigate("topics")}
               >
                 <BookOpen size={18} /> {copy.nav.topics}
@@ -717,19 +582,9 @@ export default function App() {
                 appState={appState}
                 captures={captures}
                 topics={topics}
-                sessions={practiceSessions}
                 memories={memories}
                 openInbox={() => navigate("inbox")}
                 openTopic={openTopic}
-                continuePractice={async (session) => {
-    const topic = topicsRef.current.find((item) => item.id === session.topicId);
-                  await persistState({
-                    ...appState,
-                    activeTopicId: topic?.id ?? appState.activeTopicId,
-                    activePracticeSessionId: session.id
-                  });
-                  navigate("practice");
-                }}
                 upgrade={() => navigate("settings")}
                 tryDemo={startDemo}
               />
@@ -743,7 +598,7 @@ export default function App() {
                 updateCapture={updateCapture}
                 confirmScreenshotText={confirmScreenshotText}
                 archiveCapture={archiveCapture}
-                deleteCapture={deleteCapture}
+                deleteCapture={deleteCaptureAndSyncTopics}
                 createTopicFromCaptures={createTopicFromCaptures}
                 addCapturesToTopic={addCapturesToTopic}
                 saveExpressionFromCapture={(capture, expression) => saveExpressionFromCapture(capture, expression, setExpressions)}
@@ -766,6 +621,7 @@ export default function App() {
                 topic={activeTopic}
                 captures={topicCaptures(activeTopic, captures)}
                 expressions={topicExpressions(activeTopic, expressions)}
+                practiceChatReviews={topicPracticeChatReviews}
                 updateTopic={updateTopic}
                 openStudyRoom={async () => {
                   await markTopicStudied(activeTopic);
@@ -800,39 +656,17 @@ export default function App() {
                 onReady={handlePreparingReady}
               />
             )}
-            {screen === "practice-chat" && activeTopic && practiceChatFirstQuestion && (
-              <PracticeChatPage
-                topic={activeTopic}
-                opening={copy.practiceChat.opening}
-                firstQuestion={practiceChatFirstQuestion}
-                onChatReply={handlePracticeChatReply}
-                onEnd={endPracticeChat}
-                interfaceLanguage={appState.profile.interfaceLanguage}
-                targetLanguage={appState.profile.targetLanguage}
-                nativeLanguage={appState.profile.nativeLanguage}
-              />
-            )}
-            {screen === "practice" && activeTopic && activeSession && (
-              <PracticePage
-                topic={activeTopic}
-                captures={topicCaptures(activeTopic, captures)}
-                session={activeSession}
-                input={practiceInput}
-                setInput={setPracticeInput}
-                requestTip={requestTip}
-                submitAnswer={submitPracticeAnswer}
-                endPractice={() => navigate("practice-review")}
-              />
-            )}
-            {screen === "practice-review" && activeTopic && activeReview && (
+            {screen === "practice-review" && activeTopic && practiceChatReview && (
               <PracticeReviewPage
                 topic={activeTopic}
-                review={activeReview}
-                session={activeSession}
-                expressions={expressions}
-                backToTopics={() => navigate("topics")}
-                openNotebook={() => navigate("notebook")}
-                continuePractice={() => startPracticeForTopic(activeTopic)}
+                review={practiceChatReview}
+                onDone={async (review) => {
+                  await saveReviewAndGoToTopic(review);
+                }}
+                onPracticeAgain={async (review) => {
+                  await saveReviewAndPracticeAgain(review, activeTopic);
+                }}
+                interfaceLanguage={appState.profile.interfaceLanguage}
               />
             )}
             {screen === "notebook" && (

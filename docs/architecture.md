@@ -1,6 +1,6 @@
 # TinyBu Architecture Notes
 
-Last updated: 2026-05-07.
+Last updated: 2026-05-13.
 
 This document is the quick recovery map for future Codex sessions. It describes where code lives, what is risky, and how to keep changes scoped.
 
@@ -40,7 +40,7 @@ src/features/home/
   Home dashboard.
 
 src/features/practice/
-  Practice pages and pure practice data builders.
+  Practice Chat, Practice Review, and pure practice flow helpers.
 
 src/features/setup/
   Welcome, Onboarding, and Companion Setup pages.
@@ -77,7 +77,7 @@ Remaining hotspots:
 - `src/App.tsx` is still large and owns too many business flows.
 - `src/ai/provider.ts` is still large and owns task-level AI orchestration.
 - `src/styles.css` is large and global.
-- There is a small Node-based regression suite for provider routing, screenshot confirmation, and practice data builders.
+- There is a small Node-based regression suite for provider routing, screenshot confirmation, and Practice Chat flow helpers.
 
 Recommended current safety checks:
 
@@ -147,13 +147,13 @@ logic and should be paired with more explicit regression checks.
 
 Higher-risk refactors to postpone until the UI extractions are stable:
 
-1. Practice business flow (`startPracticeForTopic`, `requestTip`, `submitPracticeAnswer`, `finishPractice`).
-2. AI provider decomposition.
-3. CSS modularization.
+1. AI provider decomposition.
+2. CSS modularization.
+3. Moving remaining app-level side effects out of `src/App.tsx`.
 
 ## Known Gaps
 
-- Regression coverage is still small; currently it covers provider routing, screenshot confirmation, and practice data builders.
+- Regression coverage is still small; currently it covers provider routing, screenshot confirmation, and Practice Chat helpers.
 - No Playwright coverage for major UI paths.
 - `App.tsx` still owns important side effects and flow orchestration.
 - `src/ai/provider.ts` needs provider-specific modules before adding many more providers.

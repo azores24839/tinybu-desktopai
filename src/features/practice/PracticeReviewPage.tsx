@@ -1,93 +1,122 @@
-import { AppHeader } from "../../components/AppHeader";
+import { CheckCircle2, Circle } from "lucide-react";
 import { formatDate } from "../../lib/date";
-import type { ExpressionRecord, PracticeSession, ReviewRecord, TopicItem } from "../../types";
+import type { PracticeChatReview, TopicItem } from "../../types";
 
 export function PracticeReviewPage({
   topic,
   review,
-  session,
-  expressions,
-  backToTopics,
-  openNotebook,
-  continuePractice
+  onDone,
+  onPracticeAgain,
+  interfaceLanguage
 }: {
   topic: TopicItem;
-  review: ReviewRecord;
-  session?: PracticeSession;
-  expressions: ExpressionRecord[];
-  backToTopics: () => void;
-  openNotebook: () => void;
-  continuePractice: () => void;
+  review: PracticeChatReview;
+  onDone: (review: PracticeChatReview) => void;
+  onPracticeAgain: (review: PracticeChatReview) => void;
+  interfaceLanguage: "中文" | "English";
 }) {
-  const saved = expressions.filter((expression) => review.savedExpressionIds.includes(expression.id));
+  const copy = interfaceLanguage === "中文" ? zh : en;
+
   return (
-    <section className="page">
-      <AppHeader title="Practice Review" description={topic.name}>
-        <button className="secondary" onClick={backToTopics}>
-          Back to Topics
-        </button>
-        <button className="primary" onClick={openNotebook}>
-          Save to Notebook
-        </button>
-      </AppHeader>
+    <section className="page practice-chat-review-page">
+      <header className="practice-chat-review-header">
+        <h2>{copy.title}</h2>
+        <p className="review-topic-name">{topic.name}</p>
+        <p className="review-date">{formatDate(review.createdAt)}</p>
+      </header>
 
-      <section className="panel review-summary">
-        <div>
-          <p className="eyebrow">Completed {formatDate(review.createdAt)}</p>
-          <h2>{review.talkedAbout}</h2>
-          <p>{session?.answers.length ?? 0} questions completed.</p>
-        </div>
-      </section>
-
-      <div className="review-grid">
+      <div className="practice-chat-review-body">
         <section className="panel">
-          <div className="section-title">What You Practiced</div>
-          <p>{review.talkedAbout}</p>
-          <div className="mini-list">
-            {review.didWell.map((item) => (
-              <span key={item}>{item}</span>
+          <h3 className="section-title">{copy.diaryTitle}</h3>
+          <p className="review-diary">{review.diarySummary}</p>
+        </section>
+
+        <section className="panel">
+          <h3 className="section-title">{copy.focusTitle}</h3>
+          <div className="review-focus-items">
+            {review.focusItems.map((item) => (
+              <div key={item.id} className={`review-focus-item ${item.completed ? "completed" : ""}`}>
+                {item.completed ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                <span>{item.label}</span>
+              </div>
             ))}
           </div>
         </section>
-        <section className="panel">
-          <div className="section-title">Better Expressions</div>
-          {review.naturalExpressions.map((item) => (
-            <article className="natural-pair" key={`${item.original}-${item.improved}`}>
-              <span>User original</span>
-              <p>{item.original}</p>
-              <span>More natural</span>
-              <strong>{item.improved}</strong>
-              <button className="secondary">Save</button>
-            </article>
-          ))}
-        </section>
-      </div>
 
-      <div className="two-column">
+        {review.betterExpressions.length > 0 && (
+          <section className="panel">
+            <h3 className="section-title">{copy.expressionsTitle}</h3>
+            <div className="review-expressions">
+              {review.betterExpressions.map((expr, i) => (
+                <div key={i} className="review-expression-item">
+                  {expr.original && (
+                    <div className="expression-original">
+                      <span className="expression-label">{copy.originalLabel}</span>
+                      <p>{expr.original}</p>
+                    </div>
+                  )}
+                  <div className="expression-improved">
+                    <span className="expression-label">{copy.improvedLabel}</span>
+                    <p className="improved-text">{expr.improved}</p>
+                  </div>
+                  {expr.note && (
+                    <p className="expression-note">{expr.note}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className="panel">
-          <div className="section-title">Saved Suggestions</div>
-          <div className="mini-list">
-            {saved.slice(0, 5).map((expression) => (
-              <span key={expression.id}>{expression.pattern}</span>
+          <h3 className="section-title">{copy.wordsTitle}</h3>
+          <div className="review-words">
+            {review.savedWordsOrChunks.map((word, i) => (
+              <span key={i} className="word-pill">{word}</span>
             ))}
           </div>
         </section>
+
         <section className="panel">
-          <div className="section-title">Next Step</div>
-          <p>{review.nextPractice}</p>
-          <div className="button-row">
-            <button className="primary" onClick={openNotebook}>
-              Review in Notebook
-            </button>
-            <button className="secondary" onClick={continuePractice}>
-              Continue Practice
-            </button>
-            <button className="secondary" onClick={backToTopics}>
-              Start another Topic
-            </button>
-          </div>
+          <h3 className="section-title">{copy.nextTitle}</h3>
+          <p className="review-next">{review.nextStep}</p>
         </section>
       </div>
+
+      <footer className="practice-chat-review-footer">
+        <button className="primary" onClick={() => onDone(review)}>
+          {copy.done}
+        </button>
+        <button className="secondary" onClick={() => onPracticeAgain(review)}>
+          {copy.practiceAgain}
+        </button>
+      </footer>
     </section>
   );
 }
+
+const zh = {
+  title: "练习复盘",
+  diaryTitle: "Practice Diary",
+  focusTitle: "Focus Covered",
+  expressionsTitle: "Better Expressions",
+  wordsTitle: "Words & Chunks to Keep",
+  nextTitle: "Next Step",
+  originalLabel: "你的表达",
+  improvedLabel: "更自然的说法",
+  done: "完成",
+  practiceAgain: "再练一次"
+};
+
+const en = {
+  title: "Practice Review",
+  diaryTitle: "Practice Diary",
+  focusTitle: "Focus Covered",
+  expressionsTitle: "Better Expressions",
+  wordsTitle: "Words & Chunks to Keep",
+  nextTitle: "Next Step",
+  originalLabel: "Your expression",
+  improvedLabel: "More natural",
+  done: "Done",
+  practiceAgain: "Practice again"
+};

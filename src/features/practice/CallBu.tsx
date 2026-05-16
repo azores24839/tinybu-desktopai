@@ -39,6 +39,7 @@ export function CallBu({
   onStart,
   onEnd,
   interfaceLanguage,
+  compact,
 }: {
   state: CallBuState;
   error: string | null;
@@ -47,8 +48,32 @@ export function CallBu({
   onStart: () => void;
   onEnd: () => void;
   interfaceLanguage: "中文" | "English";
+  compact?: boolean;
 }) {
   const t = labels[interfaceLanguage] || labels.English;
+
+  if (compact) {
+    if (state === "idle" || state === "ended") {
+      return (
+        <button className="primary call-compact-btn" onClick={onStart} title={state === "ended" ? t.callAgain : t.callBu}>
+          <Phone size={16} />
+        </button>
+      );
+    }
+    if (state === "error") {
+      return (
+        <button className="primary call-compact-btn" onClick={onStart} title={t.callAgain}>
+          <Phone size={16} />
+        </button>
+      );
+    }
+    return (
+      <div className="call-compact-status">
+        <Loader2 size={14} className="spin" />
+        <span>{state === "connecting" ? t.connecting : state === "listening" ? t.listening : state === "thinking" ? t.thinking : t.speaking}</span>
+      </div>
+    );
+  }
 
   if (state === "idle") {
     return (

@@ -172,33 +172,16 @@ test("screenshot AI payloads only include images for visual layout questions", a
   assert.equal(buildScreenshotQuestionPayload({ question: "这段文字是什么意思？", screenshot, appState }).imageDataUrl, undefined);
 });
 
-test("general AI task payloads preserve transcript, context, and learner profile", async () => {
-  const {
-    buildContentUnderstandingPayload,
-    buildExpressionCardPayload,
-    buildMemoryPayload,
-    buildReviewPayload,
-    buildRescuePayload,
-    buildTalkTurnPayload
-  } = await loadTsModule("src/ai/taskPayloads.ts");
+test("content understanding payload preserves transcript and learner language profile", async () => {
+  const { buildContentUnderstandingPayload } = await loadTsModule("src/ai/taskPayloads.ts");
   const appState = {
     profile: {
       level: "A2",
       nativeLanguage: "中文",
-      targetLanguage: "English",
-      anxiety: 4,
-      supportPreference: "gentle"
+      targetLanguage: "English"
     }
   };
-  const messages = [{ role: "user", text: "Where is the station?" }];
-  const expressions = [
-    { original: "near the park", pattern: "near ..." },
-    { original: "go straight", pattern: "go straight" }
-  ];
   const content = {
-    id: "content-1",
-    title: "Travel clip",
-    summary: "A short travel conversation.",
     transcript: [{ text: "Where is the station?" }, { text: "It is near the park." }]
   };
 
@@ -208,68 +191,6 @@ test("general AI task payloads preserve transcript, context, and learner profile
     targetLanguage: "English",
     nativeLanguage: "中文"
   });
-  assert.deepEqual(buildExpressionCardPayload("near the park", content, appState), {
-    sentence: "near the park",
-    context: "A short travel conversation.",
-    level: "A2",
-    targetLanguage: "English",
-    nativeLanguage: "中文"
-  });
-  assert.deepEqual(
-    buildTalkTurnPayload({
-      answer: "I think it is nearby.",
-      messages,
-      content,
-      expressions,
-      appState
-    }),
-    {
-      answer: "I think it is nearby.",
-      messages,
-      contentSummary: "A short travel conversation.",
-      capturedExpressions: expressions,
-      level: "A2",
-      anxiety: 4,
-      supportPreference: "gentle"
-    }
-  );
-  assert.deepEqual(buildRescuePayload("hint", "How should I answer?", appState), {
-    rescueType: "hint",
-    currentQuestion: "How should I answer?",
-    level: "A2",
-    anxiety: 4
-  });
-  assert.deepEqual(
-    buildReviewPayload({
-      sessionTitle: "Travel practice",
-      messages,
-      expressions,
-      appState
-    }),
-    {
-      sessionTitle: "Travel practice",
-      messages,
-      expressions,
-      level: "A2",
-      nativeLanguage: "中文",
-      targetLanguage: "English"
-    }
-  );
-
-  const review = {
-    talkedAbout: "Finding the station",
-    didWell: ["Clear intent"],
-    naturalExpressions: [],
-    savedExpressions: [],
-    nextPractice: "Ask for directions again."
-  };
-  assert.deepEqual(buildMemoryPayload({ review, expressions, appState }), {
-    review,
-    expressions,
-    rescueUsed: [],
-    profile: appState.profile
-  });
-  assert.deepEqual(buildMemoryPayload({ review, expressions, rescueUsed: ["hint"], appState }).rescueUsed, ["hint"]);
 });
 
 test("screenshot confirmation is only available while image data and OCR text are present", async () => {
@@ -311,65 +232,26 @@ test("practice utils prefer selected or recommended fragments before fallback fr
   );
 });
 
-test("practice utils build completed review records without changing flow state outside inputs", async () => {
-  const {
-    buildCompletedPracticeSession,
-    buildPracticedCaptures,
-    buildPracticedTopic,
-    buildPracticeReviewRecord,
-    buildSavedPracticeExpressions,
-    selectPracticeReviewFragments
-  } = await loadTsModule("src/features/practice/practiceUtils.ts");
-  const now = () => "2026-05-07T00:00:00.000Z";
-  const topic = { id: "topic-1", name: "Travel", captureIds: ["capture-1"], savedExpressionCount: 2 };
-  const captures = [{ id: "capture-1", status: "studied", fragments: [{ id: "frag-1" }, { id: "frag-2" }] }];
-  const session = { id: "session-1", selectedFragmentIds: ["frag-2"], answers: [], status: "active" };
-  const reviewOutput = {
-    talkedAbout: "Travel plans",
-    didWell: ["Clear idea"],
-    naturalExpressions: [{ original: "I go", improved: "I am going" }],
-    savedExpressions: [
-      {
-        original: "I am going",
-        meaning: "future plan",
-        keywords: ["plan"],
-        pattern: "I am going to...",
-        scene: "travel",
-        practiceStem: "I am going to..."
-      }
-    ],
-    nextPractice: "Talk about the next trip"
+test("practice chat completion marks the topic and source captures practiced", async () => {
+  const { buildPracticeChatCompletion } = await loadTsModule("src/features/practice/practiceUtils.ts");
+  const practicedAt = "2026-05-13T08:00:00.000Z";
+  const topic = {
+    id: "topic-1",
+    name: "Travel",
+    captureIds: ["capture-1"],
+    status: "in-progress",
+    lastPracticedAt: undefined,
+    updatedAt: "2026-05-12T00:00:00.000Z"
   };
+  const captures = [
+    { id: "capture-1", status: "studied", fragments: [] },
+    { id: "capture-2", status: "in-topic", fragments: [] }
+  ];
 
-  assert.deepEqual(selectPracticeReviewFragments(captures, session.selectedFragmentIds).map((fragment) => fragment.id), ["frag-2"]);
+  const result = buildPracticeChatCompletion({ topic, capturesForTopic: captures, practicedAt });
 
-  const savedExpressions = buildSavedPracticeExpressions({
-    reviewOutput,
-    topic,
-    createId: () => "expression-1",
-    now
-  });
-  assert.equal(savedExpressions[0].sourceContentId, "capture-1");
-  assert.equal(savedExpressions[0].category, "need-practice");
-
-  const review = buildPracticeReviewRecord({
-    reviewOutput,
-    session,
-    savedExpressions,
-    createId: () => "review-1",
-    now
-  });
-  assert.deepEqual(review.savedExpressionIds, ["expression-1"]);
-
-  const completedSession = buildCompletedPracticeSession({
-    session,
-    answers: [{ id: "answer-1" }],
-    review,
-    now
-  });
-  assert.equal(completedSession.status, "completed");
-  assert.equal(completedSession.reviewId, "review-1");
-
-  assert.equal(buildPracticedCaptures(captures)[0].status, "practiced");
-  assert.equal(buildPracticedTopic({ topic, savedExpressionCount: savedExpressions.length, now }).savedExpressionCount, 3);
+  assert.equal(result.nextTopic.status, "practiced");
+  assert.equal(result.nextTopic.lastPracticedAt, practicedAt);
+  assert.equal(result.nextTopic.updatedAt, practicedAt);
+  assert.deepEqual(result.updatedCaptures.map((capture) => capture.status), ["practiced", "practiced"]);
 });

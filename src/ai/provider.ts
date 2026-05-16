@@ -1,23 +1,15 @@
 import type {
   AppStateRecord,
   CaptureFragment,
+  ChatMessage,
   ContentItem,
   ContentUnderstanding,
-  ExpressionRecord,
   FragmentRecommendationOutput,
-  MemoryUpdateOutput,
-  ReviewOutput,
-  PracticeAnswer,
-  PracticeQuestionsOutput,
-  PracticeTipOutput,
-  PracticeTurnOutput,
+  PracticeChatReviewOutput,
+  PracticePlan,
   QuickPetChatOutput,
-  RescueOutput,
-  RescueType,
   ScreenshotRecognitionOutput,
-  ScreenshotQuestionOutput,
-  TalkMessage,
-  TalkTurnOutput
+  ScreenshotQuestionOutput
 } from "../types";
 import { loadUserApiKey } from "../lib/secureKey";
 import {
@@ -35,28 +27,14 @@ import {
 import { isOpenRouterApiKey, shouldUseOpenRouter } from "./providerRouting";
 import { normalizeScreenshotRecognition } from "./responseParsing";
 import {
-  expressionCardRules,
-  memoryUpdateRules,
-  talkReviewRules,
+  practiceChatReviewRules,
   practiceQuestionsRules,
-  practiceTipRules,
-  practiceTurnRules,
   quickPetChatRules,
   recommendFragmentsRules,
-  reviewRules,
-  rescueRules,
-  talkTurnRules,
   understandContentRules
 } from "./rules";
 import { buildScreenshotCapturePayload, buildScreenshotQuestionPayload, type ScreenshotQuestionSource } from "./screenshotPayloads";
-import {
-  buildContentUnderstandingPayload,
-  buildExpressionCardPayload,
-  buildMemoryPayload,
-  buildReviewPayload,
-  buildRescuePayload,
-  buildTalkTurnPayload
-} from "./taskPayloads";
+import { buildContentUnderstandingPayload } from "./taskPayloads";
 
 type TaskName = ProviderTaskName;
 
@@ -163,109 +141,6 @@ export async function answerScreenshotQuestion(args: {
     : callUserKey("screenshotQuestion", payload, args.appState);
 }
 
-export async function generateExpressionCard(
-  sentence: string,
-  content: ContentItem,
-  appState: AppStateRecord
-) {
-  const payload = buildExpressionCardPayload(sentence, content, appState);
-
-  const base = await withFallback(
-    appState,
-    async () => {
-      const output = await (appState.settings.aiProviderMode === "cloud-proxy"
-        ? callCloudProxy<Omit<ExpressionRecord, "id">>("expressionCard", payload, appState)
-        : callUserKey<Omit<ExpressionRecord, "id">>("expressionCard", payload, appState));
-      return {
-        original: sentence,
-        meaning: output.meaning,
-        keywords: output.keywords,
-        pattern: output.pattern,
-        scene: output.scene,
-        practiceStem: output.practiceStem,
-        sourceTitle: content.title,
-        sourceContentId: content.id
-      };
-    },
-    () => expressionCardRules(sentence, content, appState)
-  );
-
-  return base;
-}
-
-export async function generateTalkTurn(args: {
-  answer: string;
-  messages: TalkMessage[];
-  content: ContentItem;
-  expressions: ExpressionRecord[];
-  appState: AppStateRecord;
-  roundCount: number;
-}): Promise<TalkTurnOutput> {
-  const payload = buildTalkTurnPayload(args);
-
-  return withFallback(
-    args.appState,
-    () =>
-      args.appState.settings.aiProviderMode === "cloud-proxy"
-        ? callCloudProxy("talkTurn", payload, args.appState)
-        : callUserKey("talkTurn", payload, args.appState),
-    () => talkTurnRules(args)
-  );
-}
-
-export async function generateRescue(
-  type: RescueType,
-  currentQuestion: string,
-  appState: AppStateRecord
-): Promise<RescueOutput> {
-  const payload = buildRescuePayload(type, currentQuestion, appState);
-
-  return withFallback(
-    appState,
-    () =>
-      appState.settings.aiProviderMode === "cloud-proxy"
-        ? callCloudProxy("rescue", payload, appState)
-        : callUserKey("rescue", payload, appState),
-    () => rescueRules(type, { question: currentQuestion, appState })
-  );
-}
-
-export async function generateTalkReview(args: {
-  sessionTitle: string;
-  messages: TalkMessage[];
-  expressions: ExpressionRecord[];
-  appState: AppStateRecord;
-}): Promise<ReviewOutput> {
-  const payload = buildReviewPayload(args);
-
-  return withFallback(
-    args.appState,
-    () =>
-      args.appState.settings.aiProviderMode === "cloud-proxy"
-        ? callCloudProxy("talkReview", payload, args.appState)
-        : callUserKey("talkReview", payload, args.appState),
-    () => talkReviewRules(args)
-  );
-}
-
-export async function updateMemory(args: {
-  review: ReviewOutput;
-  expressions: ExpressionRecord[];
-  rescueUsed?: RescueType[];
-  appState: AppStateRecord;
-}): Promise<MemoryUpdateOutput> {
-  const payload = buildMemoryPayload(args);
-
-  return withFallback(
-    args.appState,
-    () =>
-      args.appState.settings.aiProviderMode === "cloud-proxy"
-        ? callCloudProxy("memory", payload, args.appState)
-        : callUserKey("memory", payload, args.appState),
-    () => memoryUpdateRules(args)
-  );
-}
-
 export async function recommendFragments(
   fragments: CaptureFragment[],
   appState: AppStateRecord
@@ -289,7 +164,7 @@ export async function recommendFragments(
 export async function generatePracticeQuestions(args: {
   fragments: CaptureFragment[];
   appState: AppStateRecord;
-}): Promise<PracticeQuestionsOutput> {
+}): Promise<PracticePlan> {
   const payload = {
     fragments: args.fragments.map((fragment) => ({ id: fragment.id, text: fragment.text })),
     level: args.appState.profile.level,
@@ -304,57 +179,6 @@ export async function generatePracticeQuestions(args: {
         ? callCloudProxy("practiceQuestions", payload, args.appState)
         : callUserKey("practiceQuestions", payload, args.appState),
     () => practiceQuestionsRules(args)
-  );
-}
-
-export async function generatePracticeTip(args: {
-  question: string;
-  tipLevel: number;
-  outline: string;
-  example: string;
-  appState: AppStateRecord;
-}): Promise<PracticeTipOutput> {
-  const payload = {
-    question: args.question,
-    tipLevel: args.tipLevel,
-    outline: args.outline,
-    example: args.example,
-    level: args.appState.profile.level,
-    targetLanguage: args.appState.profile.targetLanguage,
-    nativeLanguage: args.appState.profile.nativeLanguage
-  };
-
-  return withFallback(
-    args.appState,
-    () =>
-      args.appState.settings.aiProviderMode === "cloud-proxy"
-        ? callCloudProxy("practiceTip", payload, args.appState)
-        : callUserKey("practiceTip", payload, args.appState),
-    () => practiceTipRules(args)
-  );
-}
-
-export async function generatePracticeTurn(args: {
-  answer: string;
-  question: string;
-  questionIndex: number;
-  appState: AppStateRecord;
-}): Promise<PracticeTurnOutput> {
-  const payload = {
-    answer: args.answer,
-    question: args.question,
-    questionIndex: args.questionIndex,
-    level: args.appState.profile.level,
-    supportPreference: args.appState.profile.supportPreference
-  };
-
-  return withFallback(
-    args.appState,
-    () =>
-      args.appState.settings.aiProviderMode === "cloud-proxy"
-        ? callCloudProxy("practiceTurn", payload, args.appState)
-        : callUserKey("practiceTurn", payload, args.appState),
-    () => practiceTurnRules(args)
   );
 }
 
@@ -412,27 +236,31 @@ export async function generatePracticeChat(args: {
   }
 }
 
-export async function generateReview(args: {
-  title: string;
-  fragments: CaptureFragment[];
-  answers: PracticeAnswer[];
+export async function generatePracticeChatReview(args: {
+  topicName: string;
+  practiceGoal: string;
+  whatToCover: string[];
+  chatMessages: ChatMessage[];
+  targetLanguage: string;
+  nativeLanguage: string;
   appState: AppStateRecord;
-}): Promise<ReviewOutput> {
+}): Promise<PracticeChatReviewOutput> {
   const payload = {
-    title: args.title,
-    fragments: args.fragments.map((fragment) => ({ id: fragment.id, text: fragment.text })),
-    answers: args.answers,
-    level: args.appState.profile.level,
-    nativeLanguage: args.appState.profile.nativeLanguage,
-    targetLanguage: args.appState.profile.targetLanguage
+    topicName: args.topicName,
+    practiceGoal: args.practiceGoal,
+    whatToCover: args.whatToCover,
+    chatMessages: args.chatMessages.map((m) => ({ role: m.role, text: m.text })),
+    targetLanguage: args.targetLanguage,
+    nativeLanguage: args.nativeLanguage,
+    level: args.appState.profile.level
   };
 
   return withFallback(
     args.appState,
     () =>
       args.appState.settings.aiProviderMode === "cloud-proxy"
-        ? callCloudProxy("review", payload, args.appState)
-        : callUserKey("review", payload, args.appState),
-    () => reviewRules(args)
+        ? callCloudProxy("practiceChatReview", payload, args.appState)
+        : callUserKey("practiceChatReview", payload, args.appState),
+    () => practiceChatReviewRules(args)
   );
 }

@@ -51,7 +51,7 @@ Airi 的核心概念不是普通助手，而是 AI 角色 / 伴侣。TinyBu 现�
 - `mood`：calm、encouraging、focused、celebrating
 - `activity`：idle、reading、thinking、listening、speaking
 - `supportMode`：gentle、balanced、direct
-- `currentGoal`：explain、rescue、converse、review
+- `currentGoal`：explain、support、converse、review
 
 这样 UI、prompt 和未来的语音行为都可以响应同一套状态，而不是每个页面各自发明一套行为。
 
@@ -93,7 +93,7 @@ TinyBu 现在是在按钮事件里直接生成每一轮 Talk turn。这样很清
 3. 运行 AI task。
 4. 应用 AI response。
 5. 更新本轮对话中被使用的表达。
-6. 必要时建议 rescue。
+6. 必要时建议 support。
 7. 持久化所有变化。
 
 这部分可以变成 `submitTalkTurn()` 这样的服务函数，从 `App.tsx` 中移出去，让组件更专注于渲染和 UI 事件。

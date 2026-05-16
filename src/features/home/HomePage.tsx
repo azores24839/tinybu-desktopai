@@ -1,60 +1,44 @@
 import { ArrowUpRight } from "lucide-react";
 import { uiCopy } from "../../lib/uiCopy";
 import { suggestedGroups } from "../captures/captureUtils";
-import type { AppStateRecord, CaptureItem, MemoryItem, PracticeSession, Screen, TopicItem } from "../../types";
+import type { AppStateRecord, CaptureItem, MemoryItem, Screen, TopicItem } from "../../types";
 
 export function HomePage({
   appState,
   captures,
   topics,
-  sessions,
   memories,
   openInbox,
   openTopic,
-  continuePractice,
   tryDemo
 }: {
   appState: AppStateRecord;
   captures: CaptureItem[];
   topics: TopicItem[];
-  sessions: PracticeSession[];
   memories: MemoryItem[];
   openInbox: () => void;
   openTopic: (topic: TopicItem, next?: Screen) => void;
-  continuePractice: (session: PracticeSession) => void;
   upgrade: () => void;
   tryDemo: () => void;
 }) {
   const copy = uiCopy[appState.profile.interfaceLanguage].home;
   const isChinese = appState.profile.interfaceLanguage === "中文";
-  const activeSessions = sessions.filter((session) => session.status === "active");
   const suggested = suggestedGroups(captures);
   const waitingCaptures = captures.filter((capture) => capture.status !== "archived" && !capture.topicId);
   const readyTopics = topics.filter((topic) => topic.status === "ready");
   const practiceTopics = topics.filter((topic) => topic.status === "in-progress");
   const latestMemory = [...memories].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
-  const activeSessionTopic = activeSessions[0] ? topics.find((topic) => topic.id === activeSessions[0].topicId) : undefined;
   const suggestedTopic = suggested[0];
 
   const suggestion = (() => {
     if (latestMemory) {
       return {
-        actionLabel: activeSessions[0] ? copy.continuePractice : copy.startPractice,
+        actionLabel: copy.startPractice,
         action: () => {
-          if (activeSessions[0]) {
-            continuePractice(activeSessions[0]);
-            return;
-          }
           const topic = practiceTopics[0] ?? readyTopics[0] ?? topics[0];
           if (topic) openTopic(topic, topic.status === "ready" ? "study-room" : "topic-detail");
           else tryDemo();
         }
-      };
-    }
-    if (activeSessions[0]) {
-      return {
-        actionLabel: copy.continuePractice,
-        action: () => continuePractice(activeSessions[0])
       };
     }
     if (suggestedTopic) {
@@ -72,7 +56,6 @@ export function HomePage({
   const headlineTopic =
     readyTopics[0]?.name ??
     practiceTopics[0]?.name ??
-    activeSessionTopic?.name ??
     suggestedTopic?.name ??
     (isChinese ? "游戏UI设计工作日常" : "Game UI Design Workday");
 
@@ -119,8 +102,8 @@ export function HomePage({
     },
     {
       label: copy.practice,
-      count: activeSessions.length + practiceTopics.length,
-      action: () => (activeSessions[0] ? continuePractice(activeSessions[0]) : practiceTopics[0] ? openTopic(practiceTopics[0]) : openInbox())
+      count: practiceTopics.length,
+      action: () => (practiceTopics[0] ? openTopic(practiceTopics[0]) : openInbox())
     }
   ];
 

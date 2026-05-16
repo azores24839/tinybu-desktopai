@@ -40,28 +40,14 @@ const taskPrompts = {
     "Answer a user's question about a previously captured screenshot. Use the saved OCR and screenshot context first. If an image is provided, use it only to resolve layout or visual ambiguity. Be concise, helpful, and answer in the user's language.",
   quickPetChat:
     "You are TinyBu, a tiny desktop language-learning buddy. Reply in the user's language unless they ask to practice another language. Keep the reply extremely short: one or two compact sentences, maximum 45 Chinese characters or 25 English words. Prefer language-learning help: explain a phrase, make a sentence natural, ask one tiny practice question, or give encouragement. No markdown.",
-  expressionCard:
-    "Turn the captured sentence into a reusable expression card. Focus on meaning, useful pattern, scene, and a half-finished sentence the learner can personalize.",
-  talkTurn:
-    "Continue a low-pressure language practice conversation. First respond to meaning, then give one tiny natural expression if helpful, then ask one simple next question.",
-  rescue:
-    "The learner is stuck. Give 1-3 short support lines only. Do not answer everything for them.",
-  talkReview:
-    "Create a gentle post-talk review. Start with what the learner communicated successfully. Give only 1-2 natural expression suggestions.",
   recommendFragments:
     "Select 3-6 fragments that are most useful for low-pressure speaking practice. Prefer clear opinions, reusable patterns, and lines learners can connect to their own life.",
   practiceQuestions:
-    "Create 3-5 gentle practice questions from selected fragments. Ask one idea at a time. Order questions from content understanding, to opinion, to personal connection, to expression use.",
-  practiceTip:
-    "The learner is stuck on one practice question. If tipLevel is 1, give only an answer structure. If tipLevel is 2, give one short target-language reference sentence.",
-  practiceTurn:
-    "Respond briefly to a learner answer. Give one encouragement and one natural response to their meaning. Do not correct heavily or add expression advice.",
-  review:
-    "Create a gentle practice review. Avoid Wrong/Correct language. Summarize what the learner talked about, what worked, more natural expressions, saved notebook expressions, and next practice.",
-  memory:
-    "Create short learning memories that support future practice. Do not save private or sensitive information.",
+    "Create a concise practice plan from selected fragments for a topic-based speaking chat. Return a practice goal, 2-3 focus items, a small language bank, and 3-5 gentle opening/follow-up questions.",
   practiceChat:
-    "You are TinyBu, a warm and gentle language learning companion. Reply in 1-3 very short sentences. First acknowledge what the user said, then give one natural expression or ask one simple follow-up question to keep the conversation going. Be encouraging, never critical. No markdown formatting, no long explanations, no lists, no corrections unless asked. Keep replies under 50 words."
+    "You are TinyBu, a warm and gentle language learning companion. Reply in 1-3 very short sentences. First acknowledge what the user said, then give one natural expression or ask one simple follow-up question to keep the conversation going. Be encouraging, never critical. No markdown formatting, no long explanations, no lists, no corrections unless asked. Keep replies under 50 words.",
+  practiceChatReview:
+    "Create a light post-practice chat review. Summarize what the learner practiced, suggest only useful natural expression improvements from the user's actual messages, save 3-8 words or chunks, and give one next step. For each better expression, include original, improved, and note; use an empty string when original or note does not apply. Return only valid JSON."
 };
 
 const quickPetChatPrompt =
@@ -119,22 +105,6 @@ function readBody(req) {
 
 function commonStringArray() {
   return { type: "array", items: { type: "string" } };
-}
-
-function expressionCardSchema() {
-  return {
-    type: "object",
-    additionalProperties: false,
-    required: ["original", "meaning", "keywords", "pattern", "scene", "practiceStem"],
-    properties: {
-      original: { type: "string" },
-      meaning: { type: "string" },
-      keywords: commonStringArray(),
-      pattern: { type: "string" },
-      scene: { type: "string" },
-      practiceStem: { type: "string" }
-    }
-  };
 }
 
 function schemaFor(task) {
@@ -205,47 +175,6 @@ function schemaFor(task) {
         }
       }
     },
-    expressionCard: {
-      name: "expression_card",
-      schema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["meaning", "keywords", "pattern", "scene", "practiceStem"],
-        properties: {
-          meaning: { type: "string" },
-          keywords: commonStringArray(),
-          pattern: { type: "string" },
-          scene: { type: "string" },
-          practiceStem: { type: "string" }
-        }
-      }
-    },
-    talkTurn: {
-      name: "talk_turn",
-      schema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["reply", "nextQuestion", "shouldSuggestRescue", "readyToEnd"],
-        properties: {
-          reply: { type: "string" },
-          nextQuestion: { type: "string" },
-          shouldSuggestRescue: { type: "boolean" },
-          readyToEnd: { type: "boolean" }
-        }
-      }
-    },
-    rescue: {
-      name: "rescue",
-      schema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["lines"],
-        properties: {
-          lines: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 3 }
-        }
-      }
-    },
-    talkReview: reviewSchema("talk_review"),
     recommendFragments: {
       name: "fragment_recommendation",
       schema: {
@@ -258,15 +187,41 @@ function schemaFor(task) {
       }
     },
     practiceQuestions: {
-      name: "practice_questions",
+      name: "practice_plan",
       schema: {
         type: "object",
         additionalProperties: false,
-        required: ["questions"],
+        required: ["practiceGoal", "whatToCover", "languageBank", "questions"],
         properties: {
+          practiceGoal: { type: "string" },
+          whatToCover: {
+            type: "array",
+            minItems: 2,
+            maxItems: 3,
+            items: { type: "string" }
+          },
+          languageBank: {
+            type: "object",
+            additionalProperties: false,
+            required: ["usefulWords", "usefulChunks"],
+            properties: {
+              usefulWords: {
+                type: "array",
+                minItems: 5,
+                maxItems: 8,
+                items: { type: "string" }
+              },
+              usefulChunks: {
+                type: "array",
+                minItems: 3,
+                maxItems: 5,
+                items: { type: "string" }
+              }
+            }
+          },
           questions: {
             type: "array",
-            minItems: 1,
+            minItems: 3,
             maxItems: 5,
             items: {
               type: "object",
@@ -284,31 +239,6 @@ function schemaFor(task) {
         }
       }
     },
-    practiceTip: {
-      name: "practice_tip",
-      schema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["outline", "example"],
-        properties: {
-          outline: { type: "string" },
-          example: { type: "string" }
-        }
-      }
-    },
-    practiceTurn: {
-      name: "practice_turn",
-      schema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["encouragement", "response"],
-        properties: {
-          encouragement: { type: "string" },
-          response: { type: "string" }
-        }
-      }
-    },
-    review: reviewSchema("practice_review"),
     practiceChat: {
       name: "practice_chat",
       schema: {
@@ -320,67 +250,35 @@ function schemaFor(task) {
         }
       }
     },
-    memory: {
-      name: "memory_update",
+    practiceChatReview: {
+      name: "practice_chat_review",
       schema: {
         type: "object",
         additionalProperties: false,
-        required: ["memories"],
+        required: ["diarySummary", "betterExpressions", "savedWordsOrChunks", "nextStep"],
         properties: {
-          memories: {
+          diarySummary: { type: "string" },
+          betterExpressions: {
             type: "array",
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["id", "type", "title", "body", "editable", "updatedAt"],
+              required: ["original", "improved", "note"],
               properties: {
-                id: { type: "string" },
-                type: { type: "string", enum: ["interest", "expression", "support", "anxiety", "next"] },
-                title: { type: "string" },
-                body: { type: "string" },
-                editable: { type: "boolean" },
-                updatedAt: { type: "string" }
+                original: { type: "string" },
+                improved: { type: "string" },
+                note: { type: "string" }
               }
             }
-          }
+          },
+          savedWordsOrChunks: { type: "array", minItems: 3, maxItems: 8, items: { type: "string" } },
+          nextStep: { type: "string" }
         }
       }
     }
   };
 
   return schemas[task];
-}
-
-function reviewSchema(name) {
-  return {
-    name,
-    schema: {
-      type: "object",
-      additionalProperties: false,
-      required: ["talkedAbout", "didWell", "naturalExpressions", "savedExpressions", "nextPractice"],
-      properties: {
-        talkedAbout: { type: "string" },
-        didWell: commonStringArray(),
-        naturalExpressions: {
-          type: "array",
-          items: {
-            type: "object",
-            additionalProperties: false,
-            required: ["original", "improved"],
-            properties: {
-              original: { type: "string" },
-              improved: { type: "string" }
-            }
-          }
-        },
-        savedExpressions: {
-          type: "array",
-          items: expressionCardSchema()
-        },
-        nextPractice: { type: "string" }
-      }
-    }
-  };
 }
 
 function anthropicEndpoint() {
