@@ -255,3 +255,49 @@ test("practice chat completion marks the topic and source captures practiced", a
   assert.equal(result.nextTopic.updatedAt, practicedAt);
   assert.deepEqual(result.updatedCaptures.map((capture) => capture.status), ["practiced", "practiced"]);
 });
+
+test("today practice tasks always provide a lightweight starting point", async () => {
+  const { buildTodayPracticeTasks } = await loadTsModule("src/features/practice/practiceTasks.ts");
+  const profile = { interfaceLanguage: "中文", targetLanguage: "English" };
+
+  const tasks = buildTodayPracticeTasks({ captures: [], memories: [], profile, limit: 3 });
+
+  assert.equal(tasks.length, 3);
+  assert.deepEqual(tasks.map((task) => task.taskType), ["tinybu-material", "scenario", "find-material"]);
+  assert.ok(tasks.every((task) => task.title && task.description && task.targetGoal && task.starterQuestion));
+});
+
+test("capture-based practice tasks only use suitable saved content", async () => {
+  const { buildTodayPracticeTasks, isCapturePracticeReady, practiceTaskToFragments } = await loadTsModule("src/features/practice/practiceTasks.ts");
+  const profile = { interfaceLanguage: "English", targetLanguage: "English" };
+  const shortCapture = {
+    id: "short",
+    title: "Short",
+    status: "suggested",
+    capturedAt: "2026-05-20T01:00:00.000Z",
+    fragments: [{ text: "Too short" }]
+  };
+  const usefulCapture = {
+    id: "useful",
+    title: "Useful",
+    topic: "AI learning",
+    summary: "A short idea about learning with AI.",
+    status: "suggested",
+    capturedAt: "2026-05-20T02:00:00.000Z",
+    fragments: [
+      {
+        text: "AI learning tools are useful when they help people express their own ideas, not only translate sentences.",
+        selected: true,
+        recommended: true
+      }
+    ]
+  };
+
+  assert.equal(isCapturePracticeReady(shortCapture), false);
+  assert.equal(isCapturePracticeReady(usefulCapture), true);
+
+  const tasks = buildTodayPracticeTasks({ captures: [shortCapture, usefulCapture], memories: [], profile, limit: 3 });
+  assert.equal(tasks[0].taskType, "capture-based");
+  assert.equal(tasks[0].sourceCaptureId, "useful");
+  assert.equal(practiceTaskToFragments(tasks[0])[0].selected, true);
+});

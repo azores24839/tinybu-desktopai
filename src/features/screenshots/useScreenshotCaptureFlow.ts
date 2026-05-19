@@ -105,7 +105,7 @@ export function useScreenshotCaptureFlow({
         companionReady: true,
         activeCaptureId: capture.id
       });
-      navigate("inbox");
+      navigate("home");
     } catch (error) {
       const diagnosticCapture = createScreenshotDiagnosticCapture(
         payload,

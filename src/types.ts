@@ -38,6 +38,8 @@ export type AiProviderMode = "rules" | "user-key" | "cloud-proxy";
 export type ExternalCaptureKind = "selection" | "article" | "youtube" | "video" | "screenshot" | "manual";
 export type PracticeQuestionType = "understanding" | "opinion" | "personal" | "expression";
 export type CaptureStatus = "unsorted" | "suggested" | "needs_review" | "in-topic" | "studied" | "practiced" | "archived";
+export type PracticeTaskType = "find-material" | "tinybu-material" | "scenario" | "memory-review" | "capture-based";
+export type PracticeTaskStatus = "new" | "used" | "saved";
 
 export type ReviewIssueType =
   | "ocr_off"
@@ -172,6 +174,21 @@ export interface TopicItem {
   lastPracticedAt?: string;
 }
 
+export interface PracticeTask {
+  id: string;
+  title: string;
+  description: string;
+  taskType: PracticeTaskType;
+  sourceText?: string;
+  sourceCaptureId?: string;
+  sourceTopicId?: string;
+  targetGoal: string;
+  starterQuestion: string;
+  status: PracticeTaskStatus;
+  createdAt: string;
+  usedAt?: string;
+}
+
 export interface ScreenshotCaptureRecord {
   imageDataUrl?: string;
   width: number;
@@ -300,7 +317,8 @@ export interface ChatMessage {
 
 export interface PracticeChatReview {
   id: string;
-  topicId: string;
+  topicId?: string;
+  taskId?: string;
   createdAt: string;
   diarySummary: string;
   completedFocusItemIds: string[];

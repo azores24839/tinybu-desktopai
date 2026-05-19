@@ -1346,6 +1346,211 @@ a {
   height: 12px;
 }
 
+.home-page .task-home-layout {
+  grid-template-rows: minmax(220px, 0.85fr) minmax(280px, 1.1fr) auto;
+  gap: clamp(22px, 3vh, 34px);
+  background: #fffdf8;
+}
+
+.task-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.34fr);
+  align-items: center;
+  min-height: 0;
+  border-radius: 28px;
+  background: #fff1c7;
+  padding: clamp(28px, 4vh, 44px);
+  overflow: hidden;
+}
+
+.task-hero-copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 14px;
+  max-width: 760px;
+}
+
+.task-eyebrow {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(150, 125, 99, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.58);
+  color: #806246;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.task-hero h1 {
+  max-width: 700px;
+  color: #2f210e;
+  font-size: clamp(34px, 4.2vw, 58px);
+  font-weight: 900;
+  line-height: 1.02;
+}
+
+.task-hero p {
+  max-width: 650px;
+  color: #7d654d;
+  font-size: 16px;
+}
+
+.task-hero-asset {
+  position: relative;
+  z-index: 1;
+  align-self: end;
+  height: min(240px, 100%);
+}
+
+.task-hero-asset img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.today-task-panel {
+  display: grid;
+  gap: 16px;
+  min-height: 0;
+}
+
+.today-task-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.today-task-heading h2 {
+  color: #0f0f0f;
+  font-size: 18px;
+}
+
+.today-task-heading p {
+  color: #8a7764;
+}
+
+.today-task-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  min-height: 0;
+}
+
+.today-task-card {
+  display: grid;
+  min-height: 250px;
+  align-content: start;
+  gap: 14px;
+  border: 1px solid rgba(150, 125, 99, 0.16);
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 22px;
+  color: #4c3420;
+  text-align: left;
+  box-shadow: 0 10px 24px rgba(91, 64, 37, 0.08);
+}
+
+.today-task-card:hover,
+.task-secondary-card:hover {
+  transform: translateY(-2px);
+}
+
+.task-source-label,
+.task-goal {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  background: #fff3da;
+  color: #8c6a45;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.today-task-card strong {
+  color: #2b1f13;
+  font-size: 22px;
+  line-height: 1.14;
+}
+
+.today-task-card p {
+  display: -webkit-box;
+  min-height: 66px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: #786653;
+}
+
+.today-task-card i {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  color: #8a5b2f;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.today-task-card.capture-based {
+  background: #fffaf0;
+}
+
+.today-task-card.memory-review {
+  background: #eef8ff;
+}
+
+.today-task-card.scenario {
+  background: #f8f5ff;
+}
+
+.task-secondary-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.task-secondary-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 72px;
+  border: 1px solid rgba(150, 125, 99, 0.16);
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 16px 18px;
+  color: #7b6047;
+  text-align: left;
+}
+
+.task-secondary-card span {
+  display: grid;
+  gap: 4px;
+}
+
+.task-secondary-card strong {
+  color: #3d2a18;
+  font-size: 15px;
+}
+
+.task-secondary-card em {
+  max-width: 100%;
+  overflow: hidden;
+  color: #8d7a68;
+  font-size: 13px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .topic-card,
 .topic-list-card,
 .expression-row,
@@ -5559,4 +5764,25 @@ button.danger {
 
 button.danger:hover {
   opacity: 0.9;
+}
+
+@media (max-width: 1120px) {
+  .home-page .task-home-layout {
+    grid-template-rows: auto auto auto;
+    overflow: auto;
+  }
+
+  .task-hero,
+  .today-task-grid,
+  .task-secondary-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .task-hero-asset {
+    display: none;
+  }
+
+  .today-task-card {
+    min-height: 190px;
+  }
 }

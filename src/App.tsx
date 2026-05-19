@@ -50,6 +50,7 @@ import type {
   ExternalCaptureKind,
   ExternalCapturePayload,
   MemoryItem,
+  PracticeTask,
   CompanionState,
   Screen,
   ScreenshotCapturePayload,
@@ -134,10 +135,12 @@ export default function App() {
 
   const {
     practicePlan,
+    activePracticeSource,
     practiceChatFirstQuestion,
     practiceChatReview,
     topicPracticeChatReviews,
     startPracticeForTopic,
+    startPracticeForTask,
     handlePreparingReady,
     handlePracticeChatReply,
     finishPracticeChatWithReview,
@@ -149,6 +152,7 @@ export default function App() {
     captures,
     setCaptures,
     setTopics,
+    setMemories,
     activeTopic,
     appState: appStateRef.current,
     persistState,
@@ -290,7 +294,7 @@ export default function App() {
         pastedSourceUrl: capture.sourceUrl,
         pastedSourceKind: capture.sourceKind
       });
-      navigate("inbox");
+      navigate("home");
     }
 
     window.addEventListener("message", handleExtensionCapture);
@@ -337,7 +341,7 @@ export default function App() {
           companionReady: true,
           activeCaptureId: importedCaptures[0].id
         });
-        navigate("inbox");
+        navigate("home");
       }
     } finally {
       setBusyLabel("");
@@ -384,7 +388,7 @@ export default function App() {
     setHomePasteDraft("");
     setBusyLabel("");
     setCompanionState("idle");
-    navigate("inbox");
+    navigate("home");
   }
 
   async function startDemo() {
@@ -404,7 +408,7 @@ export default function App() {
       companionReady: true,
       activeCaptureId: capture.id
     });
-    navigate("inbox");
+    navigate("home");
   }
 
   async function submitOnboarding(profile: UserProfile) {
@@ -527,10 +531,10 @@ export default function App() {
         </div>
       )}
 
-      {screen === "practice-chat" && activeTopic && practiceChatFirstQuestion ? (
+      {screen === "practice-chat" && activePracticeSource && practiceChatFirstQuestion ? (
         <PracticeChatPage
-          topic={activeTopic}
-          captures={topicCaptures(activeTopic, captures)}
+          practiceSource={activePracticeSource}
+          captures={activePracticeSource.captures}
           practicePlan={practicePlan}
           opening={copy.practiceChat.opening}
           firstQuestion={practiceChatFirstQuestion}
@@ -587,6 +591,9 @@ export default function App() {
                 openTopic={openTopic}
                 upgrade={() => navigate("settings")}
                 tryDemo={startDemo}
+                startTask={(task: PracticeTask) => {
+                  void startPracticeForTask(task);
+                }}
               />
             )}
             {screen === "inbox" && (
@@ -656,15 +663,15 @@ export default function App() {
                 onReady={handlePreparingReady}
               />
             )}
-            {screen === "practice-review" && activeTopic && practiceChatReview && (
+            {screen === "practice-review" && activePracticeSource && practiceChatReview && (
               <PracticeReviewPage
-                topic={activeTopic}
+                sourceTitle={activePracticeSource.title}
                 review={practiceChatReview}
                 onDone={async (review) => {
                   await saveReviewAndGoToTopic(review);
                 }}
                 onPracticeAgain={async (review) => {
-                  await saveReviewAndPracticeAgain(review, activeTopic);
+                  await saveReviewAndPracticeAgain(review, activePracticeSource.kind === "topic" ? activePracticeSource.topic : undefined);
                 }}
                 interfaceLanguage={appState.profile.interfaceLanguage}
               />

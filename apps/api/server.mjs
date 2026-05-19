@@ -43,7 +43,7 @@ const taskPrompts = {
   recommendFragments:
     "Select 3-6 fragments that are most useful for low-pressure speaking practice. Prefer clear opinions, reusable patterns, and lines learners can connect to their own life.",
   practiceQuestions:
-    "Create a concise practice plan from selected fragments for a topic-based speaking chat. Return a practice goal, 2-3 focus items, a small language bank, and 3-5 gentle opening/follow-up questions.",
+    "Create a concise practice plan for a low-pressure speaking chat. The input may come from a Topic or a small Practice Task. Return a practice goal, 2-3 focus items, a small language bank, and 3-5 gentle opening/follow-up questions. Do not make a sentence pattern itself the topic; use patterns only as support.",
   practiceChat:
     "You are TinyBu, a warm and gentle language learning companion. Reply in 1-3 very short sentences. First acknowledge what the user said, then give one natural expression or ask one simple follow-up question to keep the conversation going. Be encouraging, never critical. No markdown formatting, no long explanations, no lists, no corrections unless asked. Keep replies under 50 words.",
   practiceChatReview:
@@ -651,6 +651,7 @@ const server = http.createServer(async (req, res) => {
           const messages = [
             { role: "user", content: JSON.stringify({
               topicName: payload?.topicName,
+              practiceGoal: payload?.practiceGoal,
               userAnswer: payload?.userAnswer,
               chatHistory: (payload?.chatHistory || []).slice(-6)
             }) }
@@ -692,7 +693,7 @@ const server = http.createServer(async (req, res) => {
           const normalizedModel = normalizeOpenRouterModel(model);
           const messages = [
             { role: "system", content: taskPrompts.practiceChat },
-            { role: "system", content: `Current topic: ${payload?.topicName || ""}` },
+            { role: "system", content: `Current practice source: ${payload?.topicName || ""}\nGoal: ${payload?.practiceGoal || "low-pressure speaking practice"}` },
             ...(payload?.chatHistory || []).slice(-6).map((msg) => ({
               role: msg.role === "bu" ? "assistant" : "user",
               content: msg.text
@@ -735,7 +736,7 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
-        const input = `Topic: ${payload?.topicName || ""}\nUser: ${payload?.userAnswer || ""}`;
+        const input = `Practice source: ${payload?.topicName || ""}\nGoal: ${payload?.practiceGoal || "low-pressure speaking practice"}\nUser: ${payload?.userAnswer || ""}`;
         logReq("practiceChat → openai", input);
         const response = await fetchWithTimeout("https://api.openai.com/v1/responses", {
           method: "POST",

@@ -1,0 +1,156 @@
+import type { CaptureFragment, CaptureItem, MemoryItem, PracticeTask, UserProfile } from "../../types";
+
+const MIN_PRACTICE_TEXT_LENGTH = 40;
+const uid = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const nowIso = () => new Date().toISOString();
+
+function compactText(text: string, max = 360) {
+  return text.replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+function capturePracticeText(capture: CaptureItem) {
+  return (
+    capture.extractedText ||
+    capture.sourceText ||
+    capture.fragments.map((fragment) => fragment.text).join(" ") ||
+    capture.summary ||
+    ""
+  );
+}
+
+function taskLabelSeed(language: UserProfile["interfaceLanguage"]) {
+  const zh = language === "中文";
+  return {
+    captureTitle: zh ? "聊聊你刚刚看到的内容" : "Talk about what you just saw",
+    captureDescription: zh ? "TinyBu 会帮你先抓住重点，再把你的看法说出来。" : "TinyBu will help you catch the point and say your view.",
+    captureGoal: zh ? "表达一个观点，并给出一个理由" : "Share an opinion and one reason",
+    captureQuestion: zh ? "这段内容里，哪一点最让你想回应？" : "What part of this makes you want to respond?",
+    memoryTitle: zh ? "换个场景再说一次" : "Try it again in a new scene",
+    memoryDescription: zh ? "把上次没说顺的表达，放进一个新情境里轻轻复现。" : "Reuse a recent expression in a new, low-pressure context.",
+    memoryGoal: zh ? "复现一个最近学过的表达" : "Reuse one expression from a recent practice",
+    tinybuTitle: zh ? "TinyBu 给你挑的小材料" : "A small pick from TinyBu",
+    tinybuDescription: zh ? "不是教材题，先读一个小观点，再说说你怎么看。" : "Read one small idea, then say what you think.",
+    tinybuGoal: zh ? "表达同意、不同意或保留意见" : "Express agreement, disagreement, or hesitation",
+    tinybuQuestion: zh ? "你同意这个观点吗？为什么？" : "Do you agree with this idea? Why?",
+    scenarioTitle: zh ? "今天的情境练习" : "Today's small scenario",
+    scenarioDescription: zh ? "练一个真实会遇到的表达场景，不追求完美。" : "Practice a real-life moment without aiming for perfect.",
+    scenarioGoal: zh ? "描述状态，并解释原因" : "Describe a situation and explain why",
+    scenarioQuestion: zh ? "如果你今天状态有点累，但还想继续，你会怎么说？" : "How would you say you feel tired but still want to keep going?",
+    findTitle: zh ? "去找一个可以聊的小素材" : "Find one small thing to talk about",
+    findDescription: zh ? "截图或复制一个你想吐槽、好奇、想解释给别人的内容。" : "Capture something you want to react to, question, or explain.",
+    findGoal: zh ? "发现一个真实语境里的表达机会" : "Notice one expression opportunity from real context",
+    findQuestion: zh ? "找到后，把它丢给 TinyBu，我们再开始聊。" : "Capture it first, then TinyBu will turn it into a practice."
+  };
+}
+
+export function isCapturePracticeReady(capture: CaptureItem) {
+  if (capture.status === "archived" || capture.status === "needs_review") return false;
+  return compactText(capturePracticeText(capture)).length >= MIN_PRACTICE_TEXT_LENGTH;
+}
+
+export function buildPracticeTaskFromCapture(capture: CaptureItem, profile: UserProfile): PracticeTask | null {
+  if (!isCapturePracticeReady(capture)) return null;
+  const copy = taskLabelSeed(profile.interfaceLanguage);
+  const text = compactText(capturePracticeText(capture));
+  return {
+    id: `task-capture-${capture.id}`,
+    title: capture.topic || capture.title || copy.captureTitle,
+    description: capture.summary || copy.captureDescription,
+    taskType: "capture-based",
+    sourceText: text,
+    sourceCaptureId: capture.id,
+    targetGoal: copy.captureGoal,
+    starterQuestion: capture.questions?.[0] || copy.captureQuestion,
+    status: "new",
+    createdAt: capture.capturedAt
+  };
+}
+
+export function buildTodayPracticeTasks(args: {
+  captures: CaptureItem[];
+  memories: MemoryItem[];
+  profile: UserProfile;
+  limit?: number;
+}): PracticeTask[] {
+  const copy = taskLabelSeed(args.profile.interfaceLanguage);
+  const createdAt = nowIso();
+  const tasks: PracticeTask[] = [];
+  const recentCapture = [...args.captures]
+    .sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime())
+    .find(isCapturePracticeReady);
+  const captureTask = recentCapture ? buildPracticeTaskFromCapture(recentCapture, args.profile) : null;
+  if (captureTask) tasks.push(captureTask);
+
+  const memory = [...args.memories]
+    .filter((item) => item.type === "next" || item.type === "expression" || item.type === "support")
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+  if (memory) {
+    tasks.push({
+      id: `task-memory-${memory.id}`,
+      title: memory.title || copy.memoryTitle,
+      description: memory.body || copy.memoryDescription,
+      taskType: "memory-review",
+      targetGoal: copy.memoryGoal,
+      starterQuestion: args.profile.interfaceLanguage === "中文" ? "这次换一个自己的例子，你想怎么说？" : "Can you try it again with a new example from your life?",
+      status: "new",
+      createdAt: memory.updatedAt
+    });
+  }
+
+  tasks.push({
+    id: "task-tinybu-material-default",
+    title: copy.tinybuTitle,
+    description:
+      args.profile.interfaceLanguage === "中文"
+        ? "有人说：真正的进步不是做更多，而是把一个想法说清楚。"
+        : "Some people say real progress is not doing more, but saying one idea clearly.",
+    taskType: "tinybu-material",
+    sourceText: "Real progress is not always about doing more. Sometimes it means choosing one idea and saying it clearly in your own words.",
+    targetGoal: copy.tinybuGoal,
+    starterQuestion: copy.tinybuQuestion,
+    status: "new",
+    createdAt
+  });
+
+  tasks.push({
+    id: "task-scenario-default",
+    title: copy.scenarioTitle,
+    description: copy.scenarioDescription,
+    taskType: "scenario",
+    targetGoal: copy.scenarioGoal,
+    starterQuestion: copy.scenarioQuestion,
+    status: "new",
+    createdAt
+  });
+
+  tasks.push({
+    id: "task-find-material-default",
+    title: copy.findTitle,
+    description: copy.findDescription,
+    taskType: "find-material",
+    targetGoal: copy.findGoal,
+    starterQuestion: copy.findQuestion,
+    status: "new",
+    createdAt
+  });
+
+  const seen = new Set<string>();
+  return tasks.filter((task) => {
+    if (seen.has(task.id)) return false;
+    seen.add(task.id);
+    return true;
+  }).slice(0, args.limit ?? 3);
+}
+
+export function practiceTaskToFragments(task: PracticeTask): CaptureFragment[] {
+  const text = compactText([task.sourceText, task.description, task.starterQuestion].filter(Boolean).join(" "));
+  return [
+    {
+      id: `${task.id}-fragment`,
+      text,
+      selected: true,
+      recommended: true,
+      sourceIndex: 0
+    }
+  ];
+}

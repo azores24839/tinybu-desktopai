@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Lightbulb, Send } from "lucide-react";
 import { uiCopy } from "../../lib/uiCopy";
 import { uid, nowIso } from "../../lib/defaults";
-import type { ChatMessage, TopicItem, UserProfile, CaptureItem, PracticePlan } from "../../types";
+import type { ChatMessage, UserProfile, CaptureItem, PracticePlan } from "../../types";
+import type { PracticeSource } from "./usePracticeChat";
 import { useCallBu } from "./useCallBu";
 import { CallBu } from "./CallBu";
 
@@ -26,7 +27,7 @@ const MIN_WIDTHS = [280, 420, 240] as const;
 const INITIAL_SIZES = [36, 44, 20] as const;
 
 export function PracticeChatPage({
-  topic,
+  practiceSource,
   captures,
   practicePlan,
   opening,
@@ -38,7 +39,7 @@ export function PracticeChatPage({
   targetLanguage,
   nativeLanguage
 }: {
-  topic: TopicItem;
+  practiceSource: PracticeSource;
   captures: CaptureItem[];
   practicePlan: PracticePlan | null;
   opening: string;
@@ -51,7 +52,7 @@ export function PracticeChatPage({
   nativeLanguage: string;
 }) {
   const copy = uiCopy[interfaceLanguage].practiceChat as Record<string, string>;
-  const { state: callState, error: callError, userText: callUserText, buText: callBuText, startCall, endCall } = useCallBu({ title: topic.name, summary: topic.summary }, targetLanguage, nativeLanguage);
+  const { state: callState, error: callError, userText: callUserText, buText: callBuText, startCall, endCall } = useCallBu({ title: practiceSource.title, summary: practiceSource.summary }, targetLanguage, nativeLanguage);
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     { id: uid("msg"), role: "bu", text: opening, createdAt: nowIso() },
     { id: uid("msg"), role: "bu", text: firstQuestion, createdAt: nowIso() }
@@ -203,7 +204,7 @@ export function PracticeChatPage({
           <ArrowLeft size={16} />
           Back
         </button>
-        <h2>{topic.name}</h2>
+        <h2>{practiceSource.title}</h2>
         <button className="primary" onClick={() => onEndWithReview(messages, whatToCover)}>
           {copy.endPractice}
         </button>
@@ -262,7 +263,7 @@ export function PracticeChatPage({
               <section className="card-inner-section">
                 <h3 className="card-section-label">Original Source</h3>
                 {captures.length === 0 && (
-                  <p className="card-empty">No source content for this topic.</p>
+                  <p className="card-empty">{practiceSource.summary || "No source content for this practice."}</p>
                 )}
                 {captures.map((capture) => {
                   const text = combineFragmentText(capture.fragments);
@@ -326,7 +327,7 @@ export function PracticeChatPage({
             <div className="card-scroll">
               <section className="card-inner-section">
                 <h3 className="card-section-label">Practice Goal</h3>
-                <p className="goal-text-main">{practicePlan?.practiceGoal ?? topic.practiceGoal}</p>
+                <p className="goal-text-main">{practicePlan?.practiceGoal ?? practiceSource.practiceGoal}</p>
               </section>
 
               <div className="card-section-divider" />

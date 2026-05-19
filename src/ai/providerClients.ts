@@ -190,7 +190,7 @@ export async function callQuickPetChatCloudProxy(
 }
 
 export async function callPracticeChatOpenAi(
-  payload: { userAnswer: string; topicName: string; chatHistory: Array<{ role: string; text: string }> },
+  payload: { userAnswer: string; topicName: string; practiceGoal?: string; chatHistory: Array<{ role: string; text: string }> },
   appState: AppStateRecord,
   apiKey: string
 ): Promise<string> {
@@ -198,7 +198,7 @@ export async function callPracticeChatOpenAi(
     .slice(-6)
     .map((msg) => `${msg.role === "bu" ? "TinyBu" : "User"}: ${msg.text}`)
     .join("\n");
-  const input = `Topic: ${payload.topicName}\n\nChat history:\n${historyText}\n\nUser: ${payload.userAnswer}\n\nTinyBu:`;
+  const input = `Practice source: ${payload.topicName}\nGoal: ${payload.practiceGoal ?? "low-pressure speaking practice"}\n\nChat history:\n${historyText}\n\nUser: ${payload.userAnswer}\n\nTinyBu:`;
 
   const response = await fetchWithTimeout(
     "https://api.openai.com/v1/responses",
@@ -222,14 +222,14 @@ export async function callPracticeChatOpenAi(
 }
 
 export async function callPracticeChatOpenRouter(
-  payload: { userAnswer: string; topicName: string; chatHistory: Array<{ role: string; text: string }> },
+  payload: { userAnswer: string; topicName: string; practiceGoal?: string; chatHistory: Array<{ role: string; text: string }> },
   appState: AppStateRecord,
   apiKey: string
 ): Promise<string> {
   const baseUrl = (appState.settings.openRouterBaseUrl || "https://openrouter.ai/api/v1").replace(/\/+$/, "");
   const messages: Array<{ role: string; content: string }> = [
     { role: "system", content: taskPrompts.practiceChat },
-    { role: "system", content: `Current topic: ${payload.topicName}` },
+    { role: "system", content: `Current practice source: ${payload.topicName}\nGoal: ${payload.practiceGoal ?? "low-pressure speaking practice"}` },
     ...payload.chatHistory.slice(-6).map((msg) => ({
       role: msg.role === "bu" ? "assistant" : "user",
       content: msg.text
@@ -261,7 +261,7 @@ export async function callPracticeChatOpenRouter(
 }
 
 export async function callPracticeChatCloudProxy(
-  payload: { userAnswer: string; topicName: string; chatHistory: Array<{ role: string; text: string }> },
+  payload: { userAnswer: string; topicName: string; practiceGoal?: string; chatHistory: Array<{ role: string; text: string }> },
   appState: AppStateRecord
 ): Promise<string> {
   const response = await fetchWithTimeout(
@@ -275,6 +275,7 @@ export async function callPracticeChatCloudProxy(
         payload: {
           userAnswer: payload.userAnswer,
           topicName: payload.topicName,
+          practiceGoal: payload.practiceGoal,
           chatHistory: payload.chatHistory.slice(-6)
         }
       })

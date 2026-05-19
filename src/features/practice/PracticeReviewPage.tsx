@@ -1,15 +1,15 @@
 import { CheckCircle2, Circle } from "lucide-react";
 import { formatDate } from "../../lib/date";
-import type { PracticeChatReview, TopicItem } from "../../types";
+import type { PracticeChatReview } from "../../types";
 
 export function PracticeReviewPage({
-  topic,
+  sourceTitle,
   review,
   onDone,
   onPracticeAgain,
   interfaceLanguage
 }: {
-  topic: TopicItem;
+  sourceTitle: string;
   review: PracticeChatReview;
   onDone: (review: PracticeChatReview) => void;
   onPracticeAgain: (review: PracticeChatReview) => void;
@@ -21,7 +21,7 @@ export function PracticeReviewPage({
     <section className="page practice-chat-review-page">
       <header className="practice-chat-review-header">
         <h2>{copy.title}</h2>
-        <p className="review-topic-name">{topic.name}</p>
+        <p className="review-topic-name">{sourceTitle}</p>
         <p className="review-date">{formatDate(review.createdAt)}</p>
       </header>
 
@@ -97,11 +97,11 @@ export function PracticeReviewPage({
 
 const zh = {
   title: "练习复盘",
-  diaryTitle: "Practice Diary",
-  focusTitle: "Focus Covered",
-  expressionsTitle: "Better Expressions",
-  wordsTitle: "Words & Chunks to Keep",
-  nextTitle: "Next Step",
+  diaryTitle: "今天表达了",
+  focusTitle: "完成的小目标",
+  expressionsTitle: "更自然的一句话",
+  wordsTitle: "下次还能用",
+  nextTitle: "TinyBu 记住了",
   originalLabel: "你的表达",
   improvedLabel: "更自然的说法",
   done: "完成",
@@ -110,11 +110,11 @@ const zh = {
 
 const en = {
   title: "Practice Review",
-  diaryTitle: "Practice Diary",
-  focusTitle: "Focus Covered",
-  expressionsTitle: "Better Expressions",
-  wordsTitle: "Words & Chunks to Keep",
-  nextTitle: "Next Step",
+  diaryTitle: "What you expressed",
+  focusTitle: "Small goals covered",
+  expressionsTitle: "A more natural way",
+  wordsTitle: "Reusable language",
+  nextTitle: "What TinyBu remembers",
   originalLabel: "Your expression",
   improvedLabel: "More natural",
   done: "Done",

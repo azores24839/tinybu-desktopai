@@ -1,7 +1,14 @@
-import { ArrowUpRight } from "lucide-react";
-import { uiCopy } from "../../lib/uiCopy";
-import { suggestedGroups } from "../captures/captureUtils";
-import type { AppStateRecord, CaptureItem, MemoryItem, Screen, TopicItem } from "../../types";
+import { ArrowUpRight, BookOpen, Inbox, Sparkles } from "lucide-react";
+import type { AppStateRecord, CaptureItem, MemoryItem, PracticeTask, Screen, TopicItem } from "../../types";
+import { buildTodayPracticeTasks } from "../practice/practiceTasks";
+
+function taskLabel(task: PracticeTask, isChinese: boolean) {
+  if (task.taskType === "capture-based") return isChinese ? "最近看到的内容" : "From your screen";
+  if (task.taskType === "memory-review") return isChinese ? "上次表达回访" : "From your memory";
+  if (task.taskType === "scenario") return isChinese ? "情境练习" : "Scenario";
+  if (task.taskType === "find-material") return isChinese ? "找一个素材" : "Find material";
+  return isChinese ? "TinyBu 选的" : "TinyBu pick";
+}
 
 export function HomePage({
   appState,
@@ -10,7 +17,7 @@ export function HomePage({
   memories,
   openInbox,
   openTopic,
-  tryDemo
+  startTask
 }: {
   appState: AppStateRecord;
   captures: CaptureItem[];
@@ -20,198 +27,72 @@ export function HomePage({
   openTopic: (topic: TopicItem, next?: Screen) => void;
   upgrade: () => void;
   tryDemo: () => void;
+  startTask: (task: PracticeTask) => void;
 }) {
-  const copy = uiCopy[appState.profile.interfaceLanguage].home;
   const isChinese = appState.profile.interfaceLanguage === "中文";
-  const suggested = suggestedGroups(captures);
-  const waitingCaptures = captures.filter((capture) => capture.status !== "archived" && !capture.topicId);
-  const readyTopics = topics.filter((topic) => topic.status === "ready");
-  const practiceTopics = topics.filter((topic) => topic.status === "in-progress");
-  const latestMemory = [...memories].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
-  const suggestedTopic = suggested[0];
-
-  const suggestion = (() => {
-    if (latestMemory) {
-      return {
-        actionLabel: copy.startPractice,
-        action: () => {
-          const topic = practiceTopics[0] ?? readyTopics[0] ?? topics[0];
-          if (topic) openTopic(topic, topic.status === "ready" ? "study-room" : "topic-detail");
-          else tryDemo();
-        }
-      };
-    }
-    if (suggestedTopic) {
-      return {
-        actionLabel: copy.organizeNow,
-        action: openInbox
-      };
-    }
-    return {
-      actionLabel: copy.tryFeatured,
-      action: tryDemo
-    };
-  })();
-
-  const headlineTopic =
-    readyTopics[0]?.name ??
-    practiceTopics[0]?.name ??
-    suggestedTopic?.name ??
-    (isChinese ? "游戏UI设计工作日常" : "Game UI Design Workday");
-
-  const featuredEmoji = ["🎮", "📝", "💡", "🚀", "🧩"];
-  const featuredTags = isChinese
-    ? ["Discovery", "Refinement", "Conceptualization", "Delivery", "Refinement"]
-    : ["Discovery", "Refinement", "Conceptualization", "Delivery", "Refinement"];
-  const featuredCards = [
-    ...topics.map((topic) => ({
-      tag: topic.tags[0] ?? featuredTags[0],
-      title: topic.name,
-      likes: Math.max(24, topic.captureIds.length * 32 || 128),
-      action: () => openTopic(topic, topic.status === "ready" ? "study-room" : "topic-detail")
-    })),
-    ...suggested.slice(0, 5).map((topic, index) => ({
-      tag: featuredTags[index % featuredTags.length],
-      title: topic.name,
-      likes: 128,
-      action: openInbox
-    }))
-  ].slice(0, 5);
-
-  while (featuredCards.length < 5) {
-    const index = featuredCards.length;
-    featuredCards.push({
-      tag: featuredTags[index % featuredTags.length],
-      title:
-        index === 0
-          ? headlineTopic
-          : isChinese
-            ? "计算机能模拟人脑吗？"
-            : "Can computers simulate the brain?",
-      likes: index === 0 ? 123 : 128,
-      action: tryDemo
-    });
-  }
-
-  const queueItems = [
-    { label: copy.organize, count: waitingCaptures.length, action: openInbox },
-    {
-      label: copy.study,
-      count: readyTopics.length,
-      action: () => (readyTopics[0] ? openTopic(readyTopics[0], "study-room") : openInbox())
-    },
-    {
-      label: copy.practice,
-      count: practiceTopics.length,
-      action: () => (practiceTopics[0] ? openTopic(practiceTopics[0]) : openInbox())
-    }
-  ];
-
-  const rhythmDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const rhythmColumns = 25;
-  const rhythmCells = Array.from({ length: rhythmColumns * rhythmDays.length }, (_, index) => {
-    const column = Math.floor(index / rhythmDays.length);
-    const row = index % rhythmDays.length;
-    if (column > 21 && (column + row) % 2 === 0) return 4;
-    if (column > 17 && (column + row) % 3 === 0) return 3;
-    if (column > 12 && (column + row) % 4 === 0) return 2;
-    if (column > 7 && (column + row) % 5 === 0) return 1;
-    return 0;
-  });
+  const tasks = buildTodayPracticeTasks({ captures, memories, profile: appState.profile, limit: 3 });
+  const latestTopic = [...topics].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
 
   return (
     <section className="page home-page">
-      <div className="home-focus-layout">
-        <section className="home-hero" aria-label={copy.suggestion}>
-          <span className="hero-star star-top-left" aria-hidden="true">★</span>
-          <span className="hero-star star-top-right" aria-hidden="true">★</span>
-          <span className="hero-star star-bottom-left" aria-hidden="true">★</span>
-          <span className="hero-star star-bottom-right" aria-hidden="true">★</span>
-          <div className="hero-asset-slot" aria-hidden="true">
+      <div className="home-focus-layout task-home-layout">
+        <section className="task-hero" aria-label={isChinese ? "今日小任务" : "Today tasks"}>
+          <div className="task-hero-copy">
+            <span className="task-eyebrow">
+              <Sparkles size={16} />
+              {isChinese ? "今日小任务" : "Today with TinyBu"}
+            </span>
+            <h1>{isChinese ? "今天想完成哪个小任务？" : "Which small task feels doable today?"}</h1>
+            <p>
+              {isChinese
+                ? "不用先整理资料。选一张卡，TinyBu 会帮你把素材、情境或上次没说顺的表达，变成一次低压力对话。"
+                : "No need to organize first. Pick a card and TinyBu will turn a source, scene, or recent memory into a low-pressure practice."}
+            </p>
+          </div>
+          <div className="task-hero-asset" aria-hidden="true">
             <img src="/assets/tinybu-home-hero.png" alt="" onError={(event) => (event.currentTarget.style.display = "none")} />
           </div>
-
-          <div className="hero-copy-block">
-            <p>{isChinese ? "早上好，想不想聊聊这个？" : "Good morning, want to talk about this?"}</p>
-            <div className="hero-title-row">
-              <h1>{headlineTopic}</h1>
-            </div>
-          </div>
-          <button className="hero-go-button" onClick={suggestion.action} aria-label={suggestion.actionLabel}>
-            <span>{isChinese ? "开始" : "Start"}</span>
-            <ArrowUpRight size={32} />
-          </button>
         </section>
 
-        <section className="weekly-panel" aria-label={isChinese ? "每周精选" : "Weekly picks"}>
-          <div className="weekly-heading-row">
-            <h2>{isChinese ? "每周精选" : "Best of the week"}</h2>
-            <button type="button">{isChinese ? "更多" : "More"}</button>
+        <section className="today-task-panel" aria-label={isChinese ? "可以开始的小任务" : "Tasks to start"}>
+          <div className="today-task-heading">
+            <h2>{isChinese ? "选一张开始" : "Pick one to start"}</h2>
+            <p>{isChinese ? "每次只练一个小表达目标。" : "Each task keeps one small expression goal."}</p>
           </div>
-          <div className="weekly-card-row">
-            {featuredCards.map((card, index) => (
-              <button className="weekly-card" key={`${card.title}-${index}`} onClick={card.action}>
-                <span className="weekly-user">minibu</span>
-                <span className="weekly-likes">{card.likes} Liked</span>
-                <span className="weekly-emoji" aria-hidden="true">{featuredEmoji[index % featuredEmoji.length]}</span>
-                <span className="weekly-folder">
-                  <strong>{card.tag}</strong>
-                  <i />
-                  <em>{card.title}</em>
-                </span>
+          <div className="today-task-grid">
+            {tasks.map((task) => (
+              <button className={`today-task-card ${task.taskType}`} key={task.id} onClick={() => startTask(task)}>
+                <span className="task-source-label">{taskLabel(task, isChinese)}</span>
+                <strong>{task.title}</strong>
+                <p>{task.description}</p>
+                <span className="task-goal">{task.targetGoal}</span>
+                <i>
+                  {isChinese ? "开始聊" : "Start"}
+                  <ArrowUpRight size={18} />
+                </i>
               </button>
             ))}
           </div>
         </section>
 
-        <section className="home-bottom-grid">
-          <div className="suggestions-block">
-            <h2>Suggestions</h2>
-            <div className="queue-grid" aria-label={copy.queueTitle}>
-              {queueItems.map((item, index) => (
-                <button className={`queue-card tone-${index}`} key={item.label} onClick={item.action}>
-                  <span>{item.label}</span>
-                  <strong>{item.count}</strong>
-                  <i>
-                    <ArrowUpRight size={34} />
-                  </i>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <section className="rhythm-panel">
-            <h2>{copy.rhythm}</h2>
-
-            <div className="rhythm-calendar" aria-label={copy.rhythm}>
-              <div className="rhythm-top-labels" aria-hidden="true">
-                {[1, 5, 9, 13, 17, 21, 25].map((label) => (
-                  <span key={label}>{label}</span>
-                ))}
-              </div>
-              <div className="rhythm-calendar-body">
-                <div className="rhythm-weekdays" aria-hidden="true">
-                  {rhythmDays.map((day) => (
-                    <span key={day}>{day}</span>
-                  ))}
-                </div>
-                <div className="rhythm-grid" style={{ gridTemplateColumns: `repeat(${rhythmColumns}, var(--rhythm-cell-size))` }}>
-                  {rhythmCells.map((level, index) => (
-                    <span className={`rhythm-cell level-${level}`} key={index} />
-                  ))}
-                </div>
-              </div>
-              <div className="rhythm-legend">
-                <span>Less</span>
-                <i className="rhythm-cell level-0" />
-                <i className="rhythm-cell level-1" />
-                <i className="rhythm-cell level-2" />
-                <i className="rhythm-cell level-3" />
-                <i className="rhythm-cell level-4" />
-                <span>More</span>
-              </div>
-            </div>
-          </section>
+        <section className="task-secondary-panel">
+          <button className="task-secondary-card" onClick={openInbox}>
+            <Inbox size={18} />
+            <span>
+              <strong>{isChinese ? "查看保存的素材" : "Saved captures"}</strong>
+              <em>{isChinese ? `${captures.filter((capture) => capture.status !== "archived").length} 条内容在这里` : `${captures.filter((capture) => capture.status !== "archived").length} items saved`}</em>
+            </span>
+          </button>
+          <button
+            className="task-secondary-card"
+            onClick={() => (latestTopic ? openTopic(latestTopic, "topic-detail") : openInbox())}
+          >
+            <BookOpen size={18} />
+            <span>
+              <strong>{isChinese ? "继续深度学习" : "Continue deeper study"}</strong>
+              <em>{latestTopic ? latestTopic.name : isChinese ? "先添加一个素材" : "Add a source first"}</em>
+            </span>
+          </button>
         </section>
       </div>
     </section>

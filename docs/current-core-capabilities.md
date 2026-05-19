@@ -6,24 +6,27 @@ Practice 的单一事实来源见 `docs/practice-flow.md`。
 
 ## 一句话定位
 
-TinyBu 是一个 desktop-first 的 AI 语言学习工作台。它把浏览器选中文本、文章、视频 transcript、粘贴内容、剪贴板片段和桌面截图，转化为：
+TinyBu 是一个 desktop-first 的 AI 外语学习伙伴。它通过今日小任务、桌面捕捉、低压力 Practice Chat、Review 和 Bu's Memory，把用户真实接触到的内容转化为可完成、可延续的表达练习。
+
+当前主闭环：
+
+`Today Tasks -> Capture / Provided Material -> Practice Chat -> Review -> Bu's Memory`
+
+深度学习路径仍保留：
 
 `Inbox -> Organize -> Topics -> Study Room -> Practice Chat -> Practice Review -> Notebook / Bu's Memory`
 
-TinyBu 不是课程型产品，而是一个把零散真实内容整理成主题，再进入理解、表达练习和记忆沉淀的学习工作台。
+TinyBu 不是课程型产品，也不要求用户先整理资料。它优先通过小任务帮助用户发现或使用素材，再进入表达练习和记忆沉淀。
 
 ## 当前主流程
 
-1. 用户通过浏览器扩展、桌宠复制捕捉、截图、粘贴或 demo 内容创建 Capture。
-2. Capture 先进入 Inbox，并显示状态、来源、摘要和 Suggested Topic。
-3. 用户在 Inbox 中查看、归档、删除、移动 Capture，或进入 Organize。
-4. Organize 将未整理 captures 按语义聚合成 Suggested Topics，用户可确认、重命名、合并或移动内容。
-5. Topics 展示所有 Topic，用户进入 Topic Detail。
-6. Topic Detail 展示 Sources、Learning Overview、Practice goals，并进入 Study Room 或直接 Start Practice。
-7. Study Room 先帮助用户理解 Topic 下的 source，展示原文、摘要、关键问题和 Useful Expressions。
-8. Practice Chat 围绕 Topic 做低压力对话练习。
-9. Practice Review 展示练习总结、更自然表达、保存建议和下一步。
-10. Notebook 保存用户真正想带走的表达，Bu's Memory 记录长期学习状态。
+1. Home 展示 2-3 张今日小任务，可能来自最近捕捉、TinyBu 给的材料、情境练习或 Memory 回访。
+2. 用户选择一个小任务，或通过浏览器扩展、桌宠复制捕捉、截图、粘贴创建 Capture。
+3. 适合练习的 Capture 会成为上下文任务入口；不适合练习的内容仍进入 Inbox。
+4. Practice Chat 围绕任务或 Topic 做低压力对话练习。
+5. Review 展示表达总结、更自然表达、可复用语言和 TinyBu 记住的下一步。
+6. Bu's Memory 记录兴趣、表达困难和下一次任务线索。
+7. Inbox、Organize、Topics 和 Study Room 仍作为深度学习与整理路径保留。
 
 ## 导航与页面
 
@@ -38,7 +41,7 @@ TinyBu 不是课程型产品，而是一个把零散真实内容整理成主题�
 - Welcome：首次入口，支持 Start 和 Try Demo。
 - Onboarding：设置母语、目标语言、水平、目标、开口压力和支架偏好。
 - Companion Setup：设置 TinyBu 风格、反馈时机和语速。
-- Home：显示当前学习建议、Learning Queue 和 Practice Rhythm。
+- Home：显示今日小任务，帮助用户直接开始一次轻量表达练习。
 - Inbox：三栏布局，支持搜索、状态筛选、来源筛选、capture 详情和快捷操作。
 - Organize：三栏布局，支持未整理 captures、AI suggested topics 和 topic editor。
 - Topics：左侧 Topic 列表，右侧 Topic 详情与 Study / Practice 入口。
@@ -147,9 +150,10 @@ Study Room 用于先理解 Topic：
 
 ### Practice Chat
 
-Practice Chat 是唯一的 Topic 练习流程：
+Practice Chat 是共享练习流程，支持 Topic Practice 和 Task Practice：
 
-- 进入前根据 Topic 下的 selected / recommended fragments 生成 practice plan。
+- Topic Practice 进入前根据 Topic 下的 selected / recommended fragments 生成 practice plan。
+- Task Practice 可从今日小任务直接开始，不要求先创建 Topic。
 - 三栏展示 language bank、original source、conversation、practice goal 和 what to cover。
 - 用户与 TinyBu 进行低压力对话练习。
 - TinyBu 每次回应只给短反馈、自然表达或一个跟进问题。
@@ -166,6 +170,8 @@ Practice Chat 是唯一的 Topic 练习流程：
 - Next Step。
 
 Review 保存到 Topic History，并更新 Topic 的 `status`、`lastPracticedAt` 和相关 Capture 的 `practiced` 状态。
+
+Task Practice 的 Review 会写入 Bu's Memory，用于生成未来的回访任务。
 
 ## Notebook 与 Bu's Memory
 

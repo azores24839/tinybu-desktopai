@@ -164,12 +164,21 @@ export async function recommendFragments(
 export async function generatePracticeQuestions(args: {
   fragments: CaptureFragment[];
   appState: AppStateRecord;
+  task?: { title: string; description: string; targetGoal: string; starterQuestion: string };
 }): Promise<PracticePlan> {
   const payload = {
     fragments: args.fragments.map((fragment) => ({ id: fragment.id, text: fragment.text })),
     level: args.appState.profile.level,
     targetLanguage: args.appState.profile.targetLanguage,
-    nativeLanguage: args.appState.profile.nativeLanguage
+    nativeLanguage: args.appState.profile.nativeLanguage,
+    task: args.task
+      ? {
+          title: args.task.title,
+          description: args.task.description,
+          targetGoal: args.task.targetGoal,
+          starterQuestion: args.task.starterQuestion
+        }
+      : undefined
   };
 
   return withFallback(
@@ -207,12 +216,14 @@ export async function generateQuickPetChat(args: {
 export async function generatePracticeChat(args: {
   userAnswer: string;
   topicName: string;
+  practiceGoal?: string;
   chatHistory: Array<{ role: string; text: string }>;
   appState: AppStateRecord;
 }): Promise<string> {
   const payload = {
     userAnswer: args.userAnswer,
     topicName: args.topicName,
+    practiceGoal: args.practiceGoal,
     chatHistory: args.chatHistory.slice(-6)
   };
 

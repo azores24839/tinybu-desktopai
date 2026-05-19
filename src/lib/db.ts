@@ -4,6 +4,7 @@ import type {
   CaptureItem,
   ExpressionRecord,
   MemoryItem,
+  PracticeTask,
   PracticeChatReview,
   TopicItem
 } from "../types";
@@ -16,6 +17,7 @@ const STORES = {
   topics: "id,updatedAt,status",
   expressions: "id,capturedAt,sourceTitle,sourceContentId,category,saved,usedInTalk,learned",
   memories: "id,type,updatedAt",
+  practiceTasks: "id,taskType,status,createdAt,usedAt",
   practiceChatReviews: "id,topicId,createdAt"
 };
 
@@ -25,6 +27,7 @@ class TinyBuDatabase extends Dexie {
   topics!: Table<TopicItem, string>;
   expressions!: Table<ExpressionRecord, string>;
   memories!: Table<MemoryItem, string>;
+  practiceTasks!: Table<PracticeTask, string>;
   practiceChatReviews!: Table<PracticeChatReview, string>;
 
   constructor() {
@@ -40,6 +43,7 @@ class TinyBuDatabase extends Dexie {
       reviews: null,
       talkSessions: null
     });
+    this.version(4).stores(STORES);
   }
 }
 
@@ -73,6 +77,7 @@ export async function clearLearningData() {
     db.captures.clear(),
     db.topics.clear(),
     db.practiceChatReviews.clear(),
+    db.practiceTasks.clear(),
     db.memories.clear()
   ]);
 }

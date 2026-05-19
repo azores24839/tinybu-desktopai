@@ -71,6 +71,7 @@ export function recommendFragmentsRules(fragments: CaptureFragment[]): FragmentR
 export function practiceQuestionsRules(args: {
   fragments: CaptureFragment[];
   appState: AppStateRecord;
+  task?: { title: string; description: string; targetGoal: string; starterQuestion: string };
 }): PracticePlan {
   const first = args.fragments[0];
   const second = args.fragments[1] ?? first;
@@ -82,7 +83,7 @@ export function practiceQuestionsRules(args: {
     : "I think... because...";
 
   return {
-    practiceGoal: "Give a clear personal response",
+    practiceGoal: args.task?.targetGoal || "Give a clear personal response",
     whatToCover: [
       "Cover the main point of the topic",
       "Include at least 1 specific detail",
@@ -100,7 +101,7 @@ export function practiceQuestionsRules(args: {
     questions: [
       {
         type: "understanding",
-        question: "What is the main idea of this selected part?",
+        question: args.task?.starterQuestion || "What is the main idea of this selected part?",
         relatedFragmentIds: first ? [first.id] : [],
         tipOutline: "Start with: This part is mainly about..., then say one simple idea.",
         tipExample: "This part is mainly about changing how we think about learning."
