@@ -263,7 +263,7 @@ test("today practice tasks always provide a lightweight starting point", async (
   const tasks = buildTodayPracticeTasks({ captures: [], memories: [], profile, limit: 3 });
 
   assert.equal(tasks.length, 3);
-  assert.deepEqual(tasks.map((task) => task.taskType), ["tinybu-material", "scenario", "find-material"]);
+  assert.deepEqual(tasks.map((task) => task.taskType), ["tinybu-material", "scenario", "open-chat"]);
   assert.ok(tasks.every((task) => task.title && task.description && task.targetGoal && task.starterQuestion));
 });
 

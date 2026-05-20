@@ -36,6 +36,10 @@ function taskLabelSeed(language: UserProfile["interfaceLanguage"]) {
     scenarioDescription: zh ? "练一个真实会遇到的表达场景，不追求完美。" : "Practice a real-life moment without aiming for perfect.",
     scenarioGoal: zh ? "描述状态，并解释原因" : "Describe a situation and explain why",
     scenarioQuestion: zh ? "如果你今天状态有点累，但还想继续，你会怎么说？" : "How would you say you feel tired but still want to keep going?",
+    openChatTitle: zh ? "最近有什么让你有点在意？" : "What has been on your mind lately?",
+    openChatDescription: zh ? "不用准备素材，先随便说一点，TinyBu 会帮你接成外语表达。" : "No source needed. Say a little first, and TinyBu will help shape it into the target language.",
+    openChatGoal: zh ? "说出一个真实想法" : "Express one real thought",
+    openChatQuestion: zh ? "最近有没有一件小事，让你有点想解释、分享或吐槽？" : "Is there one small thing you want to explain, share, or react to?",
     findTitle: zh ? "去找一个可以聊的小素材" : "Find one small thing to talk about",
     findDescription: zh ? "截图或复制一个你想吐槽、好奇、想解释给别人的内容。" : "Capture something you want to react to, question, or explain.",
     findGoal: zh ? "发现一个真实语境里的表达机会" : "Notice one expression opportunity from real context",
@@ -114,11 +118,22 @@ export function buildTodayPracticeTasks(args: {
 
   tasks.push({
     id: "task-scenario-default",
-    title: copy.scenarioTitle,
-    description: copy.scenarioDescription,
+    title: args.profile.interfaceLanguage === "中文" ? "跟同事解释：今天状态不太好" : "Explain to a coworker that today is a bit rough",
+    description: args.profile.interfaceLanguage === "中文" ? "练习温和地说明状态、原因和你接下来会怎么做。" : "Practice explaining your state, the reason, and what you will do next.",
     taskType: "scenario",
     targetGoal: copy.scenarioGoal,
     starterQuestion: copy.scenarioQuestion,
+    status: "new",
+    createdAt
+  });
+
+  tasks.push({
+    id: "task-open-chat-default",
+    title: copy.openChatTitle,
+    description: copy.openChatDescription,
+    taskType: "open-chat",
+    targetGoal: copy.openChatGoal,
+    starterQuestion: copy.openChatQuestion,
     status: "new",
     createdAt
   });

@@ -553,29 +553,30 @@ export default function App() {
               <span>TinyBu</span>
             </button>
             <nav>
-              <button className={screen === "home" ? "active" : ""} onClick={() => navigate("home")}>
+              <button className={screen === "home" ? "active" : ""} onClick={() => navigate("home")} aria-label={copy.nav.home}>
                 <Home size={18} /> {copy.nav.home}
               </button>
-              <button className={screen === "inbox" || screen === "organize" ? "active" : ""} onClick={() => navigate("inbox")}>
+              <button className={screen === "inbox" || screen === "organize" ? "active" : ""} onClick={() => navigate("inbox")} aria-label={copy.nav.inbox}>
                 <Inbox size={18} /> {copy.nav.inbox}
               </button>
               <button
                 className={["topics", "topic-detail", "study-room", "practice-preparing", "practice-review", "practice-chat-review"].includes(screen) ? "active" : ""}
                 onClick={() => navigate("topics")}
+                aria-label={copy.nav.topics}
               >
                 <BookOpen size={18} /> {copy.nav.topics}
               </button>
-              <button className={screen === "notebook" ? "active" : ""} onClick={() => navigate("notebook")}>
+              <button className={screen === "notebook" ? "active" : ""} onClick={() => navigate("notebook")} aria-label={copy.nav.notebook}>
                 <NotebookTabs size={18} /> {copy.nav.notebook}
               </button>
-              <button className={screen === "memory" ? "active" : ""} onClick={() => navigate("memory")}>
+              <button className={screen === "memory" ? "active" : ""} onClick={() => navigate("memory")} aria-label={copy.nav.memory}>
                 <Brain size={18} /> {copy.nav.memory}
               </button>
-              <button className={screen === "settings" ? "active" : ""} onClick={() => navigate("settings")}>
+              <button className={screen === "settings" ? "active" : ""} onClick={() => navigate("settings")} aria-label={copy.nav.settings}>
                 <Settings size={18} /> {copy.nav.settings}
               </button>
             </nav>
-            <button className="settings-link upgrade-link" onClick={() => navigate("settings")}>
+            <button className="settings-link upgrade-link" onClick={() => navigate("settings")} aria-label={copy.home.upgrade}>
               {copy.home.upgrade}
             </button>
           </aside>

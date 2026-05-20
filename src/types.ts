@@ -38,7 +38,7 @@ export type AiProviderMode = "rules" | "user-key" | "cloud-proxy";
 export type ExternalCaptureKind = "selection" | "article" | "youtube" | "video" | "screenshot" | "manual";
 export type PracticeQuestionType = "understanding" | "opinion" | "personal" | "expression";
 export type CaptureStatus = "unsorted" | "suggested" | "needs_review" | "in-topic" | "studied" | "practiced" | "archived";
-export type PracticeTaskType = "find-material" | "tinybu-material" | "scenario" | "memory-review" | "capture-based";
+export type PracticeTaskType = "find-material" | "tinybu-material" | "scenario" | "memory-review" | "capture-based" | "open-chat";
 export type PracticeTaskStatus = "new" | "used" | "saved";
 
 export type ReviewIssueType =
