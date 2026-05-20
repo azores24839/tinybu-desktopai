@@ -181,14 +181,13 @@ export async function generatePracticeQuestions(args: {
       : undefined
   };
 
-  return withFallback(
-    args.appState,
-    () =>
-      args.appState.settings.aiProviderMode === "cloud-proxy"
-        ? callCloudProxy("practiceQuestions", payload, args.appState)
-        : callUserKey("practiceQuestions", payload, args.appState),
-    () => practiceQuestionsRules(args)
-  );
+  if (args.appState.settings.aiProviderMode === "rules") {
+    return practiceQuestionsRules(args);
+  }
+
+  return args.appState.settings.aiProviderMode === "cloud-proxy"
+    ? callCloudProxy("practiceQuestions", payload, args.appState)
+    : callUserKey("practiceQuestions", payload, args.appState);
 }
 
 export async function generateQuickPetChat(args: {
@@ -266,12 +265,11 @@ export async function generatePracticeChatReview(args: {
     level: args.appState.profile.level
   };
 
-  return withFallback(
-    args.appState,
-    () =>
-      args.appState.settings.aiProviderMode === "cloud-proxy"
-        ? callCloudProxy("practiceChatReview", payload, args.appState)
-        : callUserKey("practiceChatReview", payload, args.appState),
-    () => practiceChatReviewRules(args)
-  );
+  if (args.appState.settings.aiProviderMode === "rules") {
+    return practiceChatReviewRules(args);
+  }
+
+  return args.appState.settings.aiProviderMode === "cloud-proxy"
+    ? callCloudProxy("practiceChatReview", payload, args.appState)
+    : callUserKey("practiceChatReview", payload, args.appState);
 }

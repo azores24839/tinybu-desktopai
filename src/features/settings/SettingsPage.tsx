@@ -129,6 +129,7 @@ export function SettingsPage({
             labels={{ rules: "Rules", "user-key": "API key", "cloud-proxy": "Cloud" }}
             onChange={(aiProviderMode) => setDraft({ ...draft, settings: { ...draft.settings, aiProviderMode } })}
           />
+          <p className="settings-note">Rules is the offline mock mode for testing practice UI without API usage.</p>
           <label className="settings-field">
             Chat / learning model
             <input value={draft.settings.aiModel} onChange={(event) => setDraft({ ...draft, settings: { ...draft.settings, aiModel: event.target.value } })} />

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { generatePracticeChat, generatePracticeChatReview, generatePracticeQuestions } from "../../ai/provider";
+import { practiceChatReviewRules, practiceQuestionsRules } from "../../ai/rules";
 import { db } from "../../lib/db";
 import { showToast } from "../../lib/toast";
 import { uiCopy } from "../../lib/uiCopy";
@@ -9,6 +10,8 @@ import type { AppStateRecord, CaptureItem, ChatMessage, MemoryItem, PracticeChat
 import { buildPracticeChatCompletion, selectPracticeFragments } from "./practiceUtils";
 import { practiceTaskToFragments } from "./practiceTasks";
 import { topicCaptures } from "../topics/topicUtils";
+
+const PRACTICE_AI_TIMEOUT_MS = 8000;
 
 type UsePracticeChatArgs = {
   captures: CaptureItem[];
@@ -31,6 +34,23 @@ function extractKeywords(text: string): string[] {
     .replace(/[^a-z0-9\s]/g, "")
     .split(/\s+/)
     .filter((w) => w.length > 2);
+}
+
+function isMockPracticeEnabled(appState: AppStateRecord) {
+  if (appState.settings.aiProviderMode === "rules") return true;
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem("tinybu:mockPractice") === "1";
+}
+
+function readableAiError(error: unknown) {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return "AI request did not finish in time";
+}
+
+function timeoutAfter(ms: number) {
+  return new Promise<never>((_, reject) => {
+    window.setTimeout(() => reject(new Error(`AI request timed out after ${Math.round(ms / 1000)}s`)), ms);
+  });
 }
 
 export type UsePracticeChatResult = {
@@ -79,6 +99,31 @@ export function usePracticeChat({
     }
   }
 
+  async function preparePracticePlan(args: {
+    fragments: ReturnType<typeof selectPracticeFragments>;
+    task?: PracticeTask;
+  }) {
+    const fallback = () => practiceQuestionsRules({ fragments: args.fragments, appState, task: args.task });
+    if (isMockPracticeEnabled(appState)) {
+      showToast("Mock practice mode is on. Using local practice content without API.", "info");
+      return fallback();
+    }
+
+    try {
+      return await Promise.race([
+        generatePracticeQuestions({ fragments: args.fragments, appState, task: args.task }),
+        timeoutAfter(PRACTICE_AI_TIMEOUT_MS)
+      ]);
+    } catch (error) {
+      const message =
+        appState.profile.interfaceLanguage === "中文"
+          ? `AI 暂时不可用：${readableAiError(error)}。已切换到 mock 内容继续测试。`
+          : `AI is unavailable: ${readableAiError(error)}. TinyBu switched to mock content for testing.`;
+      showToast(message);
+      return fallback();
+    }
+  }
+
   async function startPracticeForTopic(topic: TopicItem) {
     if (startingPractice.current) return;
     startingPractice.current = true;
@@ -107,14 +152,9 @@ export function usePracticeChat({
     navigate("practice-preparing");
 
     const copy = uiCopy[appState.profile.interfaceLanguage].practiceChat as Record<string, string>;
-    try {
-      const output = await generatePracticeQuestions({ fragments, appState });
-      setPracticePlan(output);
-      setPracticeChatFirstQuestion(output.questions[0]?.question || copy.firstQuestion);
-    } catch {
-      setPracticeChatFirstQuestion(copy.firstQuestion);
-      showToast("AI is unavailable. Using a default question instead.", "info");
-    }
+    const output = await preparePracticePlan({ fragments });
+    setPracticePlan(output);
+    setPracticeChatFirstQuestion(output.questions[0]?.question || copy.firstQuestion);
     practiceAiDone.current = true;
     checkPracticeChatReady();
   }
@@ -151,13 +191,9 @@ export function usePracticeChat({
     setPracticeChatFirstQuestion(task.starterQuestion);
     navigate("practice-preparing");
 
-    try {
-      const output = await generatePracticeQuestions({ fragments, appState, task });
-      setPracticePlan(output);
-      setPracticeChatFirstQuestion(output.questions[0]?.question || task.starterQuestion);
-    } catch {
-      showToast("AI is unavailable. Using the task starter instead.", "info");
-    }
+    const output = await preparePracticePlan({ fragments, task });
+    setPracticePlan(output);
+    setPracticeChatFirstQuestion(output.questions[0]?.question || task.starterQuestion);
     practiceAiDone.current = true;
     checkPracticeChatReady();
   }
@@ -207,7 +243,7 @@ export function usePracticeChat({
       const completedFocusItemIds = focusItems.filter((f) => f.completed).map((f) => f.id);
       const userMessages = messages.filter((m) => m.role === "user");
 
-      const output = await generatePracticeChatReview({
+      const reviewArgs = {
         topicName: source.title,
         practiceGoal: practicePlan?.practiceGoal ?? source.practiceGoal,
         whatToCover,
@@ -215,7 +251,20 @@ export function usePracticeChat({
         targetLanguage: appState.profile.targetLanguage,
         nativeLanguage: appState.profile.nativeLanguage,
         appState
-      });
+      };
+      const output = isMockPracticeEnabled(appState)
+        ? practiceChatReviewRules(reviewArgs)
+        : await Promise.race([
+            generatePracticeChatReview(reviewArgs),
+            timeoutAfter(PRACTICE_AI_TIMEOUT_MS)
+          ]).catch((error) => {
+            const message =
+              appState.profile.interfaceLanguage === "中文"
+                ? `Review 生成失败：${readableAiError(error)}。已使用 mock 复盘。`
+                : `Review generation failed: ${readableAiError(error)}. TinyBu used a mock review.`;
+            showToast(message);
+            return practiceChatReviewRules(reviewArgs);
+          });
 
       const review: PracticeChatReview = {
         id: uid("pcr"),
