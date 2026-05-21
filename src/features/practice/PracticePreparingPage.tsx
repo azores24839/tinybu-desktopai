@@ -14,18 +14,19 @@ export function PracticePreparingPage({
   const [stageIndex, setStageIndex] = useState(0);
   const stages = [copy.stageReading, copy.stageIdeas, copy.stageQuestion];
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const readyCalledRef = useRef(false);
 
   useEffect(() => {
     intervalRef.current = setInterval(() => {
       setProgress((prev) => {
-        const next = prev + Math.random() * 8 + 2;
-        if (next >= 90) {
+        const next = prev + 18;
+        if (next >= 100) {
           clearInterval(intervalRef.current);
-          return 90;
+          return 100;
         }
-        return Math.min(next, 90);
+        return Math.min(next, 100);
       });
-    }, 300);
+    }, 160);
 
     return () => clearInterval(intervalRef.current);
   }, []);
@@ -37,11 +38,9 @@ export function PracticePreparingPage({
   }, [progress]);
 
   useEffect(() => {
-    if (progress >= 90) {
-      const finishTimer = setTimeout(() => {
-        setProgress(100);
-        setTimeout(onReady, 400);
-      }, 500);
+    if (progress >= 100 && !readyCalledRef.current) {
+      readyCalledRef.current = true;
+      const finishTimer = setTimeout(onReady, 180);
       return () => clearTimeout(finishTimer);
     }
   }, [progress, onReady]);

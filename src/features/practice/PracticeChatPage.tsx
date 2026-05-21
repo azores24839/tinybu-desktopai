@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Captions, Lightbulb, PhoneOff, X } from "lucide-react";
+import { Captions, Lightbulb, PhoneOff, RefreshCw, X } from "lucide-react";
 import { uid, nowIso } from "../../lib/defaults";
 import type { ChatMessage, UserProfile, CaptureItem, PracticePlan } from "../../types";
 import type { PracticeSource } from "./usePracticeChat";
@@ -15,6 +15,12 @@ function combineFragmentText(fragments: Array<{ text: string }>): string {
 function truncateText(text: string, max = 420) {
   if (text.length <= max) return text;
   return `${text.slice(0, max).trim()}...`;
+}
+
+function rotatingSlice(items: string[], page: number, count: number) {
+  if (items.length <= count) return items;
+  const start = (page * count) % items.length;
+  return Array.from({ length: count }, (_, index) => items[(start + index) % items.length]);
 }
 
 export function PracticeChatPage({
@@ -41,6 +47,8 @@ export function PracticeChatPage({
   const isChinese = interfaceLanguage === "中文";
   const [showTips, setShowTips] = useState(false);
   const [showCaptions, setShowCaptions] = useState(true);
+  const [wordHintPage, setWordHintPage] = useState(0);
+  const [chunkHintPage, setChunkHintPage] = useState(0);
   const whatToCover = practicePlan?.whatToCover ?? [];
   const messages = useMemo<ChatMessage[]>(
     () => [
@@ -65,9 +73,12 @@ export function PracticeChatPage({
     .map((capture) => combineFragmentText(capture.fragments))
     .filter(Boolean)
     .join("\n\n");
-  const sourcePreview = truncateText(sourceText || practiceSource.summary || (isChinese ? "这次练习没有绑定素材，可以围绕当前话题自由表达。" : "No source is attached. You can speak freely around the current topic."));
-  const usefulWords = practicePlan?.languageBank.usefulWords.slice(0, 6) ?? ["main point", "example", "because"];
-  const usefulChunks = practicePlan?.languageBank.usefulChunks.slice(0, 4) ?? ["The main point is that...", "For example, ...", "I think... because..."];
+  const taskSourceText = practiceSource.kind === "task" ? practiceSource.task.sourceText : "";
+  const sourcePreview = truncateText(sourceText || taskSourceText || practiceSource.summary || (isChinese ? "这次练习没有绑定素材，可以围绕当前话题自由表达。" : "No source is attached. You can speak freely around the current topic."));
+  const allUsefulWords = practicePlan?.languageBank.usefulWords ?? ["main point", "example", "because"];
+  const allUsefulChunks = practicePlan?.languageBank.usefulChunks ?? ["The main point is that...", "For example, ...", "I think... because..."];
+  const usefulWords = rotatingSlice(allUsefulWords, wordHintPage, 6);
+  const usefulChunks = rotatingSlice(allUsefulChunks, chunkHintPage, 4);
   const captionLines = [
     {
       speaker: "You",
@@ -93,27 +104,39 @@ export function PracticeChatPage({
           <aside className="practice-call-tips" aria-label={isChinese ? "提示和素材" : "Hints and source"}>
             <div className="practice-call-tips-header">
               <strong>{isChinese ? "提示" : "Hints"}</strong>
-              <button onClick={() => setShowTips(false)} aria-label={isChinese ? "关闭提示" : "Close hints"}>
-                <X size={16} />
-              </button>
+              <div className="practice-call-tips-actions">
+                <button onClick={() => setShowTips(false)} aria-label={isChinese ? "关闭提示" : "Close hints"}>
+                  <X size={16} />
+                </button>
+              </div>
             </div>
             <section>
               <h3>{isChinese ? "这次围绕" : "Topic"}</h3>
               <p>{practicePlan?.practiceGoal ?? practiceSource.practiceGoal}</p>
             </section>
             <section>
-              <h3>{isChinese ? "可用词" : "Useful words"}</h3>
+              <div className="practice-call-section-title">
+                <h3>{isChinese ? "可用表达" : "Useful expressions"}</h3>
+                <button onClick={() => setWordHintPage((page) => page + 1)} aria-label={isChinese ? "换一组表达" : "Refresh expressions"}>
+                  <RefreshCw size={13} />
+                </button>
+              </div>
               <div className="practice-call-word-row">
-                {usefulWords.map((word) => (
-                  <span key={word}>{word}</span>
+                {usefulWords.map((word, index) => (
+                  <span key={`${word}-${index}`}>{word}</span>
                 ))}
               </div>
             </section>
             <section>
-              <h3>{isChinese ? "可用表达" : "Useful chunks"}</h3>
+              <div className="practice-call-section-title">
+                <h3>{isChinese ? "可用 Chunk" : "Useful chunks"}</h3>
+                <button onClick={() => setChunkHintPage((page) => page + 1)} aria-label={isChinese ? "换一组 Chunk" : "Refresh chunks"}>
+                  <RefreshCw size={13} />
+                </button>
+              </div>
               <div className="practice-call-chunks">
-                {usefulChunks.map((chunk) => (
-                  <p key={chunk}>{chunk}</p>
+                {usefulChunks.map((chunk, index) => (
+                  <p key={`${chunk}-${index}`}>{chunk}</p>
                 ))}
               </div>
             </section>

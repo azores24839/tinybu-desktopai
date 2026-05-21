@@ -99,29 +99,38 @@ export function usePracticeChat({
     }
   }
 
-  async function preparePracticePlan(args: {
+  function beginPracticePlanLoad(args: {
     fragments: ReturnType<typeof selectPracticeFragments>;
     task?: PracticeTask;
+    fallbackQuestion: string;
   }) {
     const fallback = () => practiceQuestionsRules({ fragments: args.fragments, appState, task: args.task });
+    const fallbackOutput = fallback();
+    setPracticePlan(fallbackOutput);
+    setPracticeChatFirstQuestion(fallbackOutput.questions[0]?.question || args.fallbackQuestion);
+    practiceAiDone.current = true;
+    checkPracticeChatReady();
+
     if (isMockPracticeEnabled(appState)) {
       showToast("Mock practice mode is on. Using local practice content without API.", "info");
-      return fallback();
+      return;
     }
 
-    try {
-      return await Promise.race([
+    void Promise.race([
         generatePracticeQuestions({ fragments: args.fragments, appState, task: args.task }),
         timeoutAfter(PRACTICE_AI_TIMEOUT_MS)
-      ]);
-    } catch (error) {
-      const message =
-        appState.profile.interfaceLanguage === "中文"
-          ? `AI 暂时不可用：${readableAiError(error)}。已切换到 mock 内容继续测试。`
-          : `AI is unavailable: ${readableAiError(error)}. TinyBu switched to mock content for testing.`;
-      showToast(message);
-      return fallback();
-    }
+    ])
+      .then((output) => {
+        setPracticePlan(output);
+        setPracticeChatFirstQuestion(output.questions[0]?.question || args.fallbackQuestion);
+      })
+      .catch((error) => {
+        const message =
+          appState.profile.interfaceLanguage === "中文"
+            ? `AI 暂时不可用：${readableAiError(error)}。已使用 mock 内容继续测试。`
+            : `AI is unavailable: ${readableAiError(error)}. TinyBu is using mock content for testing.`;
+        showToast(message);
+      });
   }
 
   async function startPracticeForTopic(topic: TopicItem) {
@@ -152,11 +161,7 @@ export function usePracticeChat({
     navigate("practice-preparing");
 
     const copy = uiCopy[appState.profile.interfaceLanguage].practiceChat as Record<string, string>;
-    const output = await preparePracticePlan({ fragments });
-    setPracticePlan(output);
-    setPracticeChatFirstQuestion(output.questions[0]?.question || copy.firstQuestion);
-    practiceAiDone.current = true;
-    checkPracticeChatReady();
+    beginPracticePlanLoad({ fragments, fallbackQuestion: copy.firstQuestion });
   }
 
   async function startPracticeForTask(task: PracticeTask) {
@@ -191,15 +196,20 @@ export function usePracticeChat({
     setPracticeChatFirstQuestion(task.starterQuestion);
     navigate("practice-preparing");
 
-    const output = await preparePracticePlan({ fragments, task });
-    setPracticePlan(output);
-    setPracticeChatFirstQuestion(output.questions[0]?.question || task.starterQuestion);
-    practiceAiDone.current = true;
-    checkPracticeChatReady();
+    beginPracticePlanLoad({ fragments, task, fallbackQuestion: task.starterQuestion });
   }
 
   function handlePreparingReady() {
     preparingBarDone.current = true;
+    if (activePracticeSource) {
+      const copy = uiCopy[appState.profile.interfaceLanguage].practiceChat as Record<string, string>;
+      setPracticeChatFirstQuestion((question) => question || activePracticeSource.practiceGoal || copy.firstQuestion);
+      preparingBarDone.current = false;
+      practiceAiDone.current = false;
+      startingPractice.current = false;
+      window.setTimeout(() => navigate("practice-chat"), 0);
+      return;
+    }
     checkPracticeChatReady();
   }
 
@@ -276,18 +286,10 @@ export function usePracticeChat({
         focusItems,
         betterExpressions: output.betterExpressions,
         savedWordsOrChunks: output.savedWordsOrChunks,
+        memoryTags: output.memoryTags,
         nextStep: output.nextStep,
         messageCount: messages.length,
         userMessageCount: userMessages.length
-      };
-
-      const memory: MemoryItem = {
-        id: uid("memory"),
-        type: "next",
-        title: output.savedWordsOrChunks[0] || source.title,
-        body: output.nextStep || output.diarySummary,
-        editable: true,
-        updatedAt: review.createdAt
       };
 
       const nextTask = source.kind === "task" ? { ...source.task, status: "used" as const, usedAt: review.createdAt } : null;
@@ -300,9 +302,8 @@ export function usePracticeChat({
             })
           : null;
 
-      await db.transaction("rw", [db.practiceChatReviews, db.topics, db.captures, db.memories, db.practiceTasks], async () => {
+      await db.transaction("rw", [db.practiceChatReviews, db.topics, db.captures, db.practiceTasks], async () => {
         await db.practiceChatReviews.put(review);
-        await db.memories.put(memory);
         if (nextTask) await db.practiceTasks.put(nextTask);
         if (completion) {
           await db.topics.put(completion.nextTopic);
@@ -310,7 +311,6 @@ export function usePracticeChat({
         }
       });
       setPracticeChatReview(review);
-      setMemories((items) => [memory, ...items.filter((item) => item.id !== memory.id)]);
       if (completion) {
         setTopicPracticeChatReviews((items) => [review, ...items.filter((item) => item.id !== review.id)]);
         setTopics((items) => items.map((item) => (item.id === completion.nextTopic.id ? completion.nextTopic : item)));
@@ -339,7 +339,21 @@ export function usePracticeChat({
   }
 
   async function saveReviewAndGoToTopic(review: PracticeChatReview) {
-    await db.practiceChatReviews.put(review);
+    const memory = review.memoryTags?.length
+      ? {
+          id: uid("memory"),
+          type: "interest" as const,
+          title: "TinyBu learned",
+          body: `From this practice, TinyBu should remember: ${review.memoryTags.join(", ")}.`,
+          editable: true,
+          updatedAt: review.createdAt
+        }
+      : null;
+    await db.transaction("rw", [db.practiceChatReviews, db.memories], async () => {
+      await db.practiceChatReviews.put(review);
+      if (memory) await db.memories.put(memory);
+    });
+    if (memory) setMemories((items) => [memory, ...items.filter((item) => item.id !== memory.id)]);
     setPracticeChatReview(null);
     setActivePracticeSource(null);
     if (review.topicId) {
@@ -351,7 +365,21 @@ export function usePracticeChat({
   }
 
   async function saveReviewAndPracticeAgain(review: PracticeChatReview, topic?: TopicItem) {
-    await db.practiceChatReviews.put(review);
+    const memory = review.memoryTags?.length
+      ? {
+          id: uid("memory"),
+          type: "interest" as const,
+          title: "TinyBu learned",
+          body: `From this practice, TinyBu should remember: ${review.memoryTags.join(", ")}.`,
+          editable: true,
+          updatedAt: review.createdAt
+        }
+      : null;
+    await db.transaction("rw", [db.practiceChatReviews, db.memories], async () => {
+      await db.practiceChatReviews.put(review);
+      if (memory) await db.memories.put(memory);
+    });
+    if (memory) setMemories((items) => [memory, ...items.filter((item) => item.id !== memory.id)]);
     setPracticeChatReview(null);
     const currentSource = activePracticeSource;
     if (currentSource?.kind === "task") await startPracticeForTask(currentSource.task);

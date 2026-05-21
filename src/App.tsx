@@ -531,13 +531,13 @@ export default function App() {
         </div>
       )}
 
-      {screen === "practice-chat" && activePracticeSource && practiceChatFirstQuestion ? (
+      {screen === "practice-chat" && activePracticeSource ? (
         <PracticeChatPage
           practiceSource={activePracticeSource}
           captures={activePracticeSource.captures}
           practicePlan={practicePlan}
           opening={copy.practiceChat.opening}
-          firstQuestion={practiceChatFirstQuestion}
+          firstQuestion={practiceChatFirstQuestion || activePracticeSource.practiceGoal || copy.practiceChat.firstQuestion}
           onChatReply={handlePracticeChatReply}
           onEndWithReview={finishPracticeChatWithReview}
           onExit={endPracticeChatWithoutSaving}

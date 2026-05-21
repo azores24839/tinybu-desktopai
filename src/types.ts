@@ -333,6 +333,7 @@ export interface PracticeChatReview {
     note: string;
   }>;
   savedWordsOrChunks: string[];
+  memoryTags?: string[];
   nextStep: string;
   messageCount: number;
   userMessageCount: number;
@@ -346,5 +347,6 @@ export interface PracticeChatReviewOutput {
     note: string;
   }>;
   savedWordsOrChunks: string[];
+  memoryTags?: string[];
   nextStep: string;
 }

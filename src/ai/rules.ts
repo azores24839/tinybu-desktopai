@@ -11,6 +11,112 @@ import type {
 } from "../types";
 
 const contains = (text: string, part: string) => text.toLowerCase().includes(part.toLowerCase());
+const UNWIND_DEMO_TITLE = "My Favorite Ways to Unwind";
+
+function isUnwindDemoTask(task?: { title: string; description: string; targetGoal: string; starterQuestion: string }) {
+  return task?.title === UNWIND_DEMO_TITLE;
+}
+
+function isUnwindDemoTopic(topicName: string) {
+  return topicName === UNWIND_DEMO_TITLE;
+}
+
+function unwindDemoPracticePlan(args: { fragments: CaptureFragment[]; task: { targetGoal: string; starterQuestion: string } }): PracticePlan {
+  const fragmentIds = args.fragments.map((fragment) => fragment.id);
+
+  return {
+    practiceGoal: args.task.targetGoal,
+    whatToCover: [
+      "Name one favorite way to unwind",
+      "Describe how it changes your mood or energy",
+      "Add one specific detail, like music, tea, walking, or quiet time"
+    ],
+    languageBank: {
+      usefulWords: [
+        "unwind",
+        "decompress",
+        "take my mind off things",
+        "clear my head",
+        "slow down",
+        "feel grounded",
+        "a small reset",
+        "mentally drained",
+        "overwhelmed",
+        "comforting",
+        "soothing",
+        "healing",
+        "restorative",
+        "low-effort",
+        "quiet time",
+        "set a boundary",
+        "release tension",
+        "recharge"
+      ],
+      usefulChunks: [
+        "When I’m feeling ..., I usually reach for ...",
+        "I wouldn’t say ..., but ...",
+        "It’s not exactly ..., it’s more like ...",
+        "What helps me most is not ..., but ...",
+        "The thing about ... is that ...",
+        "What I like about ... is how ...",
+        "For me, ... works better than ... because ...",
+        "I tend to ... when I’m ...",
+        "I usually need ... before I can ...",
+        "It gives me a chance to ... without ...",
+        "It helps me shift from ... to ...",
+        "It takes my mind off ... for a while.",
+        "It helps me feel less ... and more ...",
+        "It feels like a small ... after ...",
+        "It’s a simple way to ... when ...",
+        "There’s something really ... about ...",
+        "I find it easier to ... after ...",
+        "Once I ..., I usually feel ...",
+        "Whenever I’m overwhelmed by ..., I try to ...",
+        "Instead of forcing myself to ..., I usually ...",
+        "I don’t always need ..., sometimes I just need ...",
+        "It may sound small, but ... makes a big difference.",
+        "I’m trying to get better at ... before ...",
+        "The best kind of relaxation for me is when ...",
+        "I like routines that feel ..., but still ...",
+        "It doesn’t fix ..., but it helps me ...",
+        "I see ... as a way to ..., not just ...",
+        "Compared with ..., ... feels more ...",
+        "I’m the kind of person who needs ... to ...",
+        "By the time I finish ..., I usually feel ..."
+      ]
+    },
+    questions: [
+      {
+        type: "personal",
+        question: args.task.starterQuestion,
+        relatedFragmentIds: fragmentIds,
+        tipOutline: "Name one routine first, then add a feeling or reason.",
+        tipExample: "My favorite way to unwind is listening to soft music near the window."
+      },
+      {
+        type: "personal",
+        question: "When do you usually need this kind of quiet time?",
+        relatedFragmentIds: fragmentIds,
+        tipOutline: "Describe the situation before the routine.",
+        tipExample: "When I’m mentally drained after work, I usually need quiet time before I can talk to people."
+      },
+      {
+        type: "expression",
+        question: "Can you explain how it helps you feel better?",
+        relatedFragmentIds: fragmentIds,
+        tipOutline: "Use a shift sentence: from one state to another state.",
+        tipExample: "It helps me shift from feeling overwhelmed to feeling calm and grounded."
+      },
+      {
+        type: "expression",
+        question: "Can you add one small detail that makes the scene feel personal?",
+        relatedFragmentIds: fragmentIds,
+        tipOutline: "Mention one sensory detail, like rain, tea, a window, or music.",
+        tipExample: "There’s something really soothing about drinking hot tea while it rains outside."
+      }
+    ]
+  };
+}
 
 export function understandContentRules(content: ContentItem): ContentUnderstanding {
   const transcriptText = content.transcript.map((line) => line.text).join(" ");
@@ -73,6 +179,10 @@ export function practiceQuestionsRules(args: {
   appState: AppStateRecord;
   task?: { title: string; description: string; targetGoal: string; starterQuestion: string };
 }): PracticePlan {
+  if (isUnwindDemoTask(args.task) && args.task) {
+    return unwindDemoPracticePlan({ fragments: args.fragments, task: args.task });
+  }
+
   const first = args.fragments[0];
   const second = args.fragments[1] ?? first;
   const reusable = args.fragments.find((fragment) => contains(fragment.text, "used to") || contains(fragment.text, "not just"));
@@ -152,6 +262,42 @@ export function practiceChatReviewRules(args: {
   nativeLanguage: string;
   appState: AppStateRecord;
 }): PracticeChatReviewOutput {
+  if (isUnwindDemoTopic(args.topicName)) {
+    return {
+      diarySummary:
+        "Today I got to know Sisi a little better.\n\nShe seems like someone who carries a lot quietly. When stress builds up, she doesn’t rush to fix everything right away. She needs softness first: soft music, warm tea, a quiet walk, maybe rain outside the window.\n\nI want to remember that music feels healing to her, especially songs with a gentle voice and warm lyrics. Night walks also help her clear her head. She likes jasmine tea, fruit tea, rainy days, light comedies, and funny cat videos.\n\nI noticed Sisi can be strict with herself. Sometimes she feels guilty for resting, even though she would be kind to a friend in the same situation. I hope next time I can remind her, gently, that rest is not a waste.\n\nFor Sisi, comfort seems to live in small things: a quiet evening, no work messages, a cup of tea, and a little space to breathe.",
+      betterExpressions: [
+        {
+          original: "my head is more clear",
+          improved: "My head feels clearer.",
+          note: "More natural wording for describing mental clarity."
+        }
+      ],
+      savedWordsOrChunks: [
+        "unwind",
+        "clear my head",
+        "feel grounded",
+        "healing",
+        "When I’m feeling ..., I usually reach for ...",
+        "It helps me shift from ... to ...",
+        "It doesn’t fix ..., but it helps me ..."
+      ],
+      memoryTags: [
+        "soft music",
+        "warm tea",
+        "night walks",
+        "rainy days",
+        "jasmine tea",
+        "fruit tea",
+        "light comedies",
+        "funny cat videos",
+        "needs quiet time first",
+        "can feel guilty for resting"
+      ],
+      nextStep: "Next time, gently remind Sisi that rest is not a waste."
+    };
+  }
+
   const userMessages = args.chatMessages.filter((m) => m.role === "user");
   const firstReply = userMessages[0]?.text || "";
   const betterExpressions: PracticeChatReviewOutput["betterExpressions"] = [];
@@ -172,6 +318,7 @@ export function practiceChatReviewRules(args: {
       "practice makes progress",
       "build on this"
     ].slice(0, 6),
+    memoryTags: args.whatToCover.slice(0, 3),
     nextStep: `Next time, try explaining one specific idea from ${args.topicName} with a personal example.`
   };
 }

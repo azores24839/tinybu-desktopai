@@ -103,15 +103,19 @@ export function buildTodayPracticeTasks(args: {
 
   tasks.push({
     id: "task-tinybu-material-default",
-    title: copy.tinybuTitle,
+    title: "My Favorite Ways to Unwind",
     description:
       args.profile.interfaceLanguage === "中文"
-        ? "有人说：真正的进步不是做更多，而是把一个想法说清楚。"
-        : "Some people say real progress is not doing more, but saying one idea clearly.",
+        ? "Demo：聊聊你平时如何从压力中缓过来。"
+        : "Demo: Talk about how you decompress and feel like yourself again.",
     taskType: "tinybu-material",
-    sourceText: "Real progress is not always about doing more. Sometimes it means choosing one idea and saying it clearly in your own words.",
-    targetGoal: copy.tinybuGoal,
-    starterQuestion: copy.tinybuQuestion,
+    sourceText:
+      "When I feel stressed, I usually don’t want anything too exciting. I prefer quiet, low-effort routines that help me slow down. For example, I might listen to soft music, drink hot tea near the window, or go for a short walk at night. These things don’t solve my problems directly, but they help me clear my head and feel grounded again. Sometimes I just need a small reset before I can face everything.",
+    targetGoal:
+      args.profile.interfaceLanguage === "中文"
+        ? "描述自己的解压方式，并补充感受和原因"
+        : "Describe your favorite way to unwind, with feelings and reasons",
+    starterQuestion: "What’s your favorite way to relieve stress?",
     status: "new",
     createdAt
   });
