@@ -315,6 +315,53 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+export type ReviewConfidence = "low" | "medium" | "high";
+export type ReviewFocusType =
+  | "task_completion"
+  | "continuity"
+  | "idea_development"
+  | "language_control"
+  | "interaction"
+  | "chunk_activation";
+
+export interface ReviewWhyMoment {
+  quote: string;
+  interpretation: string;
+}
+
+export interface ReviewDimensionSignals {
+  taskCompletion: number;
+  continuity: number;
+  development: number;
+  control: number;
+  interaction: number;
+}
+
+export interface PracticeReviewFeatures {
+  userTurnCount: number;
+  totalWordCount: number;
+  averageWordsPerTurn: number;
+  longestTurnWordCount: number;
+  shortReplyRatio: number;
+  completedMoveCount: number;
+  targetMoveCount: number;
+  hasReason: boolean;
+  hasExample: boolean;
+  hasContrast: boolean;
+  hasAction: boolean;
+  usedTargetChunk: boolean;
+  confidence: ReviewConfidence;
+  suggestedScore: number;
+  suggestedLabel: string;
+  dimensionSignals: ReviewDimensionSignals;
+  why: ReviewWhyMoment[];
+  segments: Array<{
+    index: number;
+    text: string;
+    wordCount: number;
+  }>;
+}
+
 export interface PracticeChatReview {
   id: string;
   topicId?: string;
@@ -337,6 +384,25 @@ export interface PracticeChatReview {
   nextStep: string;
   messageCount: number;
   userMessageCount: number;
+  expressionStatus?: {
+    score: number;
+    label: string;
+    confidence: ReviewConfidence;
+  };
+  strength?: {
+    label: string;
+    detail: string;
+    quote?: string;
+  };
+  nextFocus?: {
+    type: ReviewFocusType;
+    label: string;
+    detail: string;
+    practiceMove: string;
+    quote?: string;
+  };
+  why?: ReviewWhyMoment[];
+  dimensionSignals?: ReviewDimensionSignals;
 }
 
 export interface PracticeChatReviewOutput {
@@ -349,4 +415,23 @@ export interface PracticeChatReviewOutput {
   savedWordsOrChunks: string[];
   memoryTags?: string[];
   nextStep: string;
+  expressionStatus: {
+    score: number;
+    label: string;
+    confidence: ReviewConfidence;
+  };
+  strength: {
+    label: string;
+    detail: string;
+    quote: string;
+  };
+  nextFocus: {
+    type: ReviewFocusType;
+    label: string;
+    detail: string;
+    practiceMove: string;
+    quote: string;
+  };
+  why: ReviewWhyMoment[];
+  dimensionSignals: ReviewDimensionSignals;
 }

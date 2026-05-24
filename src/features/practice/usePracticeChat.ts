@@ -9,6 +9,7 @@ import { uid, nowIso } from "../../lib/defaults";
 import type { AppStateRecord, CaptureItem, ChatMessage, MemoryItem, PracticeChatReview, PracticePlan, PracticeTask, Screen, TopicItem } from "../../types";
 import { buildPracticeChatCompletion, selectPracticeFragments } from "./practiceUtils";
 import { practiceTaskToFragments } from "./practiceTasks";
+import { extractPracticeReviewFeatures, expressionStatusLabel } from "./practiceReviewDiagnostics";
 import { topicCaptures } from "../topics/topicUtils";
 
 const PRACTICE_AI_TIMEOUT_MS = 8000;
@@ -51,6 +52,19 @@ function timeoutAfter(ms: number) {
   return new Promise<never>((_, reject) => {
     window.setTimeout(() => reject(new Error(`AI request timed out after ${Math.round(ms / 1000)}s`)), ms);
   });
+}
+
+function confidenceRank(confidence: "low" | "medium" | "high") {
+  return confidence === "high" ? 3 : confidence === "medium" ? 2 : 1;
+}
+
+function lowerConfidence(a: "low" | "medium" | "high", b: "low" | "medium" | "high") {
+  return confidenceRank(a) <= confidenceRank(b) ? a : b;
+}
+
+function clampReviewScore(score: number) {
+  if (!Number.isFinite(score)) return 0;
+  return Math.max(0, Math.min(100, Math.round(score)));
 }
 
 export type UsePracticeChatResult = {
@@ -252,12 +266,20 @@ export function usePracticeChat({
       const focusItems = computeFocusItems(whatToCover, messages);
       const completedFocusItemIds = focusItems.filter((f) => f.completed).map((f) => f.id);
       const userMessages = messages.filter((m) => m.role === "user");
+      const reviewFeatures = extractPracticeReviewFeatures({
+        messages,
+        whatToCover,
+        completedFocusItemIds,
+        targetChunks: practicePlan?.languageBank.usefulChunks ?? [],
+        interfaceLanguage: appState.profile.interfaceLanguage
+      });
 
       const reviewArgs = {
         topicName: source.title,
         practiceGoal: practicePlan?.practiceGoal ?? source.practiceGoal,
         whatToCover,
         chatMessages: messages,
+        reviewFeatures,
         targetLanguage: appState.profile.targetLanguage,
         nativeLanguage: appState.profile.nativeLanguage,
         appState
@@ -275,6 +297,12 @@ export function usePracticeChat({
             showToast(message);
             return practiceChatReviewRules(reviewArgs);
           });
+      const expressionScore = clampReviewScore(output.expressionStatus.score);
+      const expressionStatus = {
+        score: expressionScore,
+        label: output.expressionStatus.label || expressionStatusLabel(expressionScore, appState.profile.interfaceLanguage),
+        confidence: lowerConfidence(output.expressionStatus.confidence, reviewFeatures.confidence)
+      };
 
       const review: PracticeChatReview = {
         id: uid("pcr"),
@@ -289,7 +317,12 @@ export function usePracticeChat({
         memoryTags: output.memoryTags,
         nextStep: output.nextStep,
         messageCount: messages.length,
-        userMessageCount: userMessages.length
+        userMessageCount: userMessages.length,
+        expressionStatus,
+        strength: output.strength,
+        nextFocus: output.nextFocus,
+        why: output.why,
+        dimensionSignals: output.dimensionSignals
       };
 
       const nextTask = source.kind === "task" ? { ...source.task, status: "used" as const, usedAt: review.createdAt } : null;

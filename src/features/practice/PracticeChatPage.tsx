@@ -1,8 +1,11 @@
-import { useMemo, useState } from "react";
-import { Captions, Lightbulb, PhoneOff, RefreshCw, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Captions, Lightbulb, MessageSquareText, Mic, MicOff, PhoneOff, RefreshCw, X } from "lucide-react";
 import { uid, nowIso } from "../../lib/defaults";
 import type { ChatMessage, UserProfile, CaptureItem, PracticePlan } from "../../types";
 import type { PracticeSource } from "./usePracticeChat";
+import { useCallBu } from "./useCallBu";
+import { AvatarVideoPlayer } from "./avatar/AvatarVideoPlayer";
+import { avatarStatusLabel } from "./avatar/avatarVideos";
 
 function combineFragmentText(fragments: Array<{ text: string }>): string {
   return fragments
@@ -30,7 +33,9 @@ export function PracticeChatPage({
   opening,
   firstQuestion,
   onEndWithReview,
-  interfaceLanguage
+  interfaceLanguage,
+  targetLanguage,
+  nativeLanguage
 }: {
   practiceSource: PracticeSource;
   captures: CaptureItem[];
@@ -47,28 +52,23 @@ export function PracticeChatPage({
   const isChinese = interfaceLanguage === "中文";
   const [showTips, setShowTips] = useState(false);
   const [showCaptions, setShowCaptions] = useState(true);
+  const [showTranscript, setShowTranscript] = useState(false);
   const [wordHintPage, setWordHintPage] = useState(0);
   const [chunkHintPage, setChunkHintPage] = useState(0);
+  const { state: callState, error: callError, userText, buText, muted, startCall, endCall, toggleMute } = useCallBu(
+    { title: practiceSource.title, summary: practiceSource.summary },
+    targetLanguage,
+    nativeLanguage
+  );
   const whatToCover = practicePlan?.whatToCover ?? [];
-  const messages = useMemo<ChatMessage[]>(
+  const seedMessages = useMemo<ChatMessage[]>(
     () => [
       { id: uid("msg"), role: "bu", text: opening, createdAt: nowIso() },
       { id: uid("msg"), role: "bu", text: firstQuestion, createdAt: nowIso() },
-      {
-        id: uid("msg"),
-        role: "user",
-        text: isChinese ? "我觉得这段内容主要是在讲一个很具体的问题，但我还没想好怎么用英语说。" : "I think this is about one specific problem, but I am not sure how to say it naturally yet.",
-        createdAt: nowIso()
-      },
-      {
-        id: uid("msg"),
-        role: "bu",
-        text: isChinese ? "没关系，先抓一个重点就好。你可以从 The main point is that... 开始。" : "That's okay. Start with one point: The main point is that...",
-        createdAt: nowIso()
-      }
     ],
     [firstQuestion, isChinese, opening]
   );
+  const [messages, setMessages] = useState<ChatMessage[]>(seedMessages);
   const sourceText = captures
     .map((capture) => combineFragmentText(capture.fragments))
     .filter(Boolean)
@@ -79,25 +79,66 @@ export function PracticeChatPage({
   const allUsefulChunks = practicePlan?.languageBank.usefulChunks ?? ["The main point is that...", "For example, ...", "I think... because..."];
   const usefulWords = rotatingSlice(allUsefulWords, wordHintPage, 6);
   const usefulChunks = rotatingSlice(allUsefulChunks, chunkHintPage, 4);
-  const captionLines = [
-    {
-      speaker: "You",
-      text: isChinese ? "我觉得这段内容主要是在讲一个很具体的问题，但我还没想好怎么用英语说。" : "I think this is about one specific problem, but I am not sure how to say it naturally yet."
-    },
-    {
-      speaker: "TinyBu",
-      text: isChinese ? "没关系，先抓一个重点就好。你可以从 The main point is that... 开始。" : "That's okay. Start with one point: The main point is that..."
-    }
-  ];
+  const currentCaption = messages[messages.length - 1];
+
+  useEffect(() => {
+    setMessages(seedMessages);
+  }, [seedMessages]);
+
+  useEffect(() => {
+    void startCall();
+    return () => endCall();
+  }, [endCall, startCall]);
+
+  useEffect(() => {
+    appendLiveMessage("user", userText);
+  }, [userText]);
+
+  useEffect(() => {
+    appendLiveMessage("bu", buText);
+  }, [buText]);
+
+  function appendLiveMessage(role: ChatMessage["role"], text: string) {
+    const cleanText = text.trim();
+    if (!cleanText) return;
+
+    setMessages((current) => {
+      const last = current[current.length - 1];
+      const isSameLiveUtterance =
+        last?.role === role &&
+        (cleanText.startsWith(last.text) || last.text.startsWith(cleanText));
+      if (isSameLiveUtterance) {
+        return current.map((message, index) => (
+          index === current.length - 1 ? { ...message, text: cleanText } : message
+        ));
+      }
+      return [...current, { id: uid("msg"), role, text: cleanText, createdAt: nowIso() }];
+    });
+  }
+
+  function handleEndCall() {
+    endCall();
+    onEndWithReview(messages, whatToCover);
+  }
 
   return (
     <section className="practice-call-page">
       <video className="practice-call-video" src="/media/practice-call-bg.mp4" autoPlay loop muted playsInline />
       <div className="practice-call-scrim" />
+      <AvatarVideoPlayer callState={callState} buText={buText} userText={userText} />
 
       <main className="practice-call-stage" aria-label={isChinese ? "语音练习通话" : "Practice call"}>
-        <div className="practice-call-status">
-          <span><i />{isChinese ? "正在听" : "Listening"}</span>
+        <div className="practice-call-topbar">
+          <div className="practice-call-status">
+            <span><i />{callError || avatarStatusLabel(callState, isChinese)}</span>
+          </div>
+          <button
+            className="practice-transcript-toggle"
+            onClick={() => setShowTranscript((open) => !open)}
+            aria-label={isChinese ? "查看全部对话" : "View full transcript"}
+          >
+            <MessageSquareText size={18} />
+          </button>
         </div>
 
         {showTips && (
@@ -147,13 +188,34 @@ export function PracticeChatPage({
           </aside>
         )}
 
+        {showTranscript && (
+          <aside className="practice-transcript-panel" aria-label={isChinese ? "全部对话" : "Full transcript"}>
+            <div className="practice-call-tips-header">
+              <strong>{isChinese ? "对话" : "Transcript"}</strong>
+              <div className="practice-call-tips-actions">
+                <button onClick={() => setShowTranscript(false)} aria-label={isChinese ? "关闭对话" : "Close transcript"}>
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            <div className="practice-transcript-list">
+              {messages.map((message) => (
+                <p key={message.id} className={message.role}>
+                  <span>{message.role === "user" ? (isChinese ? "你" : "You") : "TinyBu"}</span>
+                  {message.text}
+                </p>
+              ))}
+            </div>
+          </aside>
+        )}
+
         <div className={`practice-call-captions ${showCaptions ? "visible" : ""}`} aria-hidden={!showCaptions}>
-          {captionLines.map((line, index) => (
-            <p key={`${line.speaker}-${line.text}`} className={index === captionLines.length - 1 ? "current" : "previous"}>
-              <span>{line.speaker}</span>
-              {line.text}
+          {currentCaption && (
+            <p className="current">
+              <span>{currentCaption.role === "user" ? (isChinese ? "你" : "You") : "TinyBu"}</span>
+              {currentCaption.text}
             </p>
-          ))}
+          )}
         </div>
 
         <footer className="practice-call-controls" aria-label={isChinese ? "通话控制" : "Call controls"}>
@@ -161,7 +223,11 @@ export function PracticeChatPage({
             <Lightbulb size={22} />
             <span>{isChinese ? "提示" : "Hints"}</span>
           </button>
-          <button className="hangup" onClick={() => onEndWithReview(messages, whatToCover)}>
+          <button className={muted ? "active" : ""} onClick={toggleMute}>
+            {muted ? <MicOff size={23} /> : <Mic size={23} />}
+            <span>{isChinese ? "静音" : "Mute"}</span>
+          </button>
+          <button className="hangup" onClick={handleEndCall}>
             <PhoneOff size={25} />
             <span>{isChinese ? "挂断" : "End"}</span>
           </button>

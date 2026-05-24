@@ -6,6 +6,7 @@ import type {
   ContentUnderstanding,
   FragmentRecommendationOutput,
   PracticeChatReviewOutput,
+  PracticeReviewFeatures,
   PracticePlan,
   QuickPetChatOutput,
   ScreenshotRecognitionOutput,
@@ -251,6 +252,7 @@ export async function generatePracticeChatReview(args: {
   practiceGoal: string;
   whatToCover: string[];
   chatMessages: ChatMessage[];
+  reviewFeatures: PracticeReviewFeatures;
   targetLanguage: string;
   nativeLanguage: string;
   appState: AppStateRecord;
@@ -260,8 +262,10 @@ export async function generatePracticeChatReview(args: {
     practiceGoal: args.practiceGoal,
     whatToCover: args.whatToCover,
     chatMessages: args.chatMessages.map((m) => ({ role: m.role, text: m.text })),
+    reviewFeatures: args.reviewFeatures,
     targetLanguage: args.targetLanguage,
     nativeLanguage: args.nativeLanguage,
+    interfaceLanguage: args.appState.profile.interfaceLanguage,
     level: args.appState.profile.level
   };
 

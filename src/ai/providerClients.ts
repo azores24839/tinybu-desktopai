@@ -34,7 +34,7 @@ export async function callOpenAi<T>(
             strict: true
           }
         },
-        max_output_tokens: task === "screenshotCapture" || task === "screenshotQuestion" ? 1600 : 900
+        max_output_tokens: task === "screenshotCapture" || task === "screenshotQuestion" || task === "practiceChatReview" ? 1600 : 900
       })
     },
     25000
@@ -76,7 +76,7 @@ export async function callOpenRouter<T>(
             schema: schema.schema
           }
         },
-        max_tokens: task === "screenshotCapture" || task === "screenshotQuestion" ? 1600 : 900
+        max_tokens: task === "screenshotCapture" || task === "screenshotQuestion" || task === "practiceChatReview" ? 1600 : 900
       })
     },
     25000

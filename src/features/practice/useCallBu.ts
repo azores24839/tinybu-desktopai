@@ -4,11 +4,23 @@ import { encodeFrame, decodeFrame, EVENT_ID, SERVER_EVENT } from "../../lib/volc
 
 export type CallBuState = "idle" | "connecting" | "listening" | "thinking" | "speaking" | "ended" | "error";
 
+function mergeUtteranceText(current: string, next: string) {
+  const cleanCurrent = current.trim();
+  const cleanNext = next.trim();
+  if (!cleanNext) return cleanCurrent;
+  if (!cleanCurrent) return cleanNext;
+  if (cleanCurrent === cleanNext || cleanCurrent.includes(cleanNext)) return cleanCurrent;
+  if (cleanNext.includes(cleanCurrent)) return cleanNext;
+  if (/^[,.;:!?，。；：！？]/.test(cleanNext)) return `${cleanCurrent}${cleanNext}`;
+  return `${cleanCurrent} ${cleanNext}`.replace(/\s+/g, " ");
+}
+
 export function useCallBu(topic: { title: string; summary: string }, targetLanguage: string, nativeLanguage: string) {
   const [state, setState] = useState<CallBuState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [userText, setUserText] = useState("");
   const [buText, setBuText] = useState("");
+  const [muted, setMuted] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -19,6 +31,8 @@ export function useCallBu(topic: { title: string; summary: string }, targetLangu
   const callingRef = useRef(false);
   const sessionIdRef = useRef("");
   const stateRef = useRef<CallBuState>("idle");
+  const userTurnTextRef = useRef("");
+  const buTurnTextRef = useRef("");
 
   const updateState = useCallback((s: CallBuState) => {
     stateRef.current = s;
@@ -33,6 +47,14 @@ export function useCallBu(topic: { title: string; summary: string }, targetLangu
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+    }
+  }
+
+  function applyMuted(nextMuted: boolean) {
+    if (streamRef.current) {
+      streamRef.current.getAudioTracks().forEach((track) => {
+        track.enabled = !nextMuted;
+      });
     }
   }
 
@@ -147,6 +169,8 @@ export function useCallBu(topic: { title: string; summary: string }, targetLangu
       case "ConnectionStarted":
         break;
       case "SessionStarted":
+        userTurnTextRef.current = "";
+        buTurnTextRef.current = "";
         updateState("listening");
         break;
       case "SessionFinished":
@@ -180,20 +204,27 @@ export function useCallBu(topic: { title: string; summary: string }, targetLangu
           const asr = JSON.parse(payloadStr);
           if (asr.results?.length) {
             const text = asr.results[asr.results.length - 1].text || "";
-            if (text && !asr.results[0].is_interim) setUserText(text);
+            if (text && !asr.results[0].is_interim) {
+              userTurnTextRef.current = mergeUtteranceText(userTurnTextRef.current, text);
+              setUserText(userTurnTextRef.current);
+            }
           }
         } catch { /* ignore */ }
         break;
       }
 
       case "ASREnded":
+        buTurnTextRef.current = "";
         updateState("thinking");
         break;
 
       case "ChatResponse": {
         try {
           const chat = JSON.parse(payloadStr);
-          if (chat.content) setBuText(chat.content);
+          if (chat.content) {
+            buTurnTextRef.current = mergeUtteranceText(buTurnTextRef.current, chat.content);
+            setBuText(buTurnTextRef.current);
+          }
         } catch { /* ignore */ }
         break;
       }
@@ -202,7 +233,10 @@ export function useCallBu(topic: { title: string; summary: string }, targetLangu
         updateState("speaking");
         try {
           const tts = JSON.parse(payloadStr);
-          if (tts.text) setBuText(tts.text);
+          if (tts.text) {
+            buTurnTextRef.current = mergeUtteranceText(buTurnTextRef.current, tts.text);
+            setBuText(buTurnTextRef.current);
+          }
         } catch { /* ignore */ }
         break;
       }
@@ -212,6 +246,7 @@ export function useCallBu(topic: { title: string; summary: string }, targetLangu
         break;
 
       case "TTSEnded":
+        userTurnTextRef.current = "";
         updateState("listening");
         break;
 
@@ -254,12 +289,16 @@ export function useCallBu(topic: { title: string; summary: string }, targetLangu
     setError(null);
     setUserText("");
     setBuText("");
+    userTurnTextRef.current = "";
+    buTurnTextRef.current = "";
+    setMuted(false);
     updateState("connecting");
 
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } });
       streamRef.current = stream;
+      applyMuted(false);
     } catch {
       setError("Microphone access denied. Please allow microphone access in System Settings > Privacy & Security > Microphone.");
       updateState("error");
@@ -342,7 +381,7 @@ Stay on topic and let the user speak more than you.`,
         updateState("ended");
       }
     };
-  }, [topic.title, topic.summary, updateState]);
+  }, [nativeLanguage, targetLanguage, topic.title, topic.summary, updateState]);
 
   const endCall = useCallback(() => {
     const ws = wsRef.current;
@@ -369,5 +408,13 @@ Stay on topic and let the user speak more than you.`,
     wsRef.current = null;
   }, [updateState]);
 
-  return { state, error, userText, buText, startCall, endCall };
+  const toggleMute = useCallback(() => {
+    setMuted((current) => {
+      const nextMuted = !current;
+      applyMuted(nextMuted);
+      return nextMuted;
+    });
+  }, []);
+
+  return { state, error, userText, buText, muted, startCall, endCall, toggleMute };
 }

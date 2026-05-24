@@ -121,6 +121,27 @@ export function PracticeReviewPage({
               </div>
             </section>
 
+            {review.expressionStatus && review.strength && review.nextFocus && (
+              <section className="review-diagnostic-panel">
+                <div className="review-status-card">
+                  <span>{copy.expressionStatusTitle}</span>
+                  <strong>{review.expressionStatus.label}</strong>
+                </div>
+                <div className="review-diagnostic-grid">
+                  <article>
+                    <span>{copy.strengthTitle}</span>
+                    <h3>{review.strength.label}</h3>
+                    <p>{review.strength.detail}</p>
+                  </article>
+                  <article>
+                    <span>{copy.nextFocusTitle}</span>
+                    <h3>{review.nextFocus.label}</h3>
+                    <p>{review.nextFocus.detail}</p>
+                  </article>
+                </div>
+              </section>
+            )}
+
             <section className="review-memory-tags-panel">
               <div className="review-panel-heading">
                 <h3>{copy.memoryTagsTitle}</h3>
@@ -245,6 +266,10 @@ const zh = {
   expressionsTitle: "推荐保存",
   wordsTitle: "想保存的表达",
   nextTitle: "TinyBu 的小记",
+  expressionStatusTitle: "表达状态",
+  strengthTitle: "这次说得好的地方",
+  nextFocusTitle: "下次练这一点",
+  confidenceTitle: "判断把握",
   recommendedLabel: "建议留下这一句",
   originalLabel: "原句",
   improvedLabel: "更自然",
@@ -285,6 +310,10 @@ const en = {
   expressionsTitle: "Recommended save",
   wordsTitle: "Expressions to save",
   nextTitle: "TinyBu's note",
+  expressionStatusTitle: "Expression status",
+  strengthTitle: "What went well",
+  nextFocusTitle: "Try this next",
+  confidenceTitle: "Confidence",
   recommendedLabel: "Keep this sentence",
   originalLabel: "Original",
   improvedLabel: "More natural",

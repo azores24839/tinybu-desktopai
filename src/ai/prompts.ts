@@ -14,7 +14,7 @@ export const taskPrompts = {
   practiceChat:
     "You are TinyBu, a warm language practice companion.\n\nReply in 1-3 short sentences.\nAcknowledge the user's meaning, then ask one simple follow-up or offer one natural way to say it better.\nIf the user uses their native language, briefly support them and guide them back to the target language.\nStay focused on the current topic.\nNo markdown, no lists, no long explanations.\nKeep replies under 50 words.",
   practiceChatReview:
-    "You are TinyBu, a gentle language companion creating a light post-practice review.\n\nBased on the conversation history, generate:\n\n1. diarySummary: A warm first-person note from TinyBu's point of view about what TinyBu learned about the user. Make it feel like a relationship memory, not a performance report. Mention concrete preferences, stress patterns, or support needs when the conversation supports them. Keep it to 3-5 short paragraphs.\n\n2. betterExpressions: A JSON array of expression improvements. Follow these rules strictly:\n   - Each item has: original (the user's original wording, or empty string), improved (more natural way to say it), note (very short explanation, or empty string)\n   - Only rewrite expressions where the user's wording could be more natural\n   - Base each suggestion on the user's actual messages — do not invent generic examples\n   - Count user messages and follow these quantity rules:\n     * 1-2 user messages: at most 1 better expression\n     * 3-5 user messages: 1-3 better expressions  \n     * 6+ user messages: 2-5 better expressions\n   - If no clear improvement needed, return an empty array\n   - Focus on reusable natural expressions, not line-by-line correction\n\n3. savedWordsOrChunks: An array of 3-8 words, phrases, or chunks worth saving from this practice. Prioritize words the user used, AI recasts, or topic language bank items. Avoid generic words.\n\n4. memoryTags: An array of 4-8 short user-memory tags TinyBu may remember, such as preferences, calming routines, or support needs. Keep each tag compact and concrete.\n\n5. nextStep: One short, specific suggestion for continued practice (one sentence only).\n\nOutput only valid JSON matching the schema."
+    "You are TinyBu, a gentle language companion creating a light post-practice review.\n\nKeep the review companion-like, not exam-like. Do not call the numeric status a score, test result, CEFR level, or grade. Use the user's interfaceLanguage for all labels, details, Why interpretations, and notes; keep quoted user text exactly as spoken.\n\nBased on the conversation history and extracted practice features, generate:\n\n1. diarySummary: A warm first-person note from TinyBu's point of view about what TinyBu learned about the user. Make it feel like a relationship memory, not a performance report. Mention concrete preferences, stress patterns, or support needs when the conversation supports them. Keep it to 3-5 short paragraphs.\n\n2. betterExpressions: A JSON array of expression improvements. Follow these rules strictly:\n   - Each item has: original (the user's original wording, or empty string), improved (more natural way to say it), note (very short explanation, or empty string)\n   - Only rewrite expressions where the user's wording could be more natural\n   - Base each suggestion on the user's actual messages — do not invent generic examples\n   - Count user messages and follow these quantity rules:\n     * 1-2 user messages: at most 1 better expression\n     * 3-5 user messages: 1-3 better expressions\n     * 6+ user messages: 2-5 better expressions\n   - If no clear improvement needed, return an empty array\n   - Focus on reusable natural expressions, not line-by-line correction\n\n3. savedWordsOrChunks: An array of 3-8 words, phrases, or chunks worth saving from this practice. Prioritize words the user used, AI recasts, or topic language bank items. Avoid generic words.\n\n4. memoryTags: An array of 4-8 short user-memory tags TinyBu may remember, such as preferences, calming routines, or support needs. Keep each tag compact and concrete.\n\n5. nextStep: One short, specific suggestion for continued practice (one sentence only).\n\n6. expressionStatus: A light practice status with score 0-100, label, and confidence. Use the provided suggestedScore, suggestedLabel, and confidence unless the transcript strongly contradicts them.\n\n7. strength: One thing the learner did well. Include a concrete quote when possible.\n\n8. nextFocus: One next practice focus only. Use one of these types: task_completion, continuity, idea_development, language_control, interaction, chunk_activation.\n\n9. why: 1-3 concise moments explaining why TinyBu noticed this. Each item must include either a user quote or a concrete practice feature; never write generic praise only.\n\n10. dimensionSignals: Internal 0-100 signals for taskCompletion, continuity, development, control, and interaction. Do not mention them in diarySummary.\n\nOutput only valid JSON matching the schema."
 };
 
 export const jsonSchemas = {
@@ -167,7 +167,18 @@ export const jsonSchemas = {
     schema: {
       type: "object",
       additionalProperties: false,
-      required: ["diarySummary", "betterExpressions", "savedWordsOrChunks", "memoryTags", "nextStep"],
+      required: [
+        "diarySummary",
+        "betterExpressions",
+        "savedWordsOrChunks",
+        "memoryTags",
+        "nextStep",
+        "expressionStatus",
+        "strength",
+        "nextFocus",
+        "why",
+        "dimensionSignals"
+      ],
       properties: {
         diarySummary: { type: "string" },
         betterExpressions: {
@@ -191,7 +202,68 @@ export const jsonSchemas = {
           type: "array",
           items: { type: "string" }
         },
-        nextStep: { type: "string" }
+        nextStep: { type: "string" },
+        expressionStatus: {
+          type: "object",
+          additionalProperties: false,
+          required: ["score", "label", "confidence"],
+          properties: {
+            score: { type: "number" },
+            label: { type: "string" },
+            confidence: { type: "string", enum: ["low", "medium", "high"] }
+          }
+        },
+        strength: {
+          type: "object",
+          additionalProperties: false,
+          required: ["label", "detail", "quote"],
+          properties: {
+            label: { type: "string" },
+            detail: { type: "string" },
+            quote: { type: "string" }
+          }
+        },
+        nextFocus: {
+          type: "object",
+          additionalProperties: false,
+          required: ["type", "label", "detail", "practiceMove", "quote"],
+          properties: {
+            type: {
+              type: "string",
+              enum: ["task_completion", "continuity", "idea_development", "language_control", "interaction", "chunk_activation"]
+            },
+            label: { type: "string" },
+            detail: { type: "string" },
+            practiceMove: { type: "string" },
+            quote: { type: "string" }
+          }
+        },
+        why: {
+          type: "array",
+          minItems: 1,
+          maxItems: 3,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["quote", "interpretation"],
+            properties: {
+              quote: { type: "string" },
+              interpretation: { type: "string" }
+            }
+          }
+        },
+        dimensionSignals: {
+          type: "object",
+          additionalProperties: false,
+          required: ["taskCompletion", "continuity", "development", "control", "interaction"],
+          properties: {
+            taskCompletion: { type: "number" },
+            continuity: { type: "number" },
+            development: { type: "number" },
+            control: { type: "number" },
+            interaction: { type: "number" }
+          }
+        }
       }
     }
   }

@@ -47,7 +47,7 @@ const taskPrompts = {
   practiceChat:
     "You are TinyBu, a warm and gentle language learning companion. Reply in 1-3 very short sentences. First acknowledge what the user said, then give one natural expression or ask one simple follow-up question to keep the conversation going. Be encouraging, never critical. No markdown formatting, no long explanations, no lists, no corrections unless asked. Keep replies under 50 words.",
   practiceChatReview:
-    "Create a light post-practice chat review. Summarize what the learner practiced, suggest only useful natural expression improvements from the user's actual messages, save 3-8 words or chunks, and give one next step. For each better expression, include original, improved, and note; use an empty string when original or note does not apply. Return only valid JSON."
+    "Create a light post-practice chat review. Keep it companion-like, not exam-like. Use the user's interfaceLanguage for labels, details, Why interpretations, and notes; keep quoted user text exactly as spoken. Summarize what TinyBu learned about the learner, suggest only useful natural expression improvements from the user's actual messages, save 3-8 words or chunks, and give one next step. Also return expressionStatus, one strength, one nextFocus, 1-3 Why moments, and internal dimensionSignals. Why must cite user quotes or concrete practice features. Do not call the numeric status a score, grade, level, or test result. Return only valid JSON."
 };
 
 const quickPetChatPrompt =
@@ -255,7 +255,18 @@ function schemaFor(task) {
       schema: {
         type: "object",
         additionalProperties: false,
-        required: ["diarySummary", "betterExpressions", "savedWordsOrChunks", "nextStep"],
+        required: [
+          "diarySummary",
+          "betterExpressions",
+          "savedWordsOrChunks",
+          "memoryTags",
+          "nextStep",
+          "expressionStatus",
+          "strength",
+          "nextFocus",
+          "why",
+          "dimensionSignals"
+        ],
         properties: {
           diarySummary: { type: "string" },
           betterExpressions: {
@@ -272,7 +283,69 @@ function schemaFor(task) {
             }
           },
           savedWordsOrChunks: { type: "array", minItems: 3, maxItems: 8, items: { type: "string" } },
-          nextStep: { type: "string" }
+          memoryTags: { type: "array", items: { type: "string" } },
+          nextStep: { type: "string" },
+          expressionStatus: {
+            type: "object",
+            additionalProperties: false,
+            required: ["score", "label", "confidence"],
+            properties: {
+              score: { type: "number" },
+              label: { type: "string" },
+              confidence: { type: "string", enum: ["low", "medium", "high"] }
+            }
+          },
+          strength: {
+            type: "object",
+            additionalProperties: false,
+            required: ["label", "detail", "quote"],
+            properties: {
+              label: { type: "string" },
+              detail: { type: "string" },
+              quote: { type: "string" }
+            }
+          },
+          nextFocus: {
+            type: "object",
+            additionalProperties: false,
+            required: ["type", "label", "detail", "practiceMove", "quote"],
+            properties: {
+              type: {
+                type: "string",
+                enum: ["task_completion", "continuity", "idea_development", "language_control", "interaction", "chunk_activation"]
+              },
+              label: { type: "string" },
+              detail: { type: "string" },
+              practiceMove: { type: "string" },
+              quote: { type: "string" }
+            }
+          },
+          why: {
+            type: "array",
+            minItems: 1,
+            maxItems: 3,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["quote", "interpretation"],
+              properties: {
+                quote: { type: "string" },
+                interpretation: { type: "string" }
+              }
+            }
+          },
+          dimensionSignals: {
+            type: "object",
+            additionalProperties: false,
+            required: ["taskCompletion", "continuity", "development", "control", "interaction"],
+            properties: {
+              taskCompletion: { type: "number" },
+              continuity: { type: "number" },
+              development: { type: "number" },
+              control: { type: "number" },
+              interaction: { type: "number" }
+            }
+          }
         }
       }
     }
@@ -415,7 +488,7 @@ async function callAnthropic(task, model, payload) {
   const schema = schemaFor(task);
   const body = {
     model,
-    max_tokens: task === "screenshotCapture" ? 1200 : 900,
+    max_tokens: task === "screenshotCapture" || task === "practiceChatReview" ? 1600 : 900,
     system: taskPrompts[task],
     messages: [
       {
@@ -506,7 +579,7 @@ async function callOpenAi(task, model, payload) {
           strict: true
         }
       },
-      max_output_tokens: task === "screenshotCapture" ? 1200 : 900
+      max_output_tokens: task === "screenshotCapture" || task === "practiceChatReview" ? 1600 : 900
     })
   });
 
@@ -538,7 +611,7 @@ async function callOpenRouter(task, model, payload) {
           schema: schema.schema
         }
       },
-      max_tokens: task === "screenshotCapture" || task === "screenshotQuestion" ? 1600 : 900
+      max_tokens: task === "screenshotCapture" || task === "screenshotQuestion" || task === "practiceChatReview" ? 1600 : 900
     })
   });
   const data = await response.json();

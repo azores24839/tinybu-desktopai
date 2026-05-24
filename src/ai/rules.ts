@@ -6,6 +6,7 @@ import type {
   ContentUnderstanding,
   FragmentRecommendationOutput,
   PracticeChatReviewOutput,
+  PracticeReviewFeatures,
   PracticePlan,
   QuickPetChatOutput
 } from "../types";
@@ -19,6 +20,103 @@ function isUnwindDemoTask(task?: { title: string; description: string; targetGoa
 
 function isUnwindDemoTopic(topicName: string) {
   return topicName === UNWIND_DEMO_TITLE;
+}
+
+function clampScore(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function fallbackReviewFeatures(args: { chatMessages: ChatMessage[]; whatToCover: string[]; appState: AppStateRecord }): PracticeReviewFeatures {
+  const userMessages = args.chatMessages.filter((message) => message.role === "user");
+  const totalWordCount = userMessages
+    .map((message) => message.text.split(/\s+/).filter(Boolean).length)
+    .reduce((sum, count) => sum + count, 0);
+  const score = clampScore(45 + Math.min(30, totalWordCount / 2) + Math.min(20, userMessages.length * 4));
+  const label = args.appState.profile.interfaceLanguage === "中文"
+    ? score < 60
+      ? "开始接住了"
+      : score < 80
+        ? "表达变清楚了"
+        : "很有状态"
+    : score < 60
+      ? "Starting to hold the thread"
+      : score < 80
+        ? "Getting clearer"
+        : "In a good flow";
+  return {
+    userTurnCount: userMessages.length,
+    totalWordCount,
+    averageWordsPerTurn: userMessages.length ? totalWordCount / userMessages.length : 0,
+    longestTurnWordCount: totalWordCount,
+    shortReplyRatio: userMessages.length && totalWordCount < userMessages.length * 8 ? 1 : 0,
+    completedMoveCount: 0,
+    targetMoveCount: Math.max(1, args.whatToCover.length),
+    hasReason: /because|since|so|因为|所以/i.test(userMessages.map((message) => message.text).join(" ")),
+    hasExample: /example|like|比如|例如/i.test(userMessages.map((message) => message.text).join(" ")),
+    hasContrast: /but|however|但是|不过/i.test(userMessages.map((message) => message.text).join(" ")),
+    hasAction: /will|next|我会|下次/i.test(userMessages.map((message) => message.text).join(" ")),
+    usedTargetChunk: false,
+    confidence: userMessages.length < 2 || totalWordCount < 30 ? "low" : userMessages.length <= 4 || totalWordCount <= 80 ? "medium" : "high",
+    suggestedScore: score,
+    suggestedLabel: label,
+    dimensionSignals: {
+      taskCompletion: score,
+      continuity: score,
+      development: score,
+      control: score,
+      interaction: score
+    },
+    why: [
+      {
+        quote: userMessages[0]?.text ?? "",
+        interpretation: userMessages.length < 2
+          ? "This was a short practice, so TinyBu is keeping the judgment light."
+          : "TinyBu used your actual practice turns to make this light judgment."
+      }
+    ],
+    segments: []
+  };
+}
+
+function reviewV2Fallback(args: {
+  reviewFeatures?: PracticeReviewFeatures;
+  chatMessages: ChatMessage[];
+  whatToCover: string[];
+  appState: AppStateRecord;
+}): Pick<PracticeChatReviewOutput, "expressionStatus" | "strength" | "nextFocus" | "why" | "dimensionSignals"> {
+  const features = args.reviewFeatures ?? fallbackReviewFeatures(args);
+  const firstWhy = features.why[0];
+  const hasDevelopment = features.hasReason && features.hasExample;
+  const zh = args.appState.profile.interfaceLanguage === "中文";
+  return {
+    expressionStatus: {
+      score: features.suggestedScore,
+      label: features.suggestedLabel,
+      confidence: features.confidence
+    },
+    strength: {
+      label: features.hasReason
+        ? zh ? "你补出了原因" : "You gave a reason"
+        : zh ? "你接住了对话" : "You kept the conversation going",
+      detail: features.hasReason
+        ? zh ? "你没有停在一个简单回答，而是把原因说出来了。" : "You did not stop at a bare answer; you added why it mattered."
+        : zh ? "你回应了练习，也给了 TinyBu 可以继续陪你往下走的内容。" : "You responded to the practice and gave TinyBu something to build on.",
+      quote: firstWhy?.quote ?? ""
+    },
+    nextFocus: {
+      type: hasDevelopment ? "continuity" : "idea_development",
+      label: hasDevelopment
+        ? zh ? "再多接一句" : "Keep the flow going"
+        : zh ? "补一个具体例子" : "Add one concrete example",
+      detail: hasDevelopment
+        ? zh ? "下次可以试着在回答后面再自然多接一句。" : "Next time, try keeping the answer going for one more sentence."
+        : zh ? "下次说出主要想法后，补一个自己的细节或例子。" : "Next time, after your main idea, add one personal detail or example.",
+      practiceMove: hasDevelopment ? "continue_one_more_sentence" : "add_one_specific_example",
+      quote: firstWhy?.quote ?? ""
+    },
+    why: features.why,
+    dimensionSignals: features.dimensionSignals
+  };
 }
 
 function unwindDemoPracticePlan(args: { fragments: CaptureFragment[]; task: { targetGoal: string; starterQuestion: string } }): PracticePlan {
@@ -258,10 +356,12 @@ export function practiceChatReviewRules(args: {
   practiceGoal: string;
   whatToCover: string[];
   chatMessages: ChatMessage[];
+  reviewFeatures?: PracticeReviewFeatures;
   targetLanguage: string;
   nativeLanguage: string;
   appState: AppStateRecord;
 }): PracticeChatReviewOutput {
+  const reviewV2 = reviewV2Fallback(args);
   if (isUnwindDemoTopic(args.topicName)) {
     return {
       diarySummary:
@@ -294,7 +394,8 @@ export function practiceChatReviewRules(args: {
         "needs quiet time first",
         "can feel guilty for resting"
       ],
-      nextStep: "Next time, gently remind Sisi that rest is not a waste."
+      nextStep: "Next time, gently remind Sisi that rest is not a waste.",
+      ...reviewV2
     };
   }
 
@@ -319,6 +420,7 @@ export function practiceChatReviewRules(args: {
       "build on this"
     ].slice(0, 6),
     memoryTags: args.whatToCover.slice(0, 3),
-    nextStep: `Next time, try explaining one specific idea from ${args.topicName} with a personal example.`
+    nextStep: `Next time, try explaining one specific idea from ${args.topicName} with a personal example.`,
+    ...reviewV2
   };
 }

@@ -301,3 +301,67 @@ test("capture-based practice tasks only use suitable saved content", async () =>
   assert.equal(tasks[0].sourceCaptureId, "useful");
   assert.equal(practiceTaskToFragments(tasks[0])[0].selected, true);
 });
+
+test("review v2 schema requires status, strength, next focus, and why", async () => {
+  const { jsonSchemas } = await loadTsModule("src/ai/prompts.ts");
+  const schema = jsonSchemas.practiceChatReview.schema;
+
+  assert.equal(["expressionStatus", "strength", "nextFocus", "why"].every((field) => schema.required.includes(field)), true);
+  assert.equal(schema.properties.why.minItems, 1);
+  assert.equal(schema.properties.why.maxItems, 3);
+});
+
+test("review diagnostics maps expression status and lowers confidence for short practice", async () => {
+  const { expressionStatusLabel, extractPracticeReviewFeatures } = await loadTsModule("src/features/practice/practiceReviewDiagnostics.ts");
+
+  assert.equal(expressionStatusLabel(38, "中文"), "还在热身");
+  assert.equal(expressionStatusLabel(52, "中文"), "开始接住了");
+  assert.equal(expressionStatusLabel(72, "中文"), "表达变清楚了");
+  assert.equal(expressionStatusLabel(88, "中文"), "很有状态");
+
+  const features = extractPracticeReviewFeatures({
+    messages: [{ id: "u1", role: "user", text: "I am tired.", createdAt: "2026-05-22T00:00:00.000Z" }],
+    whatToCover: ["state", "reason"],
+    completedFocusItemIds: [],
+    targetChunks: [],
+    interfaceLanguage: "中文"
+  });
+
+  assert.equal(features.confidence, "low");
+  assert.equal(features.why.length >= 1, true);
+});
+
+test("rules fallback returns complete review v2 fields", async () => {
+  const { practiceChatReviewRules } = await loadTsModule("src/ai/rules.ts");
+  const output = practiceChatReviewRules({
+    topicName: "Small talk",
+    practiceGoal: "Explain one idea",
+    whatToCover: ["state", "reason"],
+    chatMessages: [
+      { id: "b1", role: "bu", text: "How are you?", createdAt: "2026-05-22T00:00:00.000Z" },
+      { id: "u1", role: "user", text: "I feel tired because I slept late.", createdAt: "2026-05-22T00:00:01.000Z" }
+    ],
+    targetLanguage: "English",
+    nativeLanguage: "中文",
+    appState: {
+      profile: {
+        interfaceLanguage: "中文"
+      }
+    }
+  });
+
+  assert.equal(typeof output.expressionStatus.score, "number");
+  assert.equal(output.expressionStatus.confidence, "low");
+  assert.equal(typeof output.strength.label, "string");
+  assert.equal(typeof output.nextFocus.practiceMove, "string");
+  assert.equal(output.why.length >= 1, true);
+  assert.equal(typeof output.dimensionSignals.taskCompletion, "number");
+});
+
+test("review page keeps legacy records compatible and labels evidence section as Why", async () => {
+  const source = await readFile(resolve(root, "src/features/practice/PracticeReviewPage.tsx"), "utf8");
+
+  assert.match(source, /review\.expressionStatus && review\.strength && review\.nextFocus/);
+  assert.match(source, /<h3>Why<\/h3>/);
+  assert.doesNotMatch(source, />Evidence</);
+});
