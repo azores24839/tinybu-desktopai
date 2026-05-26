@@ -10,6 +10,15 @@ export function isOpenRouterApiKey(apiKey: string) {
   return /^sk-or-/i.test(apiKey.trim());
 }
 
+export function isDeepSeekModel(model: string) {
+  return model.trim().toLowerCase().startsWith("deepseek");
+}
+
+export function isDeepSeekTask(task: string, appState: AppStateRecord) {
+  if (task === "screenshotCapture" || task === "screenshotQuestion") return false;
+  return isDeepSeekModel(modelForTask(task, appState));
+}
+
 export function normalizeOpenRouterModel(model: string) {
   const trimmed = model.trim();
   const aliases: Record<string, string> = {

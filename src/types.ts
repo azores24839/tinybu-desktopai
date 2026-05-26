@@ -12,6 +12,7 @@ export type Screen =
   | "practice-chat"
   | "practice-review"
   | "notebook"
+  | "expression-training"
   | "memory"
   | "settings";
 
@@ -79,6 +80,7 @@ export interface AppSettings {
   aiModel: string;
   visionModel: string;
   screenshotRecognitionEnabled: boolean;
+  deepSeekBaseUrl: string;
   openRouterBaseUrl: string;
   cloudProxyUrl: string;
   apiKeySaved: boolean;
@@ -313,6 +315,7 @@ export interface ChatMessage {
   role: "bu" | "user";
   text: string;
   createdAt: string;
+  saved?: boolean;
 }
 
 export type ReviewConfidence = "low" | "medium" | "high";
@@ -368,6 +371,15 @@ export interface PracticeChatReview {
   taskId?: string;
   createdAt: string;
   diarySummary: string;
+  taskOutcome?: {
+    label: string;
+    detail: string;
+  };
+  reviewScores?: {
+    fluency: number;
+    naturalness: number;
+    vocabulary: number;
+  };
   completedFocusItemIds: string[];
   focusItems: Array<{
     id: string;
@@ -407,6 +419,15 @@ export interface PracticeChatReview {
 
 export interface PracticeChatReviewOutput {
   diarySummary: string;
+  taskOutcome?: {
+    label: string;
+    detail: string;
+  };
+  reviewScores?: {
+    fluency: number;
+    naturalness: number;
+    vocabulary: number;
+  };
   betterExpressions: Array<{
     original: string;
     improved: string;

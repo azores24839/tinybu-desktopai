@@ -1,0 +1,272 @@
+@media (max-width: 1180px) {
+  .expression-library-layout {
+    grid-template-columns: 160px minmax(0, 1fr);
+  }
+
+  .expression-training-panel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .review-redesign-grid,
+  .expression-library-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .review-score-row {
+    grid-template-columns: 88px minmax(0, 1fr) 38px;
+  }
+
+  .expression-library-hero,
+  .expression-library-toolbar,
+  .expression-library-grid,
+  .training-topbar,
+  .training-action-bar,
+  .training-prompt-head,
+  .training-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .expression-training-fullscreen {
+    height: auto;
+    min-height: 100vh;
+    overflow: auto;
+  }
+
+  .training-question-card {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .expression-preview-panel {
+    position: static;
+  }
+
+  .expression-preview-stats,
+  .training-step-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .training-question-card,
+  .training-complete-card {
+    border-radius: 24px;
+  }
+}
+
+@media (max-width: 1280px) {
+  .needs-review-layout {
+    grid-template-columns: 250px minmax(0, 1fr);
+  }
+
+  .needs-review-layout::before {
+    left: 250px;
+  }
+}
+
+@media (max-width: 980px) {
+  .needs-review-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .needs-review-layout::before {
+    display: none;
+  }
+
+  .review-queue-column,
+  .review-center {
+    max-height: none;
+  }
+
+  .review-screenshot-row {
+    grid-template-columns: 1fr;
+  }
+
+  .review-screenshot-thumb {
+    width: 100%;
+    height: auto;
+    max-height: 220px;
+  }
+
+  .review-drawer {
+    width: 100vw;
+  }
+}
+
+@media (max-width: 1280px) {
+  .page {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .organize-layout,
+  .study-layout {
+    grid-template-columns: 210px minmax(0, 1fr) 300px;
+  }
+
+  .inbox-folder-layout:has(.folder-drawer) {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+
+  .practice-layout {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}
+
+@media (max-width: 980px) {
+  .desktop-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    display: grid;
+    grid-template-columns: auto auto;
+    align-items: center;
+    width: 100%;
+    position: static;
+    height: auto;
+    gap: 10px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 12px;
+  }
+
+  .sidebar nav {
+    display: flex;
+    grid-column: 1 / -1;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    gap: 4px;
+    overflow-x: auto;
+  }
+
+  .sidebar nav button,
+  .settings-link,
+  .brand-button {
+    flex: 0 0 auto;
+    width: auto;
+    white-space: nowrap;
+  }
+
+  .settings-link {
+    margin-top: 0;
+    margin-left: 0;
+    justify-self: end;
+  }
+
+  .app-header,
+  .suggestion-panel,
+  .rhythm-header {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .home-shell {
+    height: 100vh;
+    min-height: 680px;
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .home-shell .sidebar {
+    height: auto;
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 0;
+    border-radius: 32px 32px 0 0;
+    padding: 12px 18px;
+  }
+
+  .home-shell .main-panel {
+    height: auto;
+    min-height: 0;
+    border-radius: 0 0 32px 32px;
+  }
+
+  .material-library-panel {
+    top: 84px;
+    left: 24px;
+    width: calc(100vw - 48px);
+    max-height: calc(100vh - 112px);
+    padding: 22px;
+  }
+
+  .home-page {
+    height: 100%;
+    padding: 18px 22px 22px;
+  }
+
+  .home-page .home-focus-layout {
+    grid-template-rows: minmax(120px, 22%) minmax(210px, 36%) minmax(150px, 1fr);
+    gap: 14px;
+  }
+
+  .home-hero {
+    grid-template-columns: minmax(170px, 0.7fr) minmax(0, 1.3fr);
+    gap: 18px;
+  }
+
+  .hero-asset-slot {
+    min-height: 118px;
+  }
+
+  .weekly-card-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .home-bottom-grid {
+    grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
+    align-items: end;
+    gap: 20px;
+  }
+
+  .home-page .queue-card {
+    min-height: 112px;
+    border-radius: 28px;
+    padding: 20px 24px;
+  }
+
+  .home-page .queue-card i {
+    right: 18px;
+    bottom: 18px;
+    width: 42px;
+    height: 42px;
+  }
+
+  .home-page .rhythm-panel {
+    --rhythm-cell-size: 10px;
+    --rhythm-gap: 4px;
+  }
+
+  .suggestion-panel {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .inbox-layout,
+  .inbox-folder-layout,
+  .organize-layout,
+  .study-layout,
+  .practice-layout,
+  .notebook-layout,
+  .topics-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-panel,
+  .detail-panel,
+  .topic-detail-panel,
+  .source-nav,
+  .practice-support,
+  .folder-drawer {
+    position: static;
+    max-height: none;
+  }
+
+  .queue-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+

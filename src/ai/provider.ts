@@ -15,17 +15,20 @@ import type {
 import { loadUserApiKey } from "../lib/secureKey";
 import {
   callCloudProxy,
+  callDeepSeek,
   callOpenAi,
   callOpenRouter,
+  callPracticeChatDeepSeek,
   callPracticeChatCloudProxy,
   callPracticeChatOpenAi,
   callPracticeChatOpenRouter,
   callQuickPetChatCloudProxy,
+  callQuickPetChatDeepSeek,
   callQuickPetChatOpenAi,
   callQuickPetChatOpenRouter,
   type ProviderTaskName
 } from "./providerClients";
-import { isOpenRouterApiKey, shouldUseOpenRouter } from "./providerRouting";
+import { isDeepSeekTask, isOpenRouterApiKey, shouldUseOpenRouter } from "./providerRouting";
 import { normalizeScreenshotRecognition } from "./responseParsing";
 import {
   practiceChatReviewRules,
@@ -50,6 +53,9 @@ async function callQuickPetChatUserKey(
   appState: AppStateRecord
 ): Promise<QuickPetChatOutput> {
   const apiKey = await loadRequiredUserApiKey();
+  if (isDeepSeekTask("quickPetChat", appState)) {
+    return callQuickPetChatDeepSeek(payload, appState, apiKey);
+  }
   return isOpenRouterApiKey(apiKey) || shouldUseOpenRouter("quickPetChat", appState)
     ? callQuickPetChatOpenRouter(payload, appState, apiKey)
     : callQuickPetChatOpenAi(payload, appState, apiKey);
@@ -60,6 +66,9 @@ async function callPracticeChatUserKey(
   appState: AppStateRecord
 ): Promise<string> {
   const apiKey = await loadRequiredUserApiKey();
+  if (isDeepSeekTask("practiceChat", appState)) {
+    return callPracticeChatDeepSeek(payload, appState, apiKey);
+  }
   return isOpenRouterApiKey(apiKey) || shouldUseOpenRouter("practiceChat", appState)
     ? callPracticeChatOpenRouter(payload, appState, apiKey)
     : callPracticeChatOpenAi(payload, appState, apiKey);
@@ -67,6 +76,9 @@ async function callPracticeChatUserKey(
 
 async function callUserKey<T>(task: TaskName, payload: unknown, appState: AppStateRecord) {
   const apiKey = await loadRequiredUserApiKey();
+  if (isDeepSeekTask(task, appState)) {
+    return callDeepSeek<T>(task, payload, appState, apiKey);
+  }
   return isOpenRouterApiKey(apiKey) || shouldUseOpenRouter(task, appState)
     ? callOpenRouter<T>(task, payload, appState, apiKey)
     : callOpenAi<T>(task, payload, appState, apiKey);

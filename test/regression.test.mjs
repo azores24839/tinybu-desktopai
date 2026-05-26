@@ -14,20 +14,72 @@ import {
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const retiredProductNamePattern = /\b(?:NOMI|Nomi|nomi|NORI|Nori|nori|Mirror|mirror)[A-Za-z0-9_-]*/g;
 const ignoredRetiredNameDirs = new Set([".git", "dist", "node_modules", "src-tauri/target"]);
+const tsModuleUrlCache = new Map();
+
+async function resolveTsImport(fromFile, specifier) {
+  const basePath = resolve(dirname(fromFile), specifier);
+  const candidates = [
+    basePath,
+    `${basePath}.ts`,
+    `${basePath}.tsx`,
+    `${basePath}.js`,
+    `${basePath}.mjs`,
+    resolve(basePath, "index.ts"),
+    resolve(basePath, "index.tsx")
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      await readFile(candidate, "utf8");
+      return candidate;
+    } catch {
+      // Keep checking extension fallbacks.
+    }
+  }
+
+  throw new Error(`Unable to resolve ${specifier} from ${fromFile}`);
+}
+
+async function tsModuleUrl(filePath) {
+  if (tsModuleUrlCache.has(filePath)) return tsModuleUrlCache.get(filePath);
+
+  const moduleUrlPromise = (async () => {
+    const source = await readFile(filePath, "utf8");
+    let output = ts.transpileModule(source, {
+      compilerOptions: {
+        module: ts.ModuleKind.ES2022,
+        target: ts.ScriptTarget.ES2022,
+        jsx: ts.JsxEmit.ReactJSX
+      },
+      fileName: filePath
+    }).outputText;
+
+    const specifiers = new Set();
+    for (const match of output.matchAll(/(?:from\s*["']([^"']+)["'])|(?:import\s*\(\s*["']([^"']+)["']\s*\))/g)) {
+      const specifier = match[1] || match[2];
+      if (specifier?.startsWith(".")) specifiers.add(specifier);
+    }
+
+    for (const specifier of specifiers) {
+      const dependencyPath = await resolveTsImport(filePath, specifier);
+      const dependencyUrl = await tsModuleUrl(dependencyPath);
+      output = output
+        .replaceAll(`from "${specifier}"`, `from "${dependencyUrl}"`)
+        .replaceAll(`from '${specifier}'`, `from '${dependencyUrl}'`)
+        .replaceAll(`import("${specifier}")`, `import("${dependencyUrl}")`)
+        .replaceAll(`import('${specifier}')`, `import("${dependencyUrl}")`);
+    }
+
+    return `data:text/javascript;base64,${Buffer.from(`${output}\n//# sourceURL=${pathToFileURL(filePath).href}`).toString("base64")}`;
+  })();
+
+  tsModuleUrlCache.set(filePath, moduleUrlPromise);
+  return moduleUrlPromise;
+}
 
 async function loadTsModule(relativePath) {
   const filePath = resolve(root, relativePath);
-  const source = await readFile(filePath, "utf8");
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.ES2022,
-      target: ts.ScriptTarget.ES2022,
-      jsx: ts.JsxEmit.ReactJSX
-    },
-    fileName: filePath
-  }).outputText;
-
-  return import(`data:text/javascript;base64,${Buffer.from(`${output}\n//# sourceURL=${pathToFileURL(filePath).href}`).toString("base64")}`);
+  return import(await tsModuleUrl(filePath));
 }
 
 async function listProjectFiles(dir = root, prefix = "") {
@@ -207,6 +259,32 @@ test("screenshot confirmation is only available while image data and OCR text ar
   assert.equal(canConfirmScreenshotText({ screenshot: { imageDataUrl: "data:image/png;base64,abc", visibleText: [] } }), false);
 });
 
+test("extension content bridge loads before the content script", async () => {
+  const manifest = JSON.parse(await readFile(resolve(root, "apps/extension/manifest.json"), "utf8"));
+  const contentScripts = manifest.content_scripts?.[0]?.js ?? [];
+  const backgroundSource = await readFile(resolve(root, "apps/extension/background.js"), "utf8");
+  const contentSource = await readFile(resolve(root, "apps/extension/content.js"), "utf8");
+
+  assert.deepEqual(contentScripts, [
+    "contentBridge.js",
+    "contentExtractors.js",
+    "contentMessaging.js",
+    "contentSelection.js",
+    "contentLayout.js",
+    "contentCaptureActions.js",
+    "contentRuntime.js",
+    "contentViewHelpers.js",
+    "contentFloatingStyles.js",
+    "content.js"
+  ]);
+  assert.match(
+    backgroundSource,
+    /files:\s*\[\s*"contentBridge\.js",\s*"contentExtractors\.js",\s*"contentMessaging\.js",\s*"contentSelection\.js",\s*"contentLayout\.js",\s*"contentCaptureActions\.js",\s*"contentRuntime\.js",\s*"contentViewHelpers\.js",\s*"contentFloatingStyles\.js",\s*"content\.js"\s*\]/
+  );
+  assert.equal(contentSource.includes("basePayload("), false);
+  assert.equal(contentSource.includes("innerHTML"), false);
+});
+
 test("practice utils prefer selected or recommended fragments before fallback fragments", async () => {
   const { selectPracticeFragments } = await loadTsModule("src/features/practice/practiceUtils.ts");
   const captures = [
@@ -238,7 +316,7 @@ test("practice chat completion marks the topic and source captures practiced", a
   const topic = {
     id: "topic-1",
     name: "Travel",
-    captureIds: ["capture-1"],
+    captureIds: ["capture-1", "capture-2"],
     status: "in-progress",
     lastPracticedAt: undefined,
     updatedAt: "2026-05-12T00:00:00.000Z"
@@ -302,6 +380,65 @@ test("capture-based practice tasks only use suitable saved content", async () =>
   assert.equal(practiceTaskToFragments(tasks[0])[0].selected, true);
 });
 
+test("practice session builder prepares topic and task sources without UI state", async () => {
+  const { buildTaskPracticeSession, buildTopicPracticeSession } = await loadTsModule("src/features/practice/practiceSessionBuilder.ts");
+  const captures = [
+    {
+      id: "capture-1",
+      title: "Travel note",
+      summary: "A note about travel.",
+      fragments: [
+        { id: "f1", text: "I want to explain why train travel feels calmer.", selected: false, recommended: false },
+        { id: "f2", text: "Taking the train gives me time to think before arriving.", selected: true, recommended: false }
+      ]
+    },
+    {
+      id: "capture-2",
+      title: "Other",
+      fragments: [{ id: "f3", text: "Not part of this topic.", selected: true, recommended: true }]
+    }
+  ];
+  const topic = {
+    id: "topic-1",
+    name: "Travel",
+    summary: "Talk about train travel.",
+    captureIds: ["capture-1"],
+    tags: [],
+    practiceGoal: "Explain one travel preference",
+    status: "new",
+    savedExpressionCount: 0,
+    createdAt: "2026-05-24T00:00:00.000Z",
+    updatedAt: "2026-05-24T00:00:00.000Z"
+  };
+  const topicSession = buildTopicPracticeSession({ captures, fallbackQuestion: "What do you prefer?", topic });
+
+  assert.equal(topicSession.source.kind, "topic");
+  assert.equal(topicSession.source.title, "Travel");
+  assert.deepEqual(topicSession.source.captures.map((capture) => capture.id), ["capture-1"]);
+  assert.deepEqual(topicSession.fragments.map((fragment) => fragment.id), ["f2"]);
+  assert.equal(buildTopicPracticeSession({ captures, fallbackQuestion: "Start?", topic: { ...topic, captureIds: [] } }), null);
+
+  const taskSession = buildTaskPracticeSession({
+    captures,
+    task: {
+      id: "task-1",
+      title: "Capture task",
+      description: "Use one saved capture.",
+      taskType: "capture-based",
+      sourceCaptureId: "capture-1",
+      targetGoal: "Explain the saved idea",
+      starterQuestion: "What did you notice?",
+      status: "new",
+      createdAt: "2026-05-24T00:00:00.000Z"
+    }
+  });
+
+  assert.equal(taskSession.source.kind, "task");
+  assert.deepEqual(taskSession.source.captures.map((capture) => capture.id), ["capture-1"]);
+  assert.equal(taskSession.firstQuestion, "What did you notice?");
+  assert.deepEqual(taskSession.fragments.map((fragment) => fragment.id), ["f2"]);
+});
+
 test("review v2 schema requires status, strength, next focus, and why", async () => {
   const { jsonSchemas } = await loadTsModule("src/ai/prompts.ts");
   const schema = jsonSchemas.practiceChatReview.schema;
@@ -356,6 +493,256 @@ test("rules fallback returns complete review v2 fields", async () => {
   assert.equal(typeof output.nextFocus.practiceMove, "string");
   assert.equal(output.why.length >= 1, true);
   assert.equal(typeof output.dimensionSignals.taskCompletion, "number");
+});
+
+test("practice review record builder clamps scores and preserves review evidence", async () => {
+  const { buildPracticeReviewRecord } = await loadTsModule("src/features/practice/practiceReviewBuilder.ts");
+  const messages = [
+    { id: "b1", role: "bu", text: "How are you?", createdAt: "2026-05-24T00:00:00.000Z" },
+    { id: "u1", role: "user", text: "I feel tired because I slept late.", createdAt: "2026-05-24T00:00:01.000Z" },
+    { id: "u2", role: "user", text: "I will take a short walk.", createdAt: "2026-05-24T00:00:02.000Z" }
+  ];
+  const review = buildPracticeReviewRecord({
+    bookmarkedLines: ["I feel tired", "short walk"],
+    completedFocusItemIds: ["focus-0"],
+    focusItems: [{ id: "focus-0", label: "Explain how you feel", completed: true }],
+    interfaceLanguage: "中文",
+    messages,
+    output: {
+      diarySummary: "The learner explained tiredness and a next step.",
+      taskOutcome: "completed",
+      reviewScores: { taskCompletion: 80, clarity: 76, naturalness: 70 },
+      betterExpressions: [{ original: "I slept late", improved: "I went to bed late", note: "More natural." }],
+      savedWordsOrChunks: ["short walk", "take a short walk"],
+      memoryTags: ["prefers gentle practice"],
+      nextStep: "Practice one reason sentence.",
+      expressionStatus: { score: 104.4, label: "", confidence: "high" },
+      strength: { label: "Clear reason", detail: "The reason was easy to follow." },
+      nextFocus: { label: "Add detail", practiceMove: "Add one concrete example." },
+      why: ["Two user turns gave enough evidence."],
+      dimensionSignals: { taskCompletion: 80, clarity: 76, naturalness: 70 }
+    },
+    reviewFeatures: { confidence: "medium", why: ["short practice"], userTurnCount: 2, totalWordCount: 13 },
+    source: {
+      kind: "task",
+      task: { id: "task-1", title: "Daily check-in" },
+      title: "Daily check-in",
+      captures: [],
+      practiceGoal: "Explain today's state"
+    }
+  });
+
+  assert.equal(review.taskId, "task-1");
+  assert.equal(review.messageCount, 3);
+  assert.equal(review.userMessageCount, 2);
+  assert.equal(review.expressionStatus.score, 100);
+  assert.equal(review.expressionStatus.confidence, "medium");
+  assert.equal(review.expressionStatus.label, "很有状态");
+  assert.deepEqual(review.savedWordsOrChunks, ["I feel tired", "short walk", "take a short walk"]);
+  assert.deepEqual(review.why, ["Two user turns gave enough evidence."]);
+});
+
+test("practice review generation args preserve source plan and language context", async () => {
+  const { buildPracticeReviewGenerationArgs } = await loadTsModule("src/features/practice/practiceReviewGeneration.ts");
+  const appState = {
+    profile: {
+      targetLanguage: "English",
+      nativeLanguage: "中文",
+      interfaceLanguage: "中文"
+    }
+  };
+  const messages = [
+    { id: "u1", role: "user", text: "I feel tired because I slept late.", createdAt: "2026-05-24T00:00:01.000Z" }
+  ];
+  const reviewFeatures = {
+    userTurnCount: 1,
+    totalWordCount: 7,
+    averageWordsPerTurn: 7,
+    longestTurnWordCount: 7,
+    shortReplyRatio: 0,
+    completedMoveCount: 1,
+    targetMoveCount: 2,
+    hasReason: true,
+    hasExample: false,
+    hasContrast: false,
+    hasAction: false,
+    usedTargetChunk: false,
+    confidence: "low",
+    suggestedScore: 56,
+    suggestedLabel: "开始接住了",
+    dimensionSignals: { taskCompletion: 55, clarity: 60, naturalness: 50 },
+    why: [],
+    segments: []
+  };
+  const args = buildPracticeReviewGenerationArgs({
+    appState,
+    messages,
+    practicePlan: { practiceGoal: "Explain your state clearly", questions: [], whatToCover: [], languageBank: { usefulWords: [], usefulChunks: [] } },
+    reviewFeatures,
+    source: {
+      kind: "topic",
+      title: "Daily check-in",
+      summary: "Talk about today.",
+      practiceGoal: "Explain today",
+      topic: { id: "topic-1" },
+      captures: []
+    },
+    whatToCover: ["state", "reason"]
+  });
+
+  assert.equal(args.topicName, "Daily check-in");
+  assert.equal(args.practiceGoal, "Explain your state clearly");
+  assert.deepEqual(args.whatToCover, ["state", "reason"]);
+  assert.deepEqual(args.chatMessages, messages);
+  assert.equal(args.reviewFeatures, reviewFeatures);
+  assert.equal(args.targetLanguage, "English");
+  assert.equal(args.nativeLanguage, "中文");
+});
+
+test("practice review completion saves topic completion and used tasks", async () => {
+  const { buildPracticeReviewCompletionArtifacts, savePracticeReviewCompletion } = await loadTsModule("src/features/practice/practiceReviewCompletion.ts");
+  const topic = {
+    id: "topic-1",
+    name: "Travel",
+    summary: "Talk about travel.",
+    captureIds: ["capture-1", "capture-2"],
+    tags: [],
+    practiceGoal: "Explain a preference",
+    status: "in-progress",
+    savedExpressionCount: 0,
+    createdAt: "2026-05-24T00:00:00.000Z",
+    updatedAt: "2026-05-24T00:00:00.000Z"
+  };
+  const captures = [
+    { id: "capture-1", status: "studied", fragments: [] },
+    { id: "capture-2", status: "in-topic", fragments: [] }
+  ];
+  const review = {
+    id: "review-1",
+    topicId: "topic-1",
+    createdAt: "2026-05-24T00:00:03.000Z",
+    diarySummary: "Done.",
+    completedFocusItemIds: [],
+    focusItems: [],
+    betterExpressions: [],
+    savedWordsOrChunks: [],
+    nextStep: "Try again.",
+    messageCount: 2,
+    userMessageCount: 1
+  };
+  const topicArtifacts = buildPracticeReviewCompletionArtifacts({
+    captures,
+    review,
+    source: {
+      kind: "topic",
+      title: "Travel",
+      summary: "Talk about travel.",
+      practiceGoal: "Explain a preference",
+      topic,
+      captures
+    }
+  });
+
+  assert.equal(topicArtifacts.nextTask, null);
+  assert.equal(topicArtifacts.completion.nextTopic.status, "practiced");
+  assert.deepEqual(topicArtifacts.completion.updatedCaptures.map((capture) => capture.status), ["practiced", "practiced"]);
+
+  const taskArtifacts = buildPracticeReviewCompletionArtifacts({
+    captures: [],
+    review: { ...review, taskId: "task-1", topicId: undefined },
+    source: {
+      kind: "task",
+      title: "Task",
+      summary: "Task summary",
+      practiceGoal: "Explain one idea",
+      task: {
+        id: "task-1",
+        title: "Task",
+        description: "Task summary",
+        taskType: "open-chat",
+        targetGoal: "Explain one idea",
+        starterQuestion: "What do you think?",
+        status: "new",
+        createdAt: "2026-05-24T00:00:00.000Z"
+      },
+      captures: []
+    }
+  });
+  assert.equal(taskArtifacts.completion, null);
+  assert.equal(taskArtifacts.nextTask.status, "used");
+  assert.equal(taskArtifacts.nextTask.usedAt, review.createdAt);
+
+  const stored = { reviews: [], topics: [], captures: [], tasks: [], transactionCount: 0 };
+  const db = {
+    practiceChatReviews: { put: async (record) => stored.reviews.push(record) },
+    topics: { put: async (record) => stored.topics.push(record) },
+    captures: { bulkPut: async (records) => stored.captures.push(...records) },
+    practiceTasks: { put: async (record) => stored.tasks.push(record) },
+    transaction: async (_mode, _tables, callback) => {
+      stored.transactionCount += 1;
+      await callback();
+    }
+  };
+
+  await savePracticeReviewCompletion({ db, review, artifacts: topicArtifacts });
+  await savePracticeReviewCompletion({ db, review: { ...review, id: "review-2" }, artifacts: taskArtifacts });
+
+  assert.equal(stored.transactionCount, 2);
+  assert.deepEqual(stored.reviews.map((item) => item.id), ["review-1", "review-2"]);
+  assert.deepEqual(stored.topics.map((item) => item.id), ["topic-1"]);
+  assert.deepEqual(stored.captures.map((item) => item.id), ["capture-1", "capture-2"]);
+  assert.deepEqual(stored.tasks.map((item) => item.id), ["task-1"]);
+});
+
+test("practice review persistence saves review expressions and memory atomically", async () => {
+  const { computeFocusItems, savePracticeReviewArtifacts } = await loadTsModule("src/features/practice/practiceReviewPersistence.ts");
+  const focusItems = computeFocusItems(
+    ["Explain your tired state", "Mention a next step"],
+    [
+      { id: "b1", role: "bu", text: "What happened?", createdAt: "2026-05-24T00:00:00.000Z" },
+      { id: "u1", role: "user", text: "I am tired, and my next step is taking a short walk.", createdAt: "2026-05-24T00:00:01.000Z" }
+    ]
+  );
+  const stored = { reviews: [], memories: [], expressions: [], transactionCount: 0 };
+  const db = {
+    practiceChatReviews: { put: async (record) => stored.reviews.push(record) },
+    memories: { put: async (record) => stored.memories.push(record) },
+    expressions: { bulkPut: async (records) => stored.expressions.push(...records) },
+    transaction: async (_mode, _tables, callback) => {
+      stored.transactionCount += 1;
+      await callback();
+    }
+  };
+  const review = {
+    id: "review-1",
+    createdAt: "2026-05-24T00:00:03.000Z",
+    diarySummary: "The learner explained a tired state.",
+    taskOutcome: "completed",
+    reviewScores: { taskCompletion: 80, clarity: 76, naturalness: 70 },
+    completedFocusItemIds: ["focus-0", "focus-1"],
+    focusItems,
+    betterExpressions: [{ original: "I slept late", improved: "I went to bed late", note: "More natural." }],
+    savedWordsOrChunks: ["short walk", "take a short walk"],
+    memoryTags: ["likes walking breaks"],
+    nextStep: "Practice one reason sentence.",
+    messageCount: 2,
+    userMessageCount: 1,
+    expressionStatus: { score: 72, label: "表达变清楚了", confidence: "medium" },
+    strength: { label: "Clear reason", detail: "The reason was easy to follow." },
+    nextFocus: { label: "Add detail", practiceMove: "Add one concrete example." },
+    why: ["The user included a state and next action."],
+    dimensionSignals: { taskCompletion: 80, clarity: 76, naturalness: 70 }
+  };
+
+  const result = await savePracticeReviewArtifacts({ db, review, sourceTitle: "Daily check-in" });
+
+  assert.deepEqual(focusItems.map((item) => item.completed), [true, true]);
+  assert.equal(stored.transactionCount, 1);
+  assert.deepEqual(stored.reviews.map((item) => item.id), ["review-1"]);
+  assert.equal(stored.memories[0].body.includes("likes walking breaks"), true);
+  assert.equal(stored.expressions.length, 2);
+  assert.deepEqual(stored.expressions.map((item) => item.sourceContentId), ["review-1", "review-1"]);
+  assert.deepEqual(result.expressionRecords.map((item) => item.scene), ["Daily check-in", "Daily check-in"]);
 });
 
 test("review page keeps legacy records compatible and labels evidence section as Why", async () => {

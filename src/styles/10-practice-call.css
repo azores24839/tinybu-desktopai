@@ -1,0 +1,613 @@
+.practice-call-page {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #0d0c0b;
+  color: #ffffff;
+}
+
+.practice-call-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.practice-call-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.04), transparent 38%),
+    linear-gradient(180deg, rgba(10, 8, 6, 0.16) 0%, rgba(10, 8, 6, 0.08) 44%, rgba(10, 8, 6, 0.62) 100%);
+}
+
+.practice-avatar-video {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.practice-call-stage {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  width: 100%;
+  height: 100%;
+  padding: clamp(22px, 3vw, 42px);
+}
+
+.practice-call-topbar {
+  align-self: start;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  margin-top: 10px;
+}
+
+.practice-call-status {
+  justify-self: center;
+  grid-column: 2;
+}
+
+.practice-call-status span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(13, 11, 9, 0.34);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
+  padding: 0 14px;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 13px;
+  font-weight: 650;
+  backdrop-filter: blur(14px);
+}
+
+.practice-call-status i {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #8de0b2;
+  box-shadow: 0 0 0 4px rgba(141, 224, 178, 0.18);
+}
+
+.practice-call-status i::after {
+  position: absolute;
+  inset: -6px;
+  border: 1px solid rgba(141, 224, 178, 0.42);
+  border-radius: inherit;
+  content: "";
+  animation: listeningPulse 1.6s ease-out infinite;
+}
+
+@keyframes listeningPulse {
+  0% {
+    opacity: 0.72;
+    transform: scale(0.72);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+}
+
+.practice-transcript-toggle {
+  display: inline-flex;
+  grid-column: 3;
+  justify-self: end;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  backdrop-filter: blur(18px);
+}
+
+.practice-call-tips {
+  position: absolute;
+  z-index: 3;
+  top: 98px;
+  bottom: auto;
+  left: clamp(18px, 2.4vw, 34px);
+  display: grid;
+  gap: 14px;
+  width: min(340px, calc(100vw - 44px));
+  max-height: min(620px, calc(100vh - 140px));
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 24px;
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.28);
+  padding: 18px;
+  backdrop-filter: blur(22px);
+  scrollbar-width: none;
+}
+
+.practice-call-tips::-webkit-scrollbar,
+.practice-transcript-panel::-webkit-scrollbar {
+  display: none;
+}
+
+.practice-call-tips-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.practice-call-tips-header strong {
+  font-size: 18px;
+  font-weight: 760;
+}
+
+.practice-call-tips-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.practice-call-tips-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.practice-call-tips section {
+  display: grid;
+  gap: 8px;
+}
+
+.practice-call-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.practice-call-section-title button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+}
+
+.practice-call-tips h3 {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.practice-call-tips p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.practice-call-word-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.practice-call-word-row span {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.88);
+  padding: 6px 9px;
+  font-size: 12px;
+  font-weight: 660;
+}
+
+.practice-call-chunks {
+  display: grid;
+  gap: 7px;
+}
+
+.practice-call-chunks p {
+  border-left: 2px solid rgba(255, 255, 255, 0.28);
+  padding-left: 10px;
+  font-style: italic;
+}
+
+.practice-transcript-panel {
+  position: absolute;
+  z-index: 3;
+  top: 98px;
+  right: clamp(18px, 2.4vw, 34px);
+  display: grid;
+  gap: 14px;
+  width: min(420px, calc(100vw - 44px));
+  max-height: min(620px, calc(100vh - 140px));
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 24px;
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.28);
+  padding: 18px;
+  backdrop-filter: blur(22px);
+  scrollbar-width: none;
+}
+
+.practice-transcript-list {
+  display: grid;
+  gap: 10px;
+}
+
+.practice-transcript-list p {
+  display: grid;
+  gap: 4px;
+  max-width: 92%;
+  margin: 0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.9);
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 590;
+  line-height: 1.45;
+}
+
+.practice-transcript-list p.user {
+  justify-self: end;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.practice-transcript-list p span {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.78em;
+  font-weight: 760;
+}
+
+.practice-call-captions {
+  display: none;
+  justify-self: center;
+  width: min(840px, calc(100vw - 48px));
+  margin-bottom: 18px;
+}
+
+.practice-call-captions.visible {
+  display: grid;
+  gap: 7px;
+}
+
+.practice-call-captions p {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  border-radius: 28px;
+  background: rgba(8, 7, 6, 0.52);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+  color: rgba(255, 255, 255, 0.9);
+  padding: 12px 18px;
+  font-size: clamp(15px, 1.5vw, 24px);
+  font-weight: 720;
+  line-height: 1.35;
+  text-align: center;
+  backdrop-filter: blur(16px);
+}
+
+.practice-call-captions p.previous {
+  opacity: 0.45;
+}
+
+.practice-call-captions p.current {
+  opacity: 1;
+}
+
+.practice-call-captions span {
+  margin-right: 8px;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.8em;
+  font-weight: 680;
+}
+
+.practice-call-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+.practice-call-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 86px;
+  min-height: 54px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(18, 16, 14, 0.48);
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.2);
+  padding: 0 18px;
+  font-size: 13px;
+  font-weight: 720;
+  cursor: pointer;
+  backdrop-filter: blur(18px);
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.practice-call-controls button:hover {
+  background: rgba(255, 255, 255, 0.18);
+  transform: translateY(-1px);
+}
+
+.practice-call-controls button.active {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.practice-call-controls .hangup {
+  min-width: 92px;
+  min-height: 62px;
+  background: #d64c3c;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.practice-call-controls .hangup:hover {
+  background: #c83f31;
+}
+
+/* Practice Goal */
+.goal-text-main {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--brand);
+  font-weight: 550;
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--brand-soft);
+  border-radius: 12px;
+}
+
+.goal-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.goal-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.goal-checkbox {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  margin-top: 1px;
+}
+
+.goal-checkbox.checked {
+  border-color: var(--highlight);
+  background: var(--highlight);
+}
+
+.goal-checkbox-fill {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.goal-item-text {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--brand);
+}
+
+.goal-item.completed .goal-item-text {
+  color: var(--brand-muted);
+}
+
+/* Goal footer */
+.goal-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.goal-tinybu {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--highlight);
+}
+
+/* CallBu compact mode */
+.call-compact-btn {
+  width: 42px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.call-compact-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 42px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  background: var(--brand-soft);
+  color: var(--brand);
+  white-space: nowrap;
+}
+
+.bu-call-btn {
+  width: 100%;
+}
+
+.bu-call-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Call Bu Panel (non-compact) */
+.call-bu-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  animation: callFadeIn 0.3s ease;
+}
+
+@keyframes callFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.call-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  background: var(--subtle);
+}
+
+.call-status.listening {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.call-status.speaking {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.call-status.thinking {
+  background: #fef9c3;
+  color: #a16207;
+}
+
+.call-status.connecting {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.call-status.error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.call-status-text {
+  flex: 1;
+}
+
+.call-subtitles {
+  display: grid;
+  gap: 6px;
+  max-height: 100px;
+  overflow-y: auto;
+}
+
+.call-subtitle {
+  font-size: 0.8rem;
+  line-height: 1.4;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--subtle);
+}
+
+.call-subtitle.user {
+  background: var(--brand-soft);
+}
+
+.call-subtitle.bu {
+  background: #ffffff;
+  border: 1px solid var(--line);
+}
+
+.bu-end-call-btn {
+  font-size: 0.8rem;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+
+@keyframes callPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pulse {
+  animation: callPulse 1s ease-in-out infinite;
+}
+
+@keyframes callSpin {
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: callSpin 1s linear infinite;
+}
+
+/* Responsive collapse */
+@media (max-width: 1200px) {
+  .practice-cards > .practice-col:nth-child(5),
+  .practice-cards > .col-divider:nth-child(4) {
+    display: none;
+  }
+}
+
+@media (max-width: 800px) {
+  .practice-cards > .practice-col:nth-child(1),
+  .practice-cards > .col-divider:nth-child(2) {
+    display: none;
+  }
+}
+

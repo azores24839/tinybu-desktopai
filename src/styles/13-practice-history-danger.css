@@ -1,0 +1,84 @@
+/* History section in Topic Detail */
+.history-section {
+  margin-top: 16px;
+}
+
+.history-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.history-date {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.history-messages {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.history-summary {
+  font-size: 0.88rem;
+  color: var(--text);
+  margin: 0 0 6px;
+  line-height: 1.4;
+}
+
+.history-expressions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.history-expression {
+  font-size: 0.8rem;
+  color: var(--brand);
+  background: var(--bg);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* Danger button */
+button.danger {
+  background: var(--danger, #dc3545);
+  color: #fff;
+  border: none;
+}
+
+button.danger:hover {
+  opacity: 0.9;
+}
+
+@media (max-width: 1120px) {
+  .home-page .task-home-layout {
+    grid-template-rows: auto auto auto;
+    overflow: auto;
+  }
+
+  .task-hero,
+  .today-task-grid,
+  .task-secondary-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .task-hero-asset {
+    display: none;
+  }
+
+  .today-task-card {
+    min-height: 190px;
+  }
+}
+

@@ -1,0 +1,356 @@
+.expression-training-fullscreen {
+  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(247, 240, 228, 0.86), rgba(250, 248, 242, 0.96)),
+    var(--bg);
+  padding: 18px clamp(18px, 4vw, 56px);
+}
+
+.training-topbar {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  max-width: 1240px;
+  margin: 0 auto 16px;
+}
+
+.training-exit-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(31, 52, 43, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #243a30;
+  padding: 10px 14px;
+  font-weight: 830;
+  cursor: pointer;
+}
+
+.training-progress-wrap {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(31, 52, 43, 0.1);
+}
+
+.training-progress-wrap span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #1b3028;
+  transition: width 220ms ease;
+}
+
+.training-topbar strong {
+  color: #5f574f;
+  font-weight: 850;
+}
+
+.training-question-shell {
+  display: grid;
+  gap: 14px;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.training-step-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.training-step-tabs span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  border: 1px solid rgba(31, 52, 43, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #857a6f;
+  font-weight: 830;
+}
+
+.training-step-tabs span.active {
+  background: #1b3028;
+  color: #fff;
+}
+
+.training-step-tabs span.done {
+  background: #eef5df;
+  color: #4f654d;
+}
+
+.training-question-card,
+.training-complete-card {
+  border: 1px solid rgba(31, 52, 43, 0.08);
+  border-radius: 34px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 30px 70px rgba(49, 38, 25, 0.12);
+}
+
+.training-question-card {
+  display: grid;
+  gap: 14px;
+  max-height: calc(100vh - 136px);
+  overflow: hidden;
+  padding: clamp(18px, 2.4vw, 32px);
+}
+
+.training-prompt-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.36fr);
+  gap: 22px;
+  align-items: end;
+}
+
+.training-question-kicker {
+  color: #9b8b78;
+  font-size: 0.78rem;
+  font-weight: 880;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.training-question-card h1,
+.training-complete-card h1 {
+  margin: 0;
+  color: #183027;
+  font-size: clamp(1.65rem, 3vw, 3rem);
+  line-height: 1.02;
+}
+
+.training-prompt-head > p,
+.training-complete-card p {
+  margin: 0;
+  color: #756b60;
+  font-size: 0.96rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.training-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.38fr);
+  gap: 16px;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.training-task-column {
+  min-width: 0;
+  min-height: 0;
+}
+
+.training-meaning-card {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  border: 1px solid rgba(31, 52, 43, 0.08);
+  border-radius: 20px;
+  background: #f4f8ec;
+  padding: 14px;
+}
+
+.training-meaning-card span,
+.training-meaning-card small {
+  color: #68765f;
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.training-meaning-card strong {
+  color: #21382e;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.training-meaning-card p {
+  margin: 0;
+  color: #68765f;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.training-meaning-card div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.training-task-card {
+  display: grid;
+  gap: 12px;
+  border-radius: 24px;
+  background: #f7f4ee;
+  padding: 16px;
+}
+
+.expression-breakdown {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px 14px;
+  align-items: start;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.expression-breakdown span {
+  color: #91877c;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.expression-breakdown strong {
+  color: #21382e;
+  font-size: 0.96rem;
+  line-height: 1.4;
+}
+
+.scenario-choice-list {
+  display: grid;
+  gap: 8px;
+}
+
+.scenario-choice-list button {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 52px;
+  border: 1px solid rgba(31, 52, 43, 0.1);
+  border-radius: 18px;
+  background: #ffffff;
+  color: #21382e;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.scenario-choice-list button.selected {
+  border-color: rgba(31, 52, 43, 0.3);
+  background: #eef5df;
+}
+
+.scenario-choice-list button span {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1.5px solid rgba(31, 52, 43, 0.18);
+  border-radius: 999px;
+  color: #1b3028;
+  font-weight: 900;
+}
+
+.scenario-choice-list button strong {
+  color: #21382e;
+  font-size: 0.96rem;
+  line-height: 1.4;
+}
+
+.scenario-feedback {
+  border-radius: 16px;
+  background: rgba(185, 86, 69, 0.08);
+  color: #8d5346 !important;
+  padding: 12px 14px;
+}
+
+.scenario-feedback.correct {
+  background: #eef5df;
+  color: #4f654d !important;
+}
+
+.training-task-card > div:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #183027;
+}
+
+.training-task-card strong {
+  font-size: 1.05rem;
+}
+
+.training-task-card p {
+  margin: 0;
+  color: #5f574f;
+  font-weight: 680;
+  line-height: 1.55;
+}
+
+.training-task-card textarea {
+  min-height: 112px;
+  resize: vertical;
+  border: 1px solid rgba(31, 52, 43, 0.1);
+  border-radius: 18px;
+  background: #fff;
+  padding: 14px;
+  color: #183027;
+  font: inherit;
+  font-weight: 680;
+  line-height: 1.5;
+}
+
+.recall-hidden-expression {
+  display: grid;
+  min-height: 84px;
+  place-items: center;
+  border: 1px dashed rgba(31, 52, 43, 0.2);
+  border-radius: 20px;
+  color: #8f8377;
+  font-weight: 860;
+}
+
+.recall-input-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.recall-input-grid label {
+  color: #5f574f;
+  font-size: 0.86rem;
+  font-weight: 830;
+}
+
+.recall-input-grid textarea {
+  min-height: 96px;
+}
+
+.recall-input-grid button {
+  justify-self: start;
+}
+
+.training-action-bar {
+  display: grid;
+  grid-template-columns: auto auto minmax(160px, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.training-action-bar button {
+  justify-content: center;
+}
+
+.training-complete-card {
+  display: grid;
+  gap: 14px;
+  max-width: 620px;
+  margin: 18vh auto 0;
+  padding: 42px;
+  text-align: center;
+}
+
+.training-complete-card button {
+  justify-self: center;
+}
+

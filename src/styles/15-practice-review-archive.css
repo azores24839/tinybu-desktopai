@@ -1,0 +1,332 @@
+.practice-transcript-message {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  max-width: 96%;
+}
+
+.practice-transcript-message.user {
+  justify-self: end;
+}
+
+.practice-transcript-list .practice-transcript-message p {
+  max-width: none;
+}
+
+.practice-transcript-message button {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.76);
+  cursor: pointer;
+}
+
+.practice-transcript-message button.saved {
+  background: rgba(240, 207, 99, 0.88);
+  color: #4b351c;
+}
+
+.review-redesign-shell {
+  width: min(1040px, 100%);
+}
+
+.review-redesign-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 18px;
+}
+
+.review-task-card,
+.review-score-card,
+.review-analysis-card,
+.review-suggestions-card {
+  border: 1px solid rgba(31, 52, 43, 0.08);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 20px 50px rgba(31, 52, 43, 0.07);
+  padding: 22px;
+}
+
+.review-card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #6f685f;
+  font-size: 0.82rem;
+  font-weight: 820;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.review-task-card h3 {
+  margin: 18px 0 10px;
+  color: #183027;
+  font-size: 1.6rem;
+  font-weight: 850;
+  line-height: 1.12;
+}
+
+.review-task-card p,
+.review-analysis-card p,
+.review-suggestions-card p {
+  margin: 0;
+  color: #4f5a53;
+  font-size: 0.98rem;
+  font-weight: 620;
+  line-height: 1.62;
+}
+
+.review-analysis-card {
+  display: grid;
+  gap: 14px;
+}
+
+.review-score-list {
+  display: grid;
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.review-score-row {
+  display: grid;
+  grid-template-columns: 94px minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 12px;
+}
+
+.review-score-row span {
+  color: #38463f;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.review-score-row div {
+  overflow: hidden;
+  height: 13px;
+  border-radius: 999px;
+  background: #eee8dd;
+}
+
+.review-score-row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #9db36d;
+}
+
+.review-score-row strong {
+  color: #183027;
+  font-size: 0.95rem;
+  font-weight: 850;
+  text-align: right;
+}
+
+.review-suggestion-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.review-suggestion-item {
+  display: grid;
+  gap: 10px;
+  border-radius: 18px;
+  background: #f7f4ee;
+  padding: 16px;
+}
+
+.review-suggestion-item > span {
+  justify-self: start;
+  border-radius: 999px;
+  background: rgba(217, 154, 134, 0.18);
+  color: #895746;
+  padding: 6px 9px;
+  font-size: 0.76rem;
+  font-weight: 820;
+}
+
+.review-original-line,
+.review-improved-line {
+  display: grid;
+  gap: 4px;
+}
+
+.review-original-line strong,
+.review-improved-line strong {
+  color: #8a8278;
+  font-size: 0.76rem;
+  font-weight: 820;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.review-improved-line {
+  color: #183027 !important;
+  font-weight: 760 !important;
+}
+
+.review-archive-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgba(23, 37, 31, 0.28);
+  padding: 24px;
+  backdrop-filter: blur(12px);
+}
+
+.review-archive-card {
+  display: grid;
+  gap: 14px;
+  width: min(720px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  overflow: auto;
+  scrollbar-width: none;
+  border: 1px solid rgba(31, 52, 43, 0.08);
+  border-radius: 24px;
+  background: rgba(251, 250, 246, 0.98);
+  box-shadow: 0 30px 90px rgba(31, 52, 43, 0.18);
+  padding: 24px;
+}
+
+.review-archive-card::-webkit-scrollbar {
+  display: none;
+}
+
+.review-archive-card > header,
+.review-archive-card > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.review-archive-card > header h3 {
+  margin: 4px 0 0;
+  color: #183027;
+  font-size: 1.7rem;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+.review-archive-card > header button {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 999px;
+  background: #f4f1ea;
+  color: #4f5a53;
+}
+
+.review-archive-card section {
+  display: grid;
+  gap: 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 18px;
+}
+
+.review-archive-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.review-archive-section-heading div {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.review-archive-section-heading h3 {
+  margin: 0;
+  color: #17251f;
+  font-size: 1.05rem;
+  font-weight: 850;
+}
+
+.review-archive-section-heading span {
+  border-radius: 999px;
+  background: #f2eee5;
+  color: #6f685f;
+  padding: 5px 9px;
+  font-size: 0.78rem;
+  font-weight: 820;
+}
+
+.review-archive-section-heading button {
+  min-height: 32px;
+  border-radius: 999px;
+  background: #17251f;
+  color: #ffffff;
+  padding: 0 12px;
+  font-size: 0.78rem;
+  font-weight: 820;
+}
+
+.review-archive-section-heading button:disabled {
+  background: #e4ded4;
+  color: #9a9187;
+}
+
+.review-archive-select-list {
+  display: grid;
+  gap: 10px;
+}
+
+.review-archive-select-list button {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  border: 1px solid rgba(31, 52, 43, 0.07);
+  border-radius: 14px;
+  background: #ffffff;
+  color: #38463f;
+  padding: 12px 13px;
+  text-align: left;
+  box-shadow: 0 8px 22px rgba(31, 52, 43, 0.035);
+}
+
+.review-archive-select-list button.selected {
+  border-color: rgba(157, 179, 109, 0.54);
+  background: #f5f9ed;
+}
+
+.review-archive-select-list button > span {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  color: #5e6a60;
+}
+
+.review-archive-select-list strong {
+  color: #17251f;
+  font-size: 0.96rem;
+  line-height: 1.42;
+}
+
+.review-archive-select-list em {
+  grid-column: 2;
+  color: #8a8278;
+  font-size: 0.84rem;
+  font-style: normal;
+  font-weight: 650;
+}
+
+.review-archive-card > footer {
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+

@@ -134,9 +134,14 @@ export function SettingsPage({
             Chat / learning model
             <input value={draft.settings.aiModel} onChange={(event) => setDraft({ ...draft, settings: { ...draft.settings, aiModel: event.target.value } })} />
           </label>
+          <p className="settings-note">DeepSeek text models use the OpenAI-compatible Chat Completions API. Recommended: deepseek-v4-flash.</p>
           <label className="settings-field">
             Screenshot / vision model
             <input value={draft.settings.visionModel} onChange={(event) => setDraft({ ...draft, settings: { ...draft.settings, visionModel: event.target.value } })} />
+          </label>
+          <label className="settings-field">
+            DeepSeek base URL
+            <input value={draft.settings.deepSeekBaseUrl} onChange={(event) => setDraft({ ...draft, settings: { ...draft.settings, deepSeekBaseUrl: event.target.value } })} />
           </label>
           <label className="settings-field">
             OpenRouter base URL

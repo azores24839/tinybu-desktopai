@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Captions, Lightbulb, MessageSquareText, Mic, MicOff, PhoneOff, RefreshCw, X } from "lucide-react";
+import { Bookmark, Captions, Lightbulb, MessageSquareText, Mic, MicOff, PhoneOff, RefreshCw, X } from "lucide-react";
 import { uid, nowIso } from "../../lib/defaults";
 import type { ChatMessage, UserProfile, CaptureItem, PracticePlan } from "../../types";
-import type { PracticeSource } from "./usePracticeChat";
+import type { PracticeSource } from "./practiceSessionTypes";
 import { useCallBu } from "./useCallBu";
 import { AvatarVideoPlayer } from "./avatar/AvatarVideoPlayer";
 import { avatarStatusLabel } from "./avatar/avatarVideos";
@@ -121,6 +121,12 @@ export function PracticeChatPage({
     onEndWithReview(messages, whatToCover);
   }
 
+  function toggleSavedMessage(id: string) {
+    setMessages((current) => current.map((message) => (
+      message.id === id ? { ...message, saved: !message.saved } : message
+    )));
+  }
+
   return (
     <section className="practice-call-page">
       <video className="practice-call-video" src="/media/practice-call-bg.mp4" autoPlay loop muted playsInline />
@@ -200,10 +206,20 @@ export function PracticeChatPage({
             </div>
             <div className="practice-transcript-list">
               {messages.map((message) => (
-                <p key={message.id} className={message.role}>
-                  <span>{message.role === "user" ? (isChinese ? "你" : "You") : "TinyBu"}</span>
-                  {message.text}
-                </p>
+                <article key={message.id} className={`practice-transcript-message ${message.role}`}>
+                  <p>
+                    <span>{message.role === "user" ? (isChinese ? "你" : "You") : "TinyBu"}</span>
+                    {message.text}
+                  </p>
+                  <button
+                    className={message.saved ? "saved" : ""}
+                    onClick={() => toggleSavedMessage(message.id)}
+                    aria-label={isChinese ? "收藏这句话" : "Save this line"}
+                    title={isChinese ? "收藏" : "Save"}
+                  >
+                    <Bookmark size={15} fill={message.saved ? "currentColor" : "none"} />
+                  </button>
+                </article>
               ))}
             </div>
           </aside>

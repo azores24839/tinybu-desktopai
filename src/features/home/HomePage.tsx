@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { ArrowUpRight, BookMarked, CheckCircle2, ChevronDown, Gift, Phone, Plus, Sparkles } from "lucide-react";
 import type { AppStateRecord, CaptureItem, MemoryItem, PracticeTask, Screen, TopicItem } from "../../types";
 import { captureText } from "../captures/captureUtils";
 import { MaterialLibraryPanel, type MaterialKind } from "../captures/MaterialLibraryPanel";
 import { buildTodayPracticeTasks } from "../practice/practiceTasks";
+import { gsap, useGSAP } from "../../lib/gsap";
 
 type ConversationMode = "casual" | "roleplay" | "retell";
 
@@ -95,6 +96,7 @@ export function HomePage({
   tryDemo: () => void;
   startTask: (task: PracticeTask) => void;
 }) {
+  const homeRef = useRef<HTMLElement | null>(null);
   const [tasksOpen, setTasksOpen] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
   const [inputDraft, setInputDraft] = useState("");
@@ -147,6 +149,40 @@ export function HomePage({
   ];
   const currentMode = modeCopy(mode, isChinese);
 
+  useGSAP(
+    () => {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const targets = gsap.utils.toArray<HTMLElement>(".clean-home-animate", homeRef.current);
+      if (targets.length === 0) return;
+
+      gsap.from(targets, {
+        autoAlpha: 0,
+        y: 18,
+        duration: 0.58,
+        ease: "power3.out",
+        stagger: 0.08
+      });
+    },
+    { scope: homeRef }
+  );
+
+  useGSAP(
+    () => {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const targets = gsap.utils.toArray<HTMLElement>(".daily-task-popover, .mode-picker-menu, .material-library-panel", homeRef.current);
+      if (targets.length === 0) return;
+
+      gsap.from(targets, {
+        autoAlpha: 0,
+        y: 8,
+        scale: 0.98,
+        duration: 0.22,
+        ease: "power2.out"
+      });
+    },
+    { dependencies: [tasksOpen, modeOpen, materialLibraryOpen], scope: homeRef }
+  );
+
   function handleStartFromInput() {
     const text = inputDraft.trim();
     if (!text && !fileName) return;
@@ -181,9 +217,9 @@ export function HomePage({
   }
 
   return (
-    <section className="page home-page clean-home-page">
+    <section className="page home-page clean-home-page" ref={homeRef}>
       <div className="clean-home-surface">
-        <header className="clean-home-topbar">
+        <header className="clean-home-topbar clean-home-animate">
           <div className="daily-task-menu">
             <button className="daily-task-trigger" onClick={() => setTasksOpen((open) => !open)}>
               <Gift size={16} />
@@ -205,9 +241,9 @@ export function HomePage({
         </header>
 
         <main className="clean-home-main">
-          <h1>{isChinese ? "今天想聊点什么？" : "What shall we talk about today?"}</h1>
+          <h1 className="clean-home-animate">{isChinese ? "今天想聊点什么？" : "What shall we talk about today?"}</h1>
 
-          <div className="topic-recommend-row" aria-label={isChinese ? "话题推荐" : "Topic recommendations"}>
+          <div className="topic-recommend-row clean-home-animate" aria-label={isChinese ? "话题推荐" : "Topic recommendations"}>
             {topicCards.map((task, index) => (
               <button
                 className={`topic-recommend-card tilt-${index}`}
@@ -225,7 +261,7 @@ export function HomePage({
             ))}
           </div>
 
-          <section className="conversation-start-box" aria-label={isChinese ? "开始对话" : "Start conversation"}>
+          <section className="conversation-start-box clean-home-animate" aria-label={isChinese ? "开始对话" : "Start conversation"}>
             <textarea
               value={inputDraft}
               onChange={(event) => setInputDraft(event.target.value)}

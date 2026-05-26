@@ -83,14 +83,29 @@ function reviewV2Fallback(args: {
   chatMessages: ChatMessage[];
   whatToCover: string[];
   appState: AppStateRecord;
-}): Pick<PracticeChatReviewOutput, "expressionStatus" | "strength" | "nextFocus" | "why" | "dimensionSignals"> {
+}): Pick<PracticeChatReviewOutput, "taskOutcome" | "reviewScores" | "expressionStatus" | "strength" | "nextFocus" | "why" | "dimensionSignals"> {
   const features = args.reviewFeatures ?? fallbackReviewFeatures(args);
   const firstWhy = features.why[0];
   const hasDevelopment = features.hasReason && features.hasExample;
   const zh = args.appState.profile.interfaceLanguage === "中文";
+  const fluency = clampScore(features.dimensionSignals.continuity || features.suggestedScore);
+  const naturalness = clampScore(features.dimensionSignals.control || features.suggestedScore);
+  const vocabulary = clampScore((features.dimensionSignals.development + features.suggestedScore) / 2);
+  const taskDone = features.completedMoveCount >= Math.max(1, Math.ceil(features.targetMoveCount / 2));
   return {
+    taskOutcome: {
+      label: taskDone ? (zh ? "任务基本完成" : "Mission mostly complete") : (zh ? "任务还可以更完整" : "Mission needs one more step"),
+      detail: taskDone
+        ? (zh ? "你已经覆盖了这次任务里的关键内容，TinyBu 能接住你的主要意思。" : "You covered the key parts of the mission, so TinyBu could follow your main point.")
+        : (zh ? "你开始回应了主题，但还需要多补一个理由、例子或明确结论。" : "You started the topic, but one more reason, example, or clear conclusion would make it complete.")
+    },
+    reviewScores: {
+      fluency,
+      naturalness,
+      vocabulary
+    },
     expressionStatus: {
-      score: features.suggestedScore,
+      score: clampScore((fluency + naturalness + vocabulary) / 3),
       label: features.suggestedLabel,
       confidence: features.confidence
     },
@@ -123,7 +138,7 @@ function unwindDemoPracticePlan(args: { fragments: CaptureFragment[]; task: { ta
   const fragmentIds = args.fragments.map((fragment) => fragment.id);
 
   return {
-    practiceGoal: args.task.targetGoal,
+    practiceGoal: "Help TinyBu understand why your favorite way to unwind works for you.",
     whatToCover: [
       "Name one favorite way to unwind",
       "Describe how it changes your mood or energy",
@@ -363,14 +378,17 @@ export function practiceChatReviewRules(args: {
 }): PracticeChatReviewOutput {
   const reviewV2 = reviewV2Fallback(args);
   if (isUnwindDemoTopic(args.topicName)) {
+    const zh = args.appState.profile.interfaceLanguage === "中文";
     return {
       diarySummary:
-        "Today I got to know Sisi a little better.\n\nShe seems like someone who carries a lot quietly. When stress builds up, she doesn’t rush to fix everything right away. She needs softness first: soft music, warm tea, a quiet walk, maybe rain outside the window.\n\nI want to remember that music feels healing to her, especially songs with a gentle voice and warm lyrics. Night walks also help her clear her head. She likes jasmine tea, fruit tea, rainy days, light comedies, and funny cat videos.\n\nI noticed Sisi can be strict with herself. Sometimes she feels guilty for resting, even though she would be kind to a friend in the same situation. I hope next time I can remind her, gently, that rest is not a waste.\n\nFor Sisi, comfort seems to live in small things: a quiet evening, no work messages, a cup of tea, and a little space to breathe.",
+        zh
+          ? "这次对话里，你围绕解压方式做了比较清楚的表达。整体思路是先说明自己喜欢安静、低负担的放松方式，再补充这些方式为什么能让自己慢下来。\n\n表达上，你能够使用具体场景来支撑观点，比如音乐、热茶、夜晚散步这些细节。这样 TinyBu 不只是听到一个偏好，也能理解这个偏好背后的感受。\n\n可以继续优化的是部分英文表达的自然度。下次可以把中文式表达换成更地道的短句，让句子听起来更像真实聊天。"
+          : "You practiced explaining how you unwind in a clear, personal way.\n\nYour answer did not stay at a simple preference. You added concrete scenes like soft music, warm tea, and night walks, which made it easier for TinyBu to understand why this way of relaxing works for you.\n\nThe next improvement is expression naturalness. A few phrases can sound more idiomatic if you use shorter, cleaner spoken English.",
       betterExpressions: [
         {
           original: "my head is more clear",
           improved: "My head feels clearer.",
-          note: "More natural wording for describing mental clarity."
+          note: zh ? "Expression：描述头脑变清楚时更自然。" : "Expression: More natural wording for describing mental clarity."
         }
       ],
       savedWordsOrChunks: [

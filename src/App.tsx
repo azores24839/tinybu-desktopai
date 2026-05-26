@@ -1,80 +1,34 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  BookOpen,
-  Brain,
-  Home,
-  Inbox,
-  NotebookTabs,
-  Settings,
-  Wand2
-} from "lucide-react";
+import { AppShell } from "./app/AppShell";
+import { useAppBootstrap } from "./app/useAppBootstrap";
+import { useExternalCaptureImports } from "./app/useExternalCaptureImports";
 import { demoContents } from "./data/demoContent";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { TinyBuOrb } from "./components/TinyBuOrb";
 import { ToastContainer } from "./components/ToastContainer";
-import { clearLearningData, db, loadAppState, saveAppState } from "./lib/db";
+import { clearLearningData, db, saveAppState } from "./lib/db";
 import { clearUserApiKey, loadUserApiKey, saveUserApiKey } from "./lib/secureKey";
 import { showToast } from "./lib/toast";
-import { invokeTauri, listenTauri, type CaptureBridgeState } from "./lib/tauriBridge";
 import { defaultAppState, nowIso } from "./lib/defaults";
-import { uiCopy } from "./lib/uiCopy";
 import {
   captureText,
 } from "./features/captures/captureUtils";
-import { InboxPage } from "./features/captures/InboxPage";
-import { OrganizePage } from "./features/captures/OrganizePage";
 import { useCaptures } from "./features/captures/useCaptures";
 import { saveExpressionFromCapture } from "./features/captures/saveExpression";
-import { topicCaptures, topicExpressions } from "./features/topics/topicUtils";
+import { topicCaptures } from "./features/topics/topicUtils";
 import { useTopics } from "./features/topics/useTopics";
-import { TopicsPage } from "./features/topics/TopicsPage";
-import { TopicDetailPage } from "./features/topics/TopicDetailPage";
-import { StudyRoomPage } from "./features/topics/StudyRoomPage";
-import { NotebookPage } from "./features/notebook/NotebookPage";
-import { MemoryPage } from "./features/memory/MemoryPage";
-import { SettingsPage } from "./features/settings/SettingsPage";
-import { HomePage } from "./features/home/HomePage";
-import { PracticeReviewPage } from "./features/practice/PracticeReviewPage";
-import { PracticePreparingPage } from "./features/practice/PracticePreparingPage";
-import { PracticeChatPage } from "./features/practice/PracticeChatPage";
 import { usePracticeChat } from "./features/practice/usePracticeChat";
-import { WelcomePage } from "./features/setup/WelcomePage";
-import { OnboardingPage } from "./features/setup/OnboardingPage";
-import { CompanionSetupPage } from "./features/setup/CompanionSetupPage";
 import { useScreenshotCaptureFlow } from "./features/screenshots/useScreenshotCaptureFlow";
 import type {
   AppStateRecord,
-  CaptureItem,
   CompanionProfile,
   ExpressionRecord,
   ExternalCaptureKind,
-  ExternalCapturePayload,
   MemoryItem,
-  PracticeTask,
   CompanionState,
   Screen,
-  ScreenshotCapturePayload,
   TopicItem,
   UserProfile
 } from "./types";
-
-const CAPTURE_QUERY_PARAM = "tinybuCapture";
-const CAPTURE_MESSAGE_TYPE = "TINYBU_CAPTURE";
-
-function parseIncomingCapture(): ExternalCapturePayload | null {
-  const params = new URLSearchParams(window.location.search);
-  const raw = params.get(CAPTURE_QUERY_PARAM);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as ExternalCapturePayload;
-  } catch {
-    try {
-      return JSON.parse(decodeURIComponent(raw)) as ExternalCapturePayload;
-    } catch {
-      return null;
-    }
-  }
-}
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("welcome");
@@ -103,9 +57,6 @@ export default function App() {
   const [apiKeyDraft, setApiKeyDraft] = useState("");
   const [apiKeyStatus, setApiKeyStatus] = useState("");
   const [busyLabel, setBusyLabel] = useState("");
-  const lastExternalCaptureSignature = useRef("");
-  const bridgeImportingRef = useRef(false);
-  const initialBridgeDrainRef = useRef(false);
 
   const activeTopic = useMemo(
     () => topics.find((topic) => topic.id === appState.activeTopicId) ?? topics[0],
@@ -139,6 +90,7 @@ export default function App() {
     practiceChatFirstQuestion,
     practiceChatReview,
     topicPracticeChatReviews,
+    isReviewGenerating,
     startPracticeForTopic,
     startPracticeForTask,
     handlePreparingReady,
@@ -153,201 +105,34 @@ export default function App() {
     setCaptures,
     setTopics,
     setMemories,
+    setExpressions,
     activeTopic,
     appState: appStateRef.current,
     persistState,
     navigate
   });
 
-  useEffect(() => {
-    async function boot() {
-      try {
-      const [state, storedCaptures, storedTopics, storedExpressions, storedMemories] =
-        await Promise.all([
-          loadAppState(),
-          db.captures.orderBy("capturedAt").reverse().toArray(),
-          db.topics.orderBy("updatedAt").reverse().toArray(),
-          db.expressions.orderBy("capturedAt").reverse().toArray(),
-          db.memories.orderBy("updatedAt").reverse().toArray()
-        ]);
+  useAppBootstrap({
+    createCaptureRecord,
+    setAppState,
+    setCaptures,
+    setTopics,
+    setExpressions,
+    setMemories,
+    setHomePasteDraft,
+    setScreen
+  });
 
-      const incomingCapture = parseIncomingCapture();
-      let bootState = state;
-      let nextCaptures = storedCaptures;
-
-      if (incomingCapture?.text) {
-        const capture = await createCaptureRecord({
-          title: incomingCapture.title || "Imported Web Content",
-          sourceUrl: incomingCapture.url || "",
-          sourceKind: incomingCapture.kind || "selection",
-          text: incomingCapture.text,
-          capturedAt: incomingCapture.capturedAt || nowIso(),
-          appState: state
-        });
-        await db.captures.put(capture);
-        nextCaptures = [capture, ...nextCaptures];
-        bootState = {
-          ...state,
-          onboarded: true,
-          companionReady: true,
-          activeCaptureId: capture.id,
-          pastedTranscript: incomingCapture.text,
-          pastedSourceTitle: capture.title,
-          pastedSourceUrl: capture.sourceUrl,
-          pastedSourceKind: capture.sourceKind
-        };
-        await saveAppState(bootState);
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-
-      setAppState(bootState);
-      setHomePasteDraft(bootState.pastedTranscript);
-      setCaptures(nextCaptures);
-      setTopics(storedTopics);
-      setExpressions(storedExpressions);
-      setMemories(storedMemories);
-      setScreen(bootState.onboarded ? (bootState.companionReady ? "home" : "companion") : "welcome");
-      } catch (error) {
-        console.error("boot() failed, starting with empty state", error);
-        setAppState(defaultAppState);
-        setScreen("welcome");
-      }
-    }
-
-    boot();
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    let unlisten = () => {};
-
-    listenTauri("tinybu-open-captures", () => {
-      void importPendingBridgeCaptures();
-    }).then((cleanup) => {
-      if (active) unlisten = cleanup;
-      else cleanup();
-    });
-
-    return () => {
-      active = false;
-      unlisten();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!appState.onboarded || initialBridgeDrainRef.current) return;
-    initialBridgeDrainRef.current = true;
-
-    void invokeTauri<CaptureBridgeState>("get_capture_bridge_state").then((state) => {
-      if ((state?.pendingCount ?? 0) > 0) {
-        void importPendingBridgeCaptures();
-      }
-    });
-  }, [appState.onboarded]);
-
-  useEffect(() => {
-    let active = true;
-    let unlisten = () => {};
-
-    listenTauri<CaptureBridgeState>("tinybu-capture-bridge-updated", (event) => {
-      if ((event.payload?.pendingCount ?? 0) > 0) {
-        void importPendingBridgeCaptures();
-      }
-    }).then((cleanup) => {
-      if (active) unlisten = cleanup;
-      else cleanup();
-    });
-
-    return () => {
-      active = false;
-      unlisten();
-    };
-  }, []);
-
-  useEffect(() => {
-    async function handleExtensionCapture(event: MessageEvent) {
-      if (event.data?.type !== CAPTURE_MESSAGE_TYPE) return;
-      const incomingCapture = event.data.payload as ExternalCapturePayload;
-      const text = incomingCapture?.text?.trim();
-      if (!text) return;
-      const signature = [incomingCapture.kind, incomingCapture.title, incomingCapture.url, text].join("::");
-      if (signature === lastExternalCaptureSignature.current) return;
-      lastExternalCaptureSignature.current = signature;
-
-      const capture = await createCaptureRecord({
-        title: incomingCapture.title || "Browser Capture",
-        sourceUrl: incomingCapture.url || "",
-        sourceKind: incomingCapture.kind || "selection",
-        text,
-        capturedAt: incomingCapture.capturedAt || nowIso(),
-        appState: appStateRef.current
-      });
-      await db.captures.put(capture);
-      setCaptures((items) => [capture, ...items]);
-      await persistState({
-        ...appStateRef.current,
-        onboarded: true,
-        companionReady: true,
-        activeCaptureId: capture.id,
-        pastedTranscript: text,
-        pastedSourceTitle: capture.title,
-        pastedSourceUrl: capture.sourceUrl,
-        pastedSourceKind: capture.sourceKind
-      });
-      navigate("home");
-    }
-
-    window.addEventListener("message", handleExtensionCapture);
-    return () => window.removeEventListener("message", handleExtensionCapture);
-  }, []);
-
-  useEffect(() => {
-    let unlisten = () => {};
-    listenTauri<ScreenshotCapturePayload>("tinybu-screenshot-captured", (event) => {
-      void importScreenshotCapture(event.payload);
-    }).then((cleanup) => {
-      unlisten = cleanup;
-    });
-    return () => unlisten();
-  }, []);
-
-  async function importPendingBridgeCaptures() {
-    if (bridgeImportingRef.current) return;
-    bridgeImportingRef.current = true;
-    setBusyLabel("Importing captures");
-    try {
-      const pendingCaptures = await invokeTauri<ExternalCapturePayload[]>("drain_pending_captures");
-      const importedCaptures: CaptureItem[] = [];
-      for (const incomingCapture of pendingCaptures ?? []) {
-        const text = incomingCapture.text?.trim();
-        if (!text) continue;
-        importedCaptures.push(
-          await createCaptureRecord({
-            title: incomingCapture.title || "Desktop Capture",
-            sourceUrl: incomingCapture.url || "",
-            sourceKind: incomingCapture.kind || "selection",
-            text,
-            capturedAt: incomingCapture.capturedAt || nowIso(),
-            appState: appStateRef.current
-          })
-        );
-      }
-      if (importedCaptures.length) {
-        await db.captures.bulkPut(importedCaptures);
-        setCaptures((items) => [...importedCaptures, ...items]);
-        await persistState({
-          ...appStateRef.current,
-          onboarded: true,
-          companionReady: true,
-          activeCaptureId: importedCaptures[0].id
-        });
-        navigate("home");
-      }
-    } finally {
-      setBusyLabel("");
-      bridgeImportingRef.current = false;
-    }
-  }
+  useExternalCaptureImports({
+    appState,
+    appStateRef,
+    createCaptureRecord,
+    setCaptures,
+    persistState,
+    navigate,
+    setBusyLabel,
+    importScreenshotCapture
+  });
 
   async function persistState(nextState: AppStateRecord) {
     await saveAppState(nextState);
@@ -500,244 +285,98 @@ export default function App() {
     setExpressions((items) => items.filter((item) => item.id !== id));
   }
 
+  async function updateMemoryItem(item: MemoryItem) {
+    await db.memories.put(item);
+    setMemories((items) => items.map((memory) => (memory.id === item.id ? item : memory)));
+  }
+
+  async function deleteMemory(id: string) {
+    await db.memories.delete(id);
+    setMemories((items) => items.filter((item) => item.id !== id));
+  }
+
+  async function checkUserKey() {
+    const key = await loadUserApiKey();
+    setApiKeyStatus(key ? "API key is readable by TinyBu." : "No API key found on this device.");
+  }
+
+  async function clearUserKey() {
+    await clearUserApiKey();
+    setApiKeyStatus("API key cleared.");
+    await updateState((state) => ({
+      ...state,
+      settings: { ...state.settings, apiKeySaved: false }
+    }));
+  }
+
   useEffect(() => {
     if (screen === "topic-detail" && activeTopic) {
       loadTopicPracticeChatReviews(activeTopic.id);
     }
   }, [screen, activeTopic?.id]);
 
-  const shellScreens: Screen[] = [
-    "home",
-    "inbox",
-    "organize",
-    "topics",
-    "topic-detail",
-    "study-room",
-    "practice-preparing",
-    "practice-review",
-    "notebook",
-    "memory",
-    "settings"
-  ];
-  const copy = uiCopy[appState.profile.interfaceLanguage];
-
   return (
     <ErrorBoundary>
-    <div className="app">
-      {busyLabel && (
-        <div className="busy-banner">
-          <Wand2 size={16} />
-          {busyLabel}
-        </div>
-      )}
-
-      {screen === "practice-chat" && activePracticeSource ? (
-        <PracticeChatPage
-          practiceSource={activePracticeSource}
-          captures={activePracticeSource.captures}
-          practicePlan={practicePlan}
-          opening={copy.practiceChat.opening}
-          firstQuestion={practiceChatFirstQuestion || activePracticeSource.practiceGoal || copy.practiceChat.firstQuestion}
-          onChatReply={handlePracticeChatReply}
-          onEndWithReview={finishPracticeChatWithReview}
-          onExit={endPracticeChatWithoutSaving}
-          interfaceLanguage={appState.profile.interfaceLanguage}
-          targetLanguage={appState.profile.targetLanguage}
-          nativeLanguage={appState.profile.nativeLanguage}
-        />
-      ) : shellScreens.includes(screen) ? (
-        <div className="desktop-shell home-shell">
-          <aside className="sidebar">
-            <button className="brand-button" onClick={() => navigate("home")}>
-              <TinyBuOrb state={companionState} />
-              <span>TinyBu</span>
-            </button>
-            <nav>
-              <button className={screen === "home" ? "active" : ""} onClick={() => navigate("home")} aria-label={copy.nav.home}>
-                <Home size={18} /> {copy.nav.home}
-              </button>
-              <button className={screen === "inbox" || screen === "organize" ? "active" : ""} onClick={() => navigate("inbox")} aria-label={copy.nav.inbox}>
-                <Inbox size={18} /> {copy.nav.inbox}
-              </button>
-              <button
-                className={["topics", "topic-detail", "study-room", "practice-preparing", "practice-review", "practice-chat-review"].includes(screen) ? "active" : ""}
-                onClick={() => navigate("topics")}
-                aria-label={copy.nav.topics}
-              >
-                <BookOpen size={18} /> {copy.nav.topics}
-              </button>
-              <button className={screen === "notebook" ? "active" : ""} onClick={() => navigate("notebook")} aria-label={copy.nav.notebook}>
-                <NotebookTabs size={18} /> {copy.nav.notebook}
-              </button>
-              <button className={screen === "memory" ? "active" : ""} onClick={() => navigate("memory")} aria-label={copy.nav.memory}>
-                <Brain size={18} /> {copy.nav.memory}
-              </button>
-              <button className={screen === "settings" ? "active" : ""} onClick={() => navigate("settings")} aria-label={copy.nav.settings}>
-                <Settings size={18} /> {copy.nav.settings}
-              </button>
-            </nav>
-            <button className="settings-link upgrade-link" onClick={() => navigate("settings")} aria-label={copy.home.upgrade}>
-              {copy.home.upgrade}
-            </button>
-          </aside>
-
-          <main className="main-panel">
-            {screen === "home" && (
-              <HomePage
-                appState={appState}
-                captures={captures}
-                topics={topics}
-                memories={memories}
-                openInbox={() => navigate("inbox")}
-                openTopic={openTopic}
-                upgrade={() => navigate("settings")}
-                tryDemo={startDemo}
-                startTask={(task: PracticeTask) => {
-                  void startPracticeForTask(task);
-                }}
-              />
-            )}
-            {screen === "inbox" && (
-              <InboxPage
-                captures={captures}
-                topics={topics}
-                activeCapture={activeCapture}
-                openCapture={openCapture}
-                updateCapture={updateCapture}
-                confirmScreenshotText={confirmScreenshotText}
-                archiveCapture={archiveCapture}
-                deleteCapture={deleteCaptureAndSyncTopics}
-                createTopicFromCaptures={createTopicFromCaptures}
-                addCapturesToTopic={addCapturesToTopic}
-                saveExpressionFromCapture={(capture, expression) => saveExpressionFromCapture(capture, expression, setExpressions)}
-              />
-            )}
-            {screen === "organize" && (
-              <OrganizePage
-                captures={captures}
-                topics={topics}
-                createTopicFromCaptures={createTopicFromCaptures}
-                addCapturesToTopic={addCapturesToTopic}
-                back={() => navigate("inbox")}
-              />
-            )}
-            {screen === "topics" && (
-              <TopicsPage topics={topics} captures={captures} expressions={expressions} openTopic={openTopic} startPractice={startPracticeForTopic} />
-            )}
-            {screen === "topic-detail" && activeTopic && (
-              <TopicDetailPage
-                topic={activeTopic}
-                captures={topicCaptures(activeTopic, captures)}
-                expressions={topicExpressions(activeTopic, expressions)}
-                practiceChatReviews={topicPracticeChatReviews}
-                updateTopic={updateTopic}
-                openStudyRoom={async () => {
-                  await markTopicStudied(activeTopic);
-                  navigate("study-room");
-                }}
-                startPractice={() => startPracticeForTopic(activeTopic)}
-                back={() => navigate("topics")}
-              />
-            )}
-            {screen === "study-room" && activeTopic && (
-              <StudyRoomPage
-                topic={activeTopic}
-                captures={topicCaptures(activeTopic, captures)}
-                expressions={topicExpressions(activeTopic, expressions)}
-                activeCapture={activeCapture}
-                setActiveCapture={async (capture) => {
-                  await persistState({ ...appState, activeCaptureId: capture.id });
-                }}
-                saveExpression={(capture, expression) => saveExpressionFromCapture(capture, expression, setExpressions)}
-                startPractice={() => startPracticeForTopic(activeTopic)}
-                back={() => navigate("topic-detail")}
-                screenshotQuestionInput={screenshotQuestionInput}
-                setScreenshotQuestionInput={setScreenshotQuestionInput}
-                askAboutScreenshot={askAboutScreenshot}
-                confirmScreenshotText={confirmScreenshotText}
-                screenshotQuestionBusy={screenshotQuestionBusy}
-              />
-            )}
-            {screen === "practice-preparing" && (
-              <PracticePreparingPage
-                interfaceLanguage={appState.profile.interfaceLanguage}
-                onReady={handlePreparingReady}
-              />
-            )}
-            {screen === "practice-review" && activePracticeSource && practiceChatReview && (
-              <PracticeReviewPage
-                sourceTitle={activePracticeSource.title}
-                review={practiceChatReview}
-                onDone={async (review) => {
-                  await saveReviewAndGoToTopic(review);
-                }}
-                onPracticeAgain={async (review) => {
-                  await saveReviewAndPracticeAgain(review, activePracticeSource.kind === "topic" ? activePracticeSource.topic : undefined);
-                }}
-                interfaceLanguage={appState.profile.interfaceLanguage}
-              />
-            )}
-            {screen === "notebook" && (
-              <NotebookPage expressions={expressions} updateExpression={updateExpression} deleteExpression={deleteExpression} />
-            )}
-            {screen === "memory" && (
-              <MemoryPage
-                memories={memories}
-                topics={topics}
-                expressions={expressions}
-                updateMemoryItem={async (item) => {
-                  await db.memories.put(item);
-                  setMemories((items) => items.map((memory) => (memory.id === item.id ? item : memory)));
-                }}
-                deleteMemory={async (id) => {
-                  await db.memories.delete(id);
-                  setMemories((items) => items.filter((item) => item.id !== id));
-                }}
-              />
-            )}
-            {screen === "settings" && (
-              <SettingsPage
-                appState={appState}
-                apiKeyDraft={apiKeyDraft}
-                apiKeyStatus={apiKeyStatus}
-                setApiKeyDraft={setApiKeyDraft}
-                saveSettings={saveSettings}
-                checkUserKey={async () => {
-                  const key = await loadUserApiKey();
-                  setApiKeyStatus(key ? "API key is readable by TinyBu." : "No API key found on this device.");
-                }}
-                clearUserKey={async () => {
-                  await clearUserApiKey();
-                  setApiKeyStatus("API key cleared.");
-                  await updateState((state) => ({
-                    ...state,
-                    settings: { ...state.settings, apiKeySaved: false }
-                  }));
-                }}
-                clearMemory={clearMemoryOnly}
-                clearAllData={clearAllData}
-                resetOnboarding={resetOnboarding}
-              />
-            )}
-          </main>
-        </div>
-      ) : (
-        <main className="entry-shell">
-          {screen === "welcome" && <WelcomePage start={() => navigate("onboarding")} demo={startDemo} />}
-          {screen === "onboarding" && (
-            <OnboardingPage initialProfile={appState.profile} submit={submitOnboarding} skip={() => submitOnboarding(defaultAppState.profile)} />
-          )}
-          {screen === "companion" && (
-            <CompanionSetupPage
-              initialCompanion={appState.companion}
-              submit={submitCompanion}
-              skip={() => submitCompanion(defaultAppState.companion)}
-            />
-          )}
-        </main>
-      )}
-    </div>
-    <ToastContainer />
+      <AppShell
+        screen={screen}
+        appState={appState}
+        busyLabel={busyLabel}
+        companionState={companionState}
+        captures={captures}
+        topics={topics}
+        expressions={expressions}
+        memories={memories}
+        activeTopic={activeTopic}
+        activeCapture={activeCapture}
+        practicePlan={practicePlan}
+        activePracticeSource={activePracticeSource}
+        practiceChatFirstQuestion={practiceChatFirstQuestion}
+        practiceChatReview={practiceChatReview}
+        topicPracticeChatReviews={topicPracticeChatReviews}
+        isReviewGenerating={isReviewGenerating}
+        screenshotQuestionInput={screenshotQuestionInput}
+        screenshotQuestionBusy={screenshotQuestionBusy}
+        apiKeyDraft={apiKeyDraft}
+        apiKeyStatus={apiKeyStatus}
+        navigate={navigate}
+        startDemo={startDemo}
+        startPracticeForTask={startPracticeForTask}
+        startPracticeForTopic={startPracticeForTopic}
+        handlePreparingReady={handlePreparingReady}
+        handlePracticeChatReply={handlePracticeChatReply}
+        finishPracticeChatWithReview={finishPracticeChatWithReview}
+        endPracticeChatWithoutSaving={endPracticeChatWithoutSaving}
+        saveReviewAndGoToTopic={saveReviewAndGoToTopic}
+        saveReviewAndPracticeAgain={saveReviewAndPracticeAgain}
+        openTopic={openTopic}
+        openCapture={openCapture}
+        updateCapture={updateCapture}
+        archiveCapture={archiveCapture}
+        deleteCapture={deleteCaptureAndSyncTopics}
+        createTopicFromCaptures={createTopicFromCaptures}
+        addCapturesToTopic={addCapturesToTopic}
+        updateTopic={updateTopic}
+        markTopicStudied={markTopicStudied}
+        persistState={persistState}
+        confirmScreenshotText={confirmScreenshotText}
+        askAboutScreenshot={askAboutScreenshot}
+        setScreenshotQuestionInput={setScreenshotQuestionInput}
+        saveExpressionFromCapture={(capture, expression) => saveExpressionFromCapture(capture, expression, setExpressions)}
+        updateExpression={updateExpression}
+        deleteExpression={deleteExpression}
+        updateMemoryItem={updateMemoryItem}
+        deleteMemory={deleteMemory}
+        saveSettings={saveSettings}
+        setApiKeyDraft={setApiKeyDraft}
+        checkUserKey={checkUserKey}
+        clearUserKey={clearUserKey}
+        clearMemoryOnly={clearMemoryOnly}
+        clearAllData={clearAllData}
+        resetOnboarding={resetOnboarding}
+        submitOnboarding={submitOnboarding}
+        submitCompanion={submitCompanion}
+      />
+      <ToastContainer />
     </ErrorBoundary>
   );
 }

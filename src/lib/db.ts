@@ -21,7 +21,7 @@ const STORES = {
   practiceChatReviews: "id,topicId,createdAt"
 };
 
-class TinyBuDatabase extends Dexie {
+export class TinyBuDatabase extends Dexie {
   appState!: Table<AppStateRecord, string>;
   captures!: Table<CaptureItem, string>;
   topics!: Table<TopicItem, string>;
@@ -52,12 +52,16 @@ export const db = new TinyBuDatabase();
 export async function loadAppState(): Promise<AppStateRecord> {
   const existing = await db.appState.get("state");
   if (existing) {
+    const mergedSettings = { ...defaultAppState.settings, ...existing.settings };
+    if (/^(MiniMax|mini?max)/i.test(mergedSettings.aiModel.trim())) {
+      mergedSettings.aiModel = defaultAppState.settings.aiModel;
+    }
     const normalizedState = {
       ...defaultAppState,
       ...existing,
       profile: { ...defaultAppState.profile, ...existing.profile },
       companion: { ...defaultAppState.companion, ...existing.companion },
-      settings: { ...defaultAppState.settings, ...existing.settings }
+      settings: mergedSettings
     };
     await db.appState.put(normalizedState);
     return normalizedState;

@@ -1,0 +1,315 @@
+/* Practice Chat Layout */
+/* Focus Mode: 3-card layout */
+.practice-focus-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg);
+}
+
+.practice-focus-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  flex-shrink: 0;
+}
+
+.practice-focus-header h2 {
+  flex: 1;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--brand);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Cards container */
+.practice-cards {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+  padding: 16px;
+  background: var(--bg);
+  align-items: stretch;
+}
+
+.practice-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Column divider (draggable) */
+.col-divider {
+  flex-shrink: 0;
+  width: 12px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 10;
+}
+
+.col-divider::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 50%;
+  width: 1px;
+  background: var(--line);
+  transform: translateX(-50%);
+  transition: background 0.15s, width 0.15s;
+}
+
+.col-divider:hover::after {
+  background: var(--brand);
+  width: 2px;
+}
+
+/* Card base */
+.card-outer {
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Scrollable inner area for left/right cards */
+.card-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Section within card */
+.card-inner-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.card-section-label {
+  font-size: 0.7rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--brand-muted);
+  margin: 0;
+}
+
+.card-body-text {
+  font-size: 0.85rem;
+  line-height: 1.65;
+  color: var(--brand);
+  margin: 0;
+}
+
+.card-section-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 12px 0;
+}
+
+.card-empty {
+  color: var(--brand-muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+/* Sub-block within section */
+.card-sub-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card-sub-label {
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--brand);
+  margin: 0;
+}
+
+/* Word pills */
+.word-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.word-pill {
+  display: inline-block;
+  font-size: 0.78rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 500;
+}
+
+/* Chunk items */
+.chunk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chunk-item {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--brand);
+  margin: 0;
+  padding: 6px 10px 6px 16px;
+  border-left: 2px solid var(--brand-soft);
+  font-style: italic;
+}
+
+/* Source entries */
+.source-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.source-entry + .source-entry {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.source-entry-title {
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--brand);
+  margin: 0;
+}
+
+.source-entry-text {
+  font-size: 0.82rem;
+}
+
+/* Conversation card */
+.conversation-card {
+  padding: 0;
+}
+
+.conversation-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.conversation-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.conversation-input textarea {
+  flex: 1;
+  resize: none;
+  min-height: 42px;
+  max-height: 120px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--subtle);
+  font-family: inherit;
+}
+
+.conversation-input textarea:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--brand-soft);
+}
+
+.conversation-input button {
+  flex-shrink: 0;
+  height: 42px;
+  padding: 0 14px;
+  border-radius: 12px;
+}
+
+/* Chat bubbles */
+.chat-bubble {
+  max-width: 82%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  line-height: 1.5;
+  font-size: 0.9rem;
+}
+
+.bubble-role {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-bottom: 2px;
+  opacity: 0.6;
+}
+
+.bu-bubble {
+  align-self: flex-start;
+  background: var(--subtle);
+  border-bottom-left-radius: 4px;
+}
+
+.user-bubble {
+  align-self: flex-end;
+  background: var(--brand);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.user-bubble p {
+  color: #fff;
+}
+
+.user-bubble .bubble-role {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.typing-dots span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brand-muted);
+  margin-right: 4px;
+  animation: typingBounce 1.4s ease-in-out infinite;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+

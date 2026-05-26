@@ -1,13 +1,26 @@
 import type { AppStateRecord, QuickPetChatOutput } from "../types";
 import { fetchWithTimeout } from "./fetchWithTimeout";
 import { jsonSchemas, taskPrompts } from "./prompts";
-import { modelForTask, normalizeOpenRouterModel } from "./providerRouting";
+import { isDeepSeekModel, modelForTask, normalizeOpenRouterModel } from "./providerRouting";
 import { buildOpenAiInput, buildOpenRouterMessages } from "./requestBuilders";
 import { parseOpenAiJson, parseOpenAiText, quickReplyText } from "./responseParsing";
 
 export type ProviderTaskName = keyof typeof taskPrompts;
 const QUICK_PET_CHAT_PROMPT =
   "TinyBu desktop buddy. Reply in the user's language. Max 35 Chinese chars or 18 English words. No markdown.";
+
+function deepSeekBaseUrl(appState: AppStateRecord) {
+  return (appState.settings.deepSeekBaseUrl || "https://api.deepseek.com").replace(/\/+$/, "");
+}
+
+function deepSeekModelForTask(task: ProviderTaskName, appState: AppStateRecord) {
+  const model = modelForTask(task, appState).trim();
+  return isDeepSeekModel(model) ? model : "deepseek-v4-flash";
+}
+
+function jsonSystemPrompt(task: ProviderTaskName) {
+  return `${taskPrompts[task]}\nReturn only valid JSON. Do not wrap it in markdown.`;
+}
 
 export async function callOpenAi<T>(
   task: ProviderTaskName,
@@ -77,6 +90,38 @@ export async function callOpenRouter<T>(
           }
         },
         max_tokens: task === "screenshotCapture" || task === "screenshotQuestion" || task === "practiceChatReview" ? 1600 : 900
+      })
+    },
+    25000
+  );
+
+  return parseOpenAiJson(response) as Promise<T>;
+}
+
+export async function callDeepSeek<T>(
+  task: ProviderTaskName,
+  payload: unknown,
+  appState: AppStateRecord,
+  apiKey: string
+): Promise<T> {
+  const response = await fetchWithTimeout(
+    `${deepSeekBaseUrl(appState)}/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: deepSeekModelForTask(task, appState),
+        messages: [
+          { role: "system", content: jsonSystemPrompt(task) },
+          ...buildOpenRouterMessages(task, payload)
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: task === "practiceChatReview" ? 1600 : 900,
+        temperature: 0.35,
+        stream: false
       })
     },
     25000
@@ -157,6 +202,36 @@ export async function callQuickPetChatOpenRouter(
         ],
         max_tokens: 70,
         temperature: 0.35
+      })
+    },
+    12000
+  );
+
+  return { reply: quickReplyText(await parseOpenAiText(response)) };
+}
+
+export async function callQuickPetChatDeepSeek(
+  payload: { message: string; [key: string]: unknown },
+  appState: AppStateRecord,
+  apiKey: string
+): Promise<QuickPetChatOutput> {
+  const response = await fetchWithTimeout(
+    `${deepSeekBaseUrl(appState)}/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: deepSeekModelForTask("quickPetChat", appState),
+        messages: [
+          { role: "system", content: QUICK_PET_CHAT_PROMPT },
+          { role: "user", content: String(payload.message) }
+        ],
+        max_tokens: 70,
+        temperature: 0.35,
+        stream: false
       })
     },
     12000
@@ -252,6 +327,43 @@ export async function callPracticeChatOpenRouter(
         messages,
         max_tokens: 150,
         temperature: 0.5
+      })
+    },
+    15000
+  );
+
+  return (await parseOpenAiText(response)).trim();
+}
+
+export async function callPracticeChatDeepSeek(
+  payload: { userAnswer: string; topicName: string; practiceGoal?: string; chatHistory: Array<{ role: string; text: string }> },
+  appState: AppStateRecord,
+  apiKey: string
+): Promise<string> {
+  const messages: Array<{ role: string; content: string }> = [
+    { role: "system", content: taskPrompts.practiceChat },
+    { role: "system", content: `Current practice source: ${payload.topicName}\nGoal: ${payload.practiceGoal ?? "low-pressure speaking practice"}` },
+    ...payload.chatHistory.slice(-6).map((msg) => ({
+      role: msg.role === "bu" ? "assistant" : "user",
+      content: msg.text
+    })),
+    { role: "user", content: payload.userAnswer }
+  ];
+
+  const response = await fetchWithTimeout(
+    `${deepSeekBaseUrl(appState)}/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: deepSeekModelForTask("practiceChat", appState),
+        messages,
+        max_tokens: 150,
+        temperature: 0.5,
+        stream: false
       })
     },
     15000

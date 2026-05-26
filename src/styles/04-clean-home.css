@@ -1,0 +1,429 @@
+/* Clean Home */
+.clean-home-page {
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+}
+
+.clean-home-surface {
+  position: relative;
+  min-height: 100%;
+  border-radius: 0 32px 32px 0;
+  background:
+    linear-gradient(rgba(31, 52, 43, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 52, 43, 0.035) 1px, transparent 1px),
+    #fbfaf6;
+  background-size: 38px 38px;
+  padding: clamp(22px, 3.2vh, 36px);
+  overflow: hidden;
+}
+
+.clean-home-topbar {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.clean-topbar-button,
+.daily-task-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  border: 1px solid rgba(31, 52, 43, 0.06);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 8px 24px rgba(33, 40, 34, 0.045);
+  color: #38463f;
+  padding: 0 13px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.daily-task-menu {
+  position: relative;
+}
+
+.daily-task-trigger {
+  background: #17251f;
+  color: #ffffff;
+}
+
+.daily-task-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 10;
+  display: grid;
+  width: min(360px, 80vw);
+  gap: 8px;
+  border: 1px solid rgba(31, 52, 43, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 22px 60px rgba(31, 52, 43, 0.12);
+  padding: 10px;
+  transform-origin: top right;
+  will-change: transform, opacity;
+}
+
+.daily-task-popover button {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  border-radius: 12px;
+  background: transparent;
+  padding: 12px 76px 12px 12px;
+  text-align: left;
+}
+
+.daily-task-popover button:hover {
+  background: #f5f2eb;
+}
+
+.daily-task-popover button.completed {
+  background: #f8f6f0;
+}
+
+.daily-task-popover span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #8a8278;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.daily-task-popover strong {
+  overflow: hidden;
+  color: #17251f;
+  font-size: 13px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daily-task-popover em {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  min-height: 30px;
+  border-radius: 999px;
+  background: #111111;
+  color: #ffffff;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 780;
+  transform: translateY(-50%);
+}
+
+.daily-task-popover button.completed em {
+  background: #f0cf63;
+  color: #21170a;
+}
+
+.clean-home-main {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: clamp(30px, 4.2vh, 52px);
+  min-height: calc(100vh - 150px);
+  padding: 20px 5vw 70px;
+}
+
+.clean-home-main h1 {
+  max-width: 820px;
+  color: #183027;
+  font-size: clamp(42px, 5vw, 72px);
+  font-weight: 850;
+  line-height: 1.06;
+  text-align: center;
+}
+
+.topic-recommend-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: clamp(18px, 2vw, 28px);
+  width: min(780px, 100%);
+}
+
+.topic-recommend-card {
+  position: relative;
+  display: grid;
+  min-height: 190px;
+  align-content: start;
+  gap: 12px;
+  border: 1px solid rgba(31, 52, 43, 0.06);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow:
+    0 18px 44px rgba(31, 52, 43, 0.08),
+    0 2px 0 rgba(31, 52, 43, 0.03);
+  padding: 18px;
+  color: #17251f;
+  text-align: left;
+  transform-origin: center;
+  transition:
+    box-shadow 180ms ease,
+    transform 180ms ease;
+  will-change: transform;
+}
+
+.topic-recommend-card.tilt-0 {
+  transform: none;
+}
+
+.topic-recommend-card.tilt-1 {
+  transform: translateY(-8px);
+}
+
+.topic-recommend-card.tilt-2 {
+  transform: none;
+}
+
+.topic-recommend-card:hover {
+  box-shadow:
+    0 24px 56px rgba(31, 52, 43, 0.11),
+    0 2px 0 rgba(31, 52, 43, 0.03);
+  transform: translateY(-6px);
+}
+
+.topic-recommend-card strong {
+  color: #182a23;
+  font-size: 18px;
+  font-weight: 820;
+  line-height: 1.18;
+}
+
+.topic-recommend-card p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: #76736c;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.topic-card-tag {
+  width: fit-content;
+  border-radius: 999px;
+  background: #f2eee5;
+  color: #6f685f;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 780;
+}
+
+.topic-recommend-card i {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: auto;
+  color: #33483f;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.conversation-start-box {
+  position: relative;
+  display: grid;
+  width: min(760px, 100%);
+  border: 1px solid rgba(31, 52, 43, 0.08);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 22px 54px rgba(31, 52, 43, 0.08);
+  padding: 16px;
+  will-change: transform, opacity;
+}
+
+.conversation-start-box textarea {
+  min-height: 76px;
+  border: 0;
+  background: transparent;
+  color: #17251f;
+  padding: 0;
+  resize: none;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.conversation-start-box textarea::placeholder {
+  color: #aaa39b;
+}
+
+.attached-file {
+  width: fit-content;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f4f1ea;
+  color: #6b6259;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-start-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 12px;
+}
+
+.start-tool-button,
+.mode-picker,
+.start-send-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  border-radius: 999px;
+}
+
+.start-tool-button {
+  width: 42px;
+  background: #f4f4f1;
+  color: #3b463f;
+  cursor: pointer;
+}
+
+.material-picker-button {
+  margin-left: auto;
+}
+
+.start-tool-button input {
+  display: none;
+}
+
+.mode-picker {
+  position: relative;
+  background: transparent;
+  padding: 0;
+}
+
+.mode-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  border: 0;
+  border-radius: 999px;
+  background: #f4f4f1;
+  color: #6f6a63;
+  padding: 0 14px 0 16px;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.mode-picker-trigger svg {
+  color: #8c857c;
+}
+
+.mode-picker-menu {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  z-index: 30;
+  display: grid;
+  width: min(280px, calc(100vw - 44px));
+  border: 1px solid rgba(31, 52, 43, 0.12);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 44px rgba(31, 52, 43, 0.14);
+  padding: 8px;
+  transform-origin: bottom left;
+  will-change: transform, opacity;
+}
+
+.mode-picker-menu button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: #242a25;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mode-picker-menu button:hover,
+.mode-picker-menu button.active {
+  background: #f4f4f1;
+}
+
+.mode-picker-menu strong {
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.mode-picker-menu span {
+  color: #8e877d;
+  font-size: 11px;
+  font-weight: 540;
+  line-height: 1.35;
+}
+
+.start-send-button {
+  width: 46px;
+  margin-left: 0;
+  background: #17251f;
+  color: #ffffff;
+}
+
+.start-send-button:disabled {
+  background: #dedbd5;
+  color: #9b948b;
+}
+
+@media (max-width: 980px) {
+  .clean-home-surface {
+    border-radius: 0 0 32px 32px;
+    overflow: auto;
+  }
+
+  .clean-home-topbar {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .clean-home-main {
+    min-height: auto;
+    padding: 52px 0 36px;
+  }
+
+  .topic-recommend-row {
+    grid-template-columns: 1fr;
+    width: min(460px, 100%);
+  }
+
+  .conversation-start-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .mode-picker-menu {
+    left: auto;
+    right: 0;
+  }
+
+  .topic-recommend-card,
+  .topic-recommend-card.tilt-0,
+  .topic-recommend-card.tilt-1,
+  .topic-recommend-card.tilt-2 {
+    transform: none;
+  }
+}

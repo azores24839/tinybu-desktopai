@@ -23,9 +23,10 @@ export const defaultSettings: AppSettings = {
   showNativeAid: true,
   supportStrength: "Balanced",
   aiProviderMode: "cloud-proxy",
-  aiModel: "MiniMax-M2.7",
+  aiModel: "deepseek-v4-flash",
   visionModel: "qwen/qwen3.6-35b-a3b",
   screenshotRecognitionEnabled: false,
+  deepSeekBaseUrl: "https://api.deepseek.com",
   openRouterBaseUrl: "https://openrouter.ai/api/v1",
   cloudProxyUrl: "http://127.0.0.1:8787/v1/tinybu/task",
   apiKeySaved: false

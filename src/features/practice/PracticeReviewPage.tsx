@@ -1,30 +1,28 @@
 import { useState } from "react";
-import { Check, MessageCircle, RefreshCcw, Target, X } from "lucide-react";
+import { BarChart3, Check, CheckCircle2, LibraryBig, RefreshCcw, Sparkles, Target, X } from "lucide-react";
 import { formatDate } from "../../lib/date";
 import type { PracticeChatReview } from "../../types";
 
-function splitDiary(summary: string) {
+function splitParagraphs(summary: string) {
   return summary
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
 }
 
-function highlightParagraph(paragraph: string, tags: string[]) {
-  const matches = tags.filter((tag) => tag.length > 2 && paragraph.toLowerCase().includes(tag.toLowerCase()));
-  if (!matches.length) return paragraph;
-  const pattern = new RegExp(`(${matches.map((tag) => tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
-  return paragraph.split(pattern).map((part, index) =>
-    matches.some((tag) => tag.toLowerCase() === part.toLowerCase()) ? (
-      <mark key={`${part}-${index}`}>{part}</mark>
-    ) : (
-      part
-    )
-  );
+function clampScore(score: number | undefined, fallback: number) {
+  if (!Number.isFinite(score)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(score ?? fallback)));
 }
 
-function looksLikeChunk(item: string) {
-  return item.includes("...") || item.split(/\s+/).length > 3 || /[.?!]$/.test(item.trim());
+function fallbackScores(review: PracticeChatReview) {
+  const signals = review.dimensionSignals;
+  const overall = review.expressionStatus?.score ?? 68;
+  return {
+    fluency: clampScore(signals?.continuity, overall),
+    naturalness: clampScore(signals?.control, overall),
+    vocabulary: clampScore(signals?.development, overall)
+  };
 }
 
 export function PracticeReviewPage({
@@ -41,34 +39,29 @@ export function PracticeReviewPage({
   interfaceLanguage: "中文" | "English";
 }) {
   const copy = interfaceLanguage === "中文" ? zh : en;
-  const [step, setStep] = useState<"diary" | "archive">("diary");
-  const [selectedExpression, setSelectedExpression] = useState(false);
-  const [selectedWords, setSelectedWords] = useState<Set<number>>(
+  const [showArchive, setShowArchive] = useState(false);
+  const [selectedExpressionIndexes, setSelectedExpressionIndexes] = useState<Set<number>>(
+    () => new Set(review.betterExpressions.map((_, index) => index))
+  );
+  const [selectedChunkIndexes, setSelectedChunkIndexes] = useState<Set<number>>(
     () => new Set(review.savedWordsOrChunks.map((_, index) => index))
   );
-  const initialMemoryTags = review.memoryTags?.length ? review.memoryTags : review.savedWordsOrChunks.slice(0, 6);
-  const [memoryTags, setMemoryTags] = useState(initialMemoryTags);
-  const completedCount = review.focusItems.filter((item) => item.completed).length;
-  const totalGoals = review.focusItems.length || 1;
-  const savedCount = review.savedWordsOrChunks.length;
-  const expression = review.betterExpressions[0];
-  const diaryParagraphs = splitDiary(review.diarySummary);
-  const vocabItems = review.savedWordsOrChunks
-    .map((item, index) => ({ item, index }))
-    .filter(({ item }) => !looksLikeChunk(item));
-  const chunkItems = review.savedWordsOrChunks
-    .map((item, index) => ({ item, index }))
-    .filter(({ item }) => looksLikeChunk(item));
-  const reviewWithMemoryTags = () => ({ ...review, memoryTags });
-  const selectedReview = () => ({
-    ...review,
-    betterExpressions: selectedExpression && expression ? [expression] : [],
-    savedWordsOrChunks: review.savedWordsOrChunks.filter((_, index) => selectedWords.has(index)),
-    memoryTags
-  });
+  const scores = review.reviewScores ?? fallbackScores(review);
+  const paragraphs = splitParagraphs(review.diarySummary);
+  const structuredReview = review.expressionStatus && review.strength && review.nextFocus
+    ? {
+        expressionStatus: review.expressionStatus,
+        strength: review.strength,
+        nextFocus: review.nextFocus
+      }
+    : null;
+  const outcome = review.taskOutcome ?? {
+    label: copy.taskFallbackTitle,
+    detail: review.nextFocus?.detail || copy.taskFallbackBody
+  };
 
-  function toggleWord(index: number) {
-    setSelectedWords((current) => {
+  function toggleExpression(index: number) {
+    setSelectedExpressionIndexes((current) => {
       const next = new Set(current);
       if (next.has(index)) next.delete(index);
       else next.add(index);
@@ -76,175 +69,250 @@ export function PracticeReviewPage({
     });
   }
 
-  function removeMemoryTag(tagToRemove: string) {
-    setMemoryTags((tags) => tags.filter((tag) => tag !== tagToRemove));
+  function toggleChunk(index: number) {
+    setSelectedChunkIndexes((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
+
+  function selectedReview() {
+    return {
+      ...review,
+      betterExpressions: review.betterExpressions.filter((_, index) => selectedExpressionIndexes.has(index)),
+      savedWordsOrChunks: review.savedWordsOrChunks.filter((_, index) => selectedChunkIndexes.has(index))
+    };
+  }
+
+  function allExpressionsSelected() {
+    return review.betterExpressions.length > 0 && selectedExpressionIndexes.size === review.betterExpressions.length;
+  }
+
+  function allChunksSelected() {
+    return review.savedWordsOrChunks.length > 0 && selectedChunkIndexes.size === review.savedWordsOrChunks.length;
+  }
+
+  function toggleAllExpressions() {
+    setSelectedExpressionIndexes(
+      allExpressionsSelected() ? new Set() : new Set(review.betterExpressions.map((_, index) => index))
+    );
+  }
+
+  function toggleAllChunks() {
+    setSelectedChunkIndexes(
+      allChunksSelected() ? new Set() : new Set(review.savedWordsOrChunks.map((_, index) => index))
+    );
   }
 
   return (
-    <section className={`page practice-chat-review-page ${step === "archive" ? "archive-step" : "diary-step"}`}>
-      <div className="practice-review-shell">
+    <section className="page practice-chat-review-page">
+      <div className="practice-review-shell review-redesign-shell">
         <header className="practice-chat-review-header">
           <div>
             <span className="review-kicker">{copy.kicker}</span>
-            <h2>{step === "diary" ? copy.title : copy.archiveTitle}</h2>
+            <h2>{copy.title}</h2>
             <p className="review-topic-name">{sourceTitle}</p>
           </div>
           <p className="review-date">{formatDate(review.createdAt)}</p>
         </header>
 
-        {step === "diary" ? (
-          <>
-            <section className="review-hero-grid">
-              <div className="review-memory-card">
-                <div className="review-memory-avatar">
-                  <img src="/assets/tinybu-practice.png" alt="TinyBu" />
-                </div>
-                <div>
-                  <p>{copy.completedPractice}</p>
-                  <div className="review-diary-text">
-                    {diaryParagraphs.map((paragraph, index) => (
-                      <p key={`${paragraph}-${index}`}>{highlightParagraph(paragraph, memoryTags)}</p>
-                    ))}
+        <section className="review-redesign-grid">
+          <article className="review-task-card">
+            <div className="review-card-title">
+              <Target size={20} />
+              <span>{copy.taskTitle}</span>
+            </div>
+            <h3>{outcome.label}</h3>
+            <p>{outcome.detail}</p>
+          </article>
+
+          <article className="review-score-card">
+            <div className="review-card-title">
+              <BarChart3 size={20} />
+              <span>{copy.scoreTitle}</span>
+            </div>
+            <div className="review-score-list">
+              {[
+                [copy.fluency, scores.fluency],
+                [copy.naturalness, scores.naturalness],
+                [copy.vocabulary, scores.vocabulary]
+              ].map(([label, score]) => (
+                <div className="review-score-row" key={label}>
+                  <span>{label}</span>
+                  <div>
+                    <i style={{ width: `${score}%` }} />
                   </div>
+                  <strong>{score}</strong>
                 </div>
-              </div>
+              ))}
+            </div>
+          </article>
+        </section>
 
-              <div className="review-memory-chips">
-                <span>
-                  <MessageCircle size={20} />
-                  {review.userMessageCount} {copy.stats.spoken}
-                </span>
-                <span>
-                  <Target size={20} />
-                  {completedCount}/{totalGoals} {copy.stats.goals}
-                </span>
-              </div>
-            </section>
+        <section className="review-analysis-card">
+          <div className="review-card-title">
+            <Sparkles size={20} />
+            <span>{copy.analysisTitle}</span>
+          </div>
+          {paragraphs.length ? (
+            paragraphs.map((paragraph, index) => <p key={`${paragraph}-${index}`}>{paragraph}</p>)
+          ) : (
+            <p>{copy.noAnalysis}</p>
+          )}
+        </section>
 
-            {review.expressionStatus && review.strength && review.nextFocus && (
-              <section className="review-diagnostic-panel">
-                <div className="review-status-card">
-                  <span>{copy.expressionStatusTitle}</span>
-                  <strong>{review.expressionStatus.label}</strong>
-                </div>
-                <div className="review-diagnostic-grid">
-                  <article>
-                    <span>{copy.strengthTitle}</span>
-                    <h3>{review.strength.label}</h3>
-                    <p>{review.strength.detail}</p>
-                  </article>
-                  <article>
-                    <span>{copy.nextFocusTitle}</span>
-                    <h3>{review.nextFocus.label}</h3>
-                    <p>{review.nextFocus.detail}</p>
-                  </article>
-                </div>
-              </section>
-            )}
-
-            <section className="review-memory-tags-panel">
-              <div className="review-panel-heading">
-                <h3>{copy.memoryTagsTitle}</h3>
-                <span>{memoryTags.length}</span>
-              </div>
-              <div className="review-memory-tags">
-                {memoryTags.map((tag) => (
-                  <button key={tag} onClick={() => removeMemoryTag(tag)} aria-label={`${copy.removeTag} ${tag}`}>
-                    {tag}
-                    <X size={13} />
-                  </button>
+        {structuredReview && (
+          <section className="review-analysis-card">
+            <div className="review-card-title">
+              <Sparkles size={20} />
+              <span>{copy.structuredTitle}</span>
+            </div>
+            <article className="review-suggestion-item">
+              <span>{structuredReview.expressionStatus.label}</span>
+              <p>{structuredReview.strength.detail}</p>
+            </article>
+            <article className="review-suggestion-item">
+              <span>{structuredReview.nextFocus.label}</span>
+              <p>{structuredReview.nextFocus.practiceMove}</p>
+            </article>
+            {review.why?.length ? (
+              <article className="review-suggestion-item">
+                <h3>Why</h3>
+                {review.why.map((moment, index) => (
+                  <p key={`${moment.quote}-${index}`}>
+                    <strong>{moment.quote}</strong>
+                    {moment.interpretation}
+                  </p>
                 ))}
-              </div>
-            </section>
+              </article>
+            ) : null}
+          </section>
+        )}
 
-            <footer className="practice-chat-review-footer">
-              <button className="secondary" onClick={() => setStep("archive")}>
-                {copy.archiveCta}
-              </button>
-              <button className="primary" onClick={() => onDone(reviewWithMemoryTags())}>
-                {copy.done}
-              </button>
-              <button className="secondary" onClick={() => onPracticeAgain(reviewWithMemoryTags())}>
-                <RefreshCcw size={16} />
-                {copy.practiceAgain}
-              </button>
-            </footer>
-          </>
-        ) : (
-          <>
-            <main className="review-archive-layout">
-              <section className="panel review-words-panel review-language-panel">
-                <div className="review-panel-heading">
-                  <h3>{copy.vocabTitle}</h3>
-                  <span>{vocabItems.filter(({ index }) => selectedWords.has(index)).length}/{vocabItems.length}</span>
+        <section className="review-suggestions-card">
+          <div className="review-card-title">
+            <CheckCircle2 size={20} />
+            <span>{copy.suggestionsTitle}</span>
+          </div>
+          {review.betterExpressions.length ? (
+            <div className="review-suggestion-list">
+              {review.betterExpressions.map((expression, index) => (
+                <article key={`${expression.improved}-${index}`} className="review-suggestion-item">
+                  <span>{expression.note || copy.expressionIssue}</span>
+                  {expression.original && (
+                    <p className="review-original-line">
+                      <strong>{copy.originalLabel}</strong>
+                      {expression.original}
+                    </p>
+                  )}
+                  <p className="review-improved-line">
+                    <strong>{copy.improvedLabel}</strong>
+                    {expression.improved}
+                  </p>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="review-muted">{copy.noSuggestions}</p>
+          )}
+        </section>
+
+        <footer className="practice-chat-review-footer">
+          <button className="secondary" onClick={() => setShowArchive(true)}>
+            <LibraryBig size={16} />
+            {copy.archiveCta}
+          </button>
+          <button className="primary" onClick={() => onDone(selectedReview())}>
+            {copy.done}
+          </button>
+          <button className="secondary" onClick={() => onPracticeAgain(selectedReview())}>
+            <RefreshCcw size={16} />
+            {copy.practiceAgain}
+          </button>
+        </footer>
+
+        {showArchive && (
+          <div className="review-archive-modal" role="dialog" aria-label={copy.archiveTitle}>
+            <div className="review-archive-card">
+              <header>
+                <div>
+                  <span className="review-kicker">{copy.archiveKicker}</span>
+                  <h3>{copy.archiveTitle}</h3>
                 </div>
-                <p className="review-save-hint">{copy.vocabHint}</p>
-                {vocabItems.length ? (
-                  <div className="review-select-words">
-                    {vocabItems.map(({ item, index }) => (
-                      <button key={`${item}-${index}`} className={selectedWords.has(index) ? "selected" : ""} onClick={() => toggleWord(index)}>
-                        <span>{selectedWords.has(index) ? <Check size={13} /> : null}</span>
-                        {item}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="review-muted">{copy.noVocab}</p>
-                )}
-              </section>
+                <button onClick={() => setShowArchive(false)} aria-label={copy.closeArchive}>
+                  <X size={18} />
+                </button>
+              </header>
 
-              <section className="panel review-words-panel review-language-panel">
-                <div className="review-panel-heading">
-                  <h3>{copy.chunksTitle}</h3>
-                  <span>{chunkItems.filter(({ index }) => selectedWords.has(index)).length}/{chunkItems.length}</span>
-                </div>
-                <p className="review-save-hint">{copy.chunksHint}</p>
-                {chunkItems.length ? (
-                  <div className="review-select-words chunk-list">
-                    {chunkItems.map(({ item, index }) => (
-                      <button key={`${item}-${index}`} className={selectedWords.has(index) ? "selected" : ""} onClick={() => toggleWord(index)}>
-                        <span>{selectedWords.has(index) ? <Check size={13} /> : null}</span>
-                        {item}
-                      </button>
-                    ))}
+              <section>
+                <div className="review-archive-section-heading">
+                  <div>
+                    <h3>{copy.expressionArchiveTitle}</h3>
+                    <span>{selectedExpressionIndexes.size}/{review.betterExpressions.length}</span>
                   </div>
-                ) : (
-                  <p className="review-muted">{copy.noChunks}</p>
-                )}
-              </section>
-
-              {expression && (
-                <section className="panel review-expression-panel compact-expression-panel">
-                  <div className="review-panel-heading">
-                    <h3>{copy.naturalSentenceTitle}</h3>
-                    <span>{selectedExpression ? 1 : 0}/1</span>
-                  </div>
-                  <button
-                    className={`review-main-expression-card ${selectedExpression ? "selected" : ""}`}
-                    onClick={() => setSelectedExpression((selected) => !selected)}
-                  >
-                    <span className="review-select-check">{selectedExpression ? <Check size={14} /> : null}</span>
-                    <div>
-                      <strong>{expression.improved}</strong>
-                      {expression.original && <p>{copy.originalLabel}: {expression.original}</p>}
-                    </div>
+                  <button onClick={toggleAllExpressions} disabled={!review.betterExpressions.length}>
+                    {allExpressionsSelected() ? copy.clearAll : copy.selectAll}
                   </button>
-                </section>
-              )}
-            </main>
+                </div>
+                {review.betterExpressions.length ? (
+                  <div className="review-archive-select-list">
+                    {review.betterExpressions.map((expression, index) => (
+                      <button
+                        key={`${expression.improved}-${index}`}
+                        className={selectedExpressionIndexes.has(index) ? "selected" : ""}
+                        onClick={() => toggleExpression(index)}
+                      >
+                        <span>{selectedExpressionIndexes.has(index) ? <Check size={13} /> : null}</span>
+                        <strong>{expression.improved}</strong>
+                        {expression.original && <em>{expression.original}</em>}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="review-muted">{copy.noExpressionArchive}</p>
+                )}
+              </section>
 
-            <footer className="practice-chat-review-footer">
-              <button className="secondary" onClick={() => setStep("diary")}>
-                {copy.backToDiary}
-              </button>
-              <button className="primary" onClick={() => onDone(selectedReview())}>
-                {copy.saveAndDone}
-              </button>
-              <button className="secondary" onClick={() => onDone({ ...review, betterExpressions: [], savedWordsOrChunks: [] })}>
-                {copy.skipSave}
-              </button>
-            </footer>
-          </>
+              <section>
+                <div className="review-archive-section-heading">
+                  <div>
+                    <h3>{copy.chunkArchiveTitle}</h3>
+                    <span>{selectedChunkIndexes.size}/{review.savedWordsOrChunks.length}</span>
+                  </div>
+                  <button onClick={toggleAllChunks} disabled={!review.savedWordsOrChunks.length}>
+                    {allChunksSelected() ? copy.clearAll : copy.selectAll}
+                  </button>
+                </div>
+                {review.savedWordsOrChunks.length ? (
+                  <div className="review-archive-select-list chunks">
+                    {review.savedWordsOrChunks.map((chunk, index) => (
+                      <button
+                        key={`${chunk}-${index}`}
+                        className={selectedChunkIndexes.has(index) ? "selected" : ""}
+                        onClick={() => toggleChunk(index)}
+                      >
+                        <span>{selectedChunkIndexes.has(index) ? <Check size={13} /> : null}</span>
+                        <strong>{chunk}</strong>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="review-muted">{copy.noChunkArchive}</p>
+                )}
+              </section>
+
+              <footer>
+                <button className="secondary" onClick={() => setShowArchive(false)}>
+                  {copy.backToReview}
+                </button>
+                <button className="primary" onClick={() => onDone(selectedReview())}>
+                  {copy.saveArchive}
+                </button>
+              </footer>
+            </div>
+          </div>
         )}
       </div>
     </section>
@@ -253,88 +321,68 @@ export function PracticeReviewPage({
 
 const zh = {
   kicker: "Review",
-  title: "今天完成了一次表达练习",
-  archiveTitle: "Vocab / Chunk 存档",
-  completedPractice: "TinyBu 的小记",
-  memoryTitle: "我记住了这次练习",
-  memoryTagsTitle: "TinyBu 会记住这些",
-  removeTag: "不记录",
-  practiceDone: "完成 1 次口语练习",
-  archiveTeaserTitle: "可以留下的内容",
-  archiveTeaserBody: "我帮你挑出了一些值得下次再用的表达。想保存时再进入存档，不想整理也可以直接完成。",
-  focusTitle: "小目标覆盖",
-  expressionsTitle: "推荐保存",
-  wordsTitle: "想保存的表达",
-  nextTitle: "TinyBu 的小记",
-  expressionStatusTitle: "表达状态",
-  strengthTitle: "这次说得好的地方",
-  nextFocusTitle: "下次练这一点",
-  confidenceTitle: "判断把握",
-  recommendedLabel: "建议留下这一句",
+  title: "本次口语复盘",
+  taskTitle: "任务完成情况",
+  taskFallbackTitle: "已完成一次主题对话",
+  taskFallbackBody: "TinyBu 已根据这次对话整理出整体表现和可优化表达。",
+  scoreTitle: "综合评分",
+  fluency: "流利度",
+  naturalness: "表达自然度",
+  vocabulary: "词汇量",
+  analysisTitle: "整体表现分析",
+  noAnalysis: "这次练习内容较短，先保留轻量复盘。",
+  structuredTitle: "关键表现",
+  suggestionsTitle: "优化建议",
+  expressionIssue: "表达错误",
   originalLabel: "原句",
-  improvedLabel: "更自然",
-  saveHint: "只保存你点亮的内容。",
-  noExpression: "这次没有需要特别改写的句子。",
-  vocabTitle: "Vocab",
-  chunksTitle: "Chunks",
-  naturalSentenceTitle: "自然说法",
-  vocabHint: "适合下次复用的词和短语，默认会保存。",
-  chunksHint: "适合直接拿来开口的句架，默认会保存。",
-  noVocab: "这次没有特别需要保存的词。",
-  noChunks: "这次没有特别需要保存的句架。",
-  archiveCta: "存 Vocab / Chunk",
-  backToDiary: "返回小记",
-  saveAndDone: "保存并完成",
-  skipSave: "不保存，完成",
+  improvedLabel: "优化",
+  noSuggestions: "这次没有明显需要改写的语法或表达错误。",
+  archiveCta: "整理进表达库",
+  archiveKicker: "Archive",
+  archiveTitle: "选择要保存的表达",
+  closeArchive: "关闭存档",
+  expressionArchiveTitle: "优化句",
+  chunkArchiveTitle: "收藏对话 / Chunk",
+  selectAll: "全选",
+  clearAll: "取消全选",
+  noExpressionArchive: "这次没有可保存的优化句。",
+  noChunkArchive: "这次没有可保存的对话或 Chunk。",
+  backToReview: "返回复盘",
+  saveArchive: "保存并完成",
   done: "完成",
-  practiceAgain: "再练一次",
-  stats: {
-    spoken: "次开口",
-    goals: "目标",
-    archive: "个可存"
-  }
+  practiceAgain: "再练一次"
 };
 
 const en = {
   kicker: "Review",
-  title: "You completed one expression practice",
-  archiveTitle: "Vocab / Chunk Archive",
-  completedPractice: "TinyBu's note",
-  memoryTitle: "I saved this little memory",
-  memoryTagsTitle: "TinyBu will remember",
-  removeTag: "Do not remember",
-  practiceDone: "1 speaking practice",
-  archiveTeaserTitle: "Optional saves",
-  archiveTeaserBody: "TinyBu picked a few sentences and phrases. Open the archive if you want to keep them, or finish without organizing.",
-  focusTitle: "Small goals covered",
-  expressionsTitle: "Recommended save",
-  wordsTitle: "Expressions to save",
-  nextTitle: "TinyBu's note",
-  expressionStatusTitle: "Expression status",
-  strengthTitle: "What went well",
-  nextFocusTitle: "Try this next",
-  confidenceTitle: "Confidence",
-  recommendedLabel: "Keep this sentence",
+  title: "Speaking review",
+  taskTitle: "Mission result",
+  taskFallbackTitle: "One topic conversation completed",
+  taskFallbackBody: "TinyBu organized your overall performance and expression fixes from this call.",
+  scoreTitle: "Scores",
+  fluency: "Fluency",
+  naturalness: "Naturalness",
+  vocabulary: "Vocabulary",
+  analysisTitle: "Overall performance",
+  noAnalysis: "This practice was short, so TinyBu kept the review light.",
+  structuredTitle: "Key performance",
+  suggestionsTitle: "Optimization suggestions",
+  expressionIssue: "Expression issue",
   originalLabel: "Original",
-  improvedLabel: "More natural",
-  saveHint: "Only highlighted items will be saved.",
-  noExpression: "No sentence needed a special rewrite this time.",
-  vocabTitle: "Vocab",
-  chunksTitle: "Chunks",
-  naturalSentenceTitle: "Natural sentence",
-  vocabHint: "Reusable words and phrases are selected by default.",
-  chunksHint: "Reusable speaking chunks are selected by default.",
-  noVocab: "No specific vocab to save this time.",
-  noChunks: "No specific chunks to save this time.",
-  archiveCta: "Save vocab / chunks",
-  backToDiary: "Back to note",
-  saveAndDone: "Save and finish",
-  skipSave: "Finish without saving",
+  improvedLabel: "Better",
+  noSuggestions: "No clear grammar or expression issue needed rewriting this time.",
+  archiveCta: "Organize library",
+  archiveKicker: "Archive",
+  archiveTitle: "Choose expressions to save",
+  closeArchive: "Close archive",
+  expressionArchiveTitle: "Optimized sentences",
+  chunkArchiveTitle: "Saved lines / chunks",
+  selectAll: "Select all",
+  clearAll: "Clear all",
+  noExpressionArchive: "No optimized sentence to save this time.",
+  noChunkArchive: "No saved line or chunk to save this time.",
+  backToReview: "Back to review",
+  saveArchive: "Save and finish",
   done: "Done",
-  practiceAgain: "Practice again",
-  stats: {
-    spoken: "turns spoken",
-    goals: "goals",
-    archive: "saves"
-  }
+  practiceAgain: "Practice again"
 };

@@ -99,7 +99,18 @@ async function sendExtractMessage(tabId, kind) {
 
   await chrome.scripting.executeScript({
     target: { tabId },
-    files: ["content.js"]
+    files: [
+      "contentBridge.js",
+      "contentExtractors.js",
+      "contentMessaging.js",
+      "contentSelection.js",
+      "contentLayout.js",
+      "contentCaptureActions.js",
+      "contentRuntime.js",
+      "contentViewHelpers.js",
+      "contentFloatingStyles.js",
+      "content.js"
+    ]
   });
 
   await wait(80);
@@ -245,7 +256,18 @@ async function ensureContentScript(tabId) {
   } catch {
     await chrome.scripting.executeScript({
       target: { tabId },
-      files: ["content.js"]
+      files: [
+        "contentBridge.js",
+        "contentExtractors.js",
+        "contentMessaging.js",
+        "contentSelection.js",
+        "contentLayout.js",
+        "contentCaptureActions.js",
+        "contentRuntime.js",
+        "contentViewHelpers.js",
+        "contentFloatingStyles.js",
+        "content.js"
+      ]
     });
     await wait(120);
   }

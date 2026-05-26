@@ -29,6 +29,10 @@ export function isAnthropicCompatibleModel(model = "") {
   return trimmed.startsWith("minimax") || trimmed.startsWith("claude") || trimmed.startsWith("anthropic/");
 }
 
+export function isDeepSeekModel(model = "") {
+  return model.trim().toLowerCase().startsWith("deepseek");
+}
+
 export function shouldUseOpenRouterModel(model = "", options = {}) {
   const normalized = normalizeOpenRouterModel(model);
   const token = options.anthropicAuthToken;

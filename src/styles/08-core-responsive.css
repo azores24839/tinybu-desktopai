@@ -1,0 +1,29 @@
+@media (max-width: 1280px) {
+  .unsorted-layout {
+    grid-template-columns: 230px minmax(0, 1fr) 250px;
+  }
+
+  .unsorted-layout::after {
+    left: 230px;
+  }
+}
+
+@media (max-width: 980px) {
+  .unsorted-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .unsorted-layout::after {
+    display: none;
+  }
+
+  .unsorted-center::after {
+    display: none;
+  }
+
+  .unsorted-queue-column,
+  .unsorted-center,
+  .unsorted-topic-panel {
+    max-height: none;
+  }
+}
