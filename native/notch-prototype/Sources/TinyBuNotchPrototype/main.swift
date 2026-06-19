@@ -406,23 +406,99 @@ final class BlackIslandView: NSView {
   }
 
   static func path(in rect: NSRect, expanded: Bool) -> CGPath {
-    let topRadius = expanded ? 58.0 : 28.0
-    let bottomRadius = expanded ? 42.0 : 28.0
-    let path = CGMutablePath()
+    if !expanded {
+      return compactCollapsedPath(in: rect)
+    }
+
+    return referenceIslandPath(
+      in: rect,
+      referenceHeight: expanded ? 277.0 : 216.5,
+      radius: 78.0
+    )
+  }
+
+  private static func compactCollapsedPath(in rect: NSRect) -> CGPath {
+    let referenceWidth = 982.0
+    let referenceRadius = 78.0
+    let rx = min(CGFloat(referenceRadius / referenceWidth) * rect.width, rect.width / 2)
+    let ry = min(rect.height / 2, rx)
+    let k = 0.5522847498
+    let cx = rx * k
+    let cy = ry * k
     let minX = rect.minX
     let maxX = rect.maxX
     let minY = rect.minY
     let maxY = rect.maxY
 
-    path.move(to: CGPoint(x: minX, y: maxY - topRadius))
-    path.addQuadCurve(to: CGPoint(x: minX + topRadius, y: maxY), control: CGPoint(x: minX, y: maxY))
-    path.addLine(to: CGPoint(x: maxX - topRadius, y: maxY))
-    path.addQuadCurve(to: CGPoint(x: maxX, y: maxY - topRadius), control: CGPoint(x: maxX, y: maxY))
-    path.addLine(to: CGPoint(x: maxX, y: minY + bottomRadius))
-    path.addQuadCurve(to: CGPoint(x: maxX - bottomRadius, y: minY), control: CGPoint(x: maxX, y: minY))
-    path.addLine(to: CGPoint(x: minX + bottomRadius, y: minY))
-    path.addQuadCurve(to: CGPoint(x: minX, y: minY + bottomRadius), control: CGPoint(x: minX, y: minY))
-    path.addLine(to: CGPoint(x: minX, y: maxY - topRadius))
+    let path = CGMutablePath()
+    path.move(to: CGPoint(x: maxX, y: maxY))
+    path.addCurve(
+      to: CGPoint(x: maxX - rx, y: maxY - ry),
+      control1: CGPoint(x: maxX - cx, y: maxY),
+      control2: CGPoint(x: maxX - rx, y: maxY - ry + cy)
+    )
+    path.addLine(to: CGPoint(x: maxX - rx, y: minY + ry))
+    path.addCurve(
+      to: CGPoint(x: maxX - rx * 2, y: minY),
+      control1: CGPoint(x: maxX - rx, y: minY + ry - cy),
+      control2: CGPoint(x: maxX - rx * 2 + cx, y: minY)
+    )
+    path.addLine(to: CGPoint(x: minX + rx * 2, y: minY))
+    path.addCurve(
+      to: CGPoint(x: minX + rx, y: minY + ry),
+      control1: CGPoint(x: minX + rx * 2 - cx, y: minY),
+      control2: CGPoint(x: minX + rx, y: minY + ry - cy)
+    )
+    path.addLine(to: CGPoint(x: minX + rx, y: maxY - ry))
+    path.addCurve(
+      to: CGPoint(x: minX, y: maxY),
+      control1: CGPoint(x: minX + rx, y: maxY - ry + cy),
+      control2: CGPoint(x: minX + cx, y: maxY)
+    )
+    path.addLine(to: CGPoint(x: maxX, y: maxY))
+    path.closeSubpath()
+    return path
+  }
+
+  private static func referenceIslandPath(in rect: NSRect, referenceHeight: Double, radius: Double) -> CGPath {
+    let referenceWidth = 982.0
+    let control = radius * 0.5522847498
+    let scaleX = rect.width / referenceWidth
+    let scaleY = rect.height / referenceHeight
+
+    func point(_ x: Double, _ y: Double) -> CGPoint {
+      CGPoint(
+        x: rect.minX + CGFloat(x) * scaleX,
+        y: rect.maxY - CGFloat(y) * scaleY
+      )
+    }
+
+    let path = CGMutablePath()
+    path.move(to: point(982, 0))
+    path.addCurve(
+      to: point(referenceWidth - radius, radius),
+      control1: point(referenceWidth - control, 0),
+      control2: point(referenceWidth - radius, radius - control)
+    )
+    path.addLine(to: point(referenceWidth - radius, referenceHeight - radius))
+    path.addCurve(
+      to: point(referenceWidth - radius * 2, referenceHeight),
+      control1: point(referenceWidth - radius, referenceHeight - radius + control),
+      control2: point(referenceWidth - radius * 2 + control, referenceHeight)
+    )
+    path.addLine(to: point(radius * 2, referenceHeight))
+    path.addCurve(
+      to: point(radius, referenceHeight - radius),
+      control1: point(radius * 2 - control, referenceHeight),
+      control2: point(radius, referenceHeight - radius + control)
+    )
+    path.addLine(to: point(radius, radius))
+    path.addCurve(
+      to: point(0, 0),
+      control1: point(radius, radius - control),
+      control2: point(control, 0)
+    )
+    path.addLine(to: point(982, 0))
     path.closeSubpath()
     return path
   }
