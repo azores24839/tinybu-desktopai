@@ -91,7 +91,7 @@ node --check apps/api/server.mjs
 Use Tauri checks when touching Rust or desktop commands:
 
 ```bash
-cargo check --manifest-path src-tauri/Cargo.toml
+npm run tauri:check
 ```
 
 ## Maintenance Rules

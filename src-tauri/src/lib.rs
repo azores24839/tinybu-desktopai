@@ -89,7 +89,8 @@ struct CaptureBridgeState {
 #[derive(Default)]
 struct ScreenshotVisibilityState {
   main_was_visible: bool,
-  pet_was_visible: bool
+  pet_was_visible: bool,
+  notch_was_visible: bool
 }
 
 impl CaptureBridgeState {
@@ -241,10 +242,15 @@ fn open_screenshot_capture(
     .get_webview_window("pet")
     .and_then(|window| window.is_visible().ok())
     .unwrap_or(false);
+  let notch_was_visible = app
+    .get_webview_window("notch")
+    .and_then(|window| window.is_visible().ok())
+    .unwrap_or(false);
   {
     let mut visibility = visibility_state.lock().map_err(|error| error.to_string())?;
     visibility.main_was_visible = main_was_visible;
     visibility.pet_was_visible = pet_was_visible;
+    visibility.notch_was_visible = notch_was_visible;
   }
 
   if let Some(window) = app.get_webview_window("main") {
@@ -252,6 +258,10 @@ fn open_screenshot_capture(
   }
 
   if let Some(window) = app.get_webview_window("pet") {
+    let _ = window.hide();
+  }
+
+  if let Some(window) = app.get_webview_window("notch") {
     let _ = window.hide();
   }
 
@@ -383,7 +393,8 @@ fn restore_screenshot_windows(app: &tauri::AppHandle, state: &SharedScreenshotVi
   let visibility = match state.lock() {
     Ok(visibility) => ScreenshotVisibilityState {
       main_was_visible: visibility.main_was_visible,
-      pet_was_visible: visibility.pet_was_visible
+      pet_was_visible: visibility.pet_was_visible,
+      notch_was_visible: visibility.notch_was_visible
     },
     Err(error) => {
       eprintln!("TinyBu could not restore screenshot windows: {error}");
@@ -399,6 +410,12 @@ fn restore_screenshot_windows(app: &tauri::AppHandle, state: &SharedScreenshotVi
 
   if visibility.pet_was_visible && app.get_webview_window("pet").is_some() {
     if let Some(window) = app.get_webview_window("pet") {
+      let _ = window.show();
+    }
+  }
+
+  if visibility.notch_was_visible && app.get_webview_window("notch").is_some() {
+    if let Some(window) = app.get_webview_window("notch") {
       let _ = window.show();
     }
   }

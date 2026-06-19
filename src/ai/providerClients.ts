@@ -6,8 +6,6 @@ import { buildOpenAiInput, buildOpenRouterMessages } from "./requestBuilders";
 import { parseOpenAiJson, parseOpenAiText, quickReplyText } from "./responseParsing";
 
 export type ProviderTaskName = keyof typeof taskPrompts;
-const QUICK_PET_CHAT_PROMPT =
-  "TinyBu desktop buddy. Reply in the user's language. Max 35 Chinese chars or 18 English words. No markdown.";
 
 function deepSeekBaseUrl(appState: AppStateRecord) {
   return (appState.settings.deepSeekBaseUrl || "https://api.deepseek.com").replace(/\/+$/, "");
@@ -167,7 +165,7 @@ export async function callQuickPetChatOpenAi(
       },
       body: JSON.stringify({
         model: modelForTask("quickPetChat", appState),
-        instructions: QUICK_PET_CHAT_PROMPT,
+        instructions: taskPrompts.quickPetChat,
         input: String(payload.message),
         max_output_tokens: 70
       })
@@ -197,7 +195,7 @@ export async function callQuickPetChatOpenRouter(
       body: JSON.stringify({
         model: normalizeOpenRouterModel(modelForTask("quickPetChat", appState)),
         messages: [
-          { role: "system", content: QUICK_PET_CHAT_PROMPT },
+          { role: "system", content: taskPrompts.quickPetChat },
           { role: "user", content: String(payload.message) }
         ],
         max_tokens: 70,
@@ -226,7 +224,7 @@ export async function callQuickPetChatDeepSeek(
       body: JSON.stringify({
         model: deepSeekModelForTask("quickPetChat", appState),
         messages: [
-          { role: "system", content: QUICK_PET_CHAT_PROMPT },
+          { role: "system", content: taskPrompts.quickPetChat },
           { role: "user", content: String(payload.message) }
         ],
         max_tokens: 70,

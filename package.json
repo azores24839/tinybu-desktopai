@@ -12,9 +12,11 @@
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
+    "tauri:check": "cargo check --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target-check",
     "api:dev": "node apps/api/server.mjs",
     "test:regression": "node --test test/regression.test.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:ci": "npm run typecheck && npm run test:regression && node --check apps/api/server.mjs && node --check apps/api/providerClients.mjs && node --check apps/api/taskSchemas.mjs && npm run tauri:check && npm run build"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

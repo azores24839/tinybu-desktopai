@@ -10,6 +10,7 @@ import {
   normalizeOpenRouterModel,
   shouldUseOpenRouterModel
 } from "../apps/api/providerRouting.mjs";
+import { quickPetChatPrompt, schemaFor, taskPrompts as apiTaskPrompts } from "../apps/api/taskSchemas.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const retiredProductNamePattern = /\b(?:NOMI|Nomi|nomi|NORI|Nori|nori|Mirror|mirror)[A-Za-z0-9_-]*/g;
@@ -189,6 +190,17 @@ test("AI request builders preserve text payloads and screenshot image inputs", a
   assert.equal(openRouterMessages[0].content[0].type, "text");
   assert.match(JSON.parse(openRouterMessages[0].content[0].text).instruction, /Answer the user's question/);
   assert.deepEqual(openRouterMessages[0].content[1], { type: "image_url", image_url: { url: imageDataUrl, detail: "high" } });
+});
+
+test("frontend and proxy keep critical AI task contracts aligned", async () => {
+  const { jsonSchemas, taskPrompts } = await loadTsModule("src/ai/prompts.ts");
+
+  assert.equal(apiTaskPrompts.quickPetChat, taskPrompts.quickPetChat);
+  assert.equal(quickPetChatPrompt, taskPrompts.quickPetChat);
+
+  for (const task of ["contentUnderstanding", "screenshotCapture", "screenshotQuestion", "quickPetChat"]) {
+    assert.deepEqual(schemaFor(task), jsonSchemas[task]);
+  }
 });
 
 test("screenshot AI payloads only include images for visual layout questions", async () => {

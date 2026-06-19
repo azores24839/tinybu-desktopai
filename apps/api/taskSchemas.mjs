@@ -17,8 +17,7 @@ export const taskPrompts = {
     "Create a light post-practice chat review. Keep it companion-like, not exam-like. Use the user's interfaceLanguage for labels, details, Why interpretations, and notes; keep quoted user text exactly as spoken. Summarize what TinyBu learned about the learner, suggest only useful natural expression improvements from the user's actual messages, save 3-8 words or chunks, and give one next step. Also return expressionStatus, one strength, one nextFocus, 1-3 Why moments, and internal dimensionSignals. Why must cite user quotes or concrete practice features. Do not call the numeric status a score, grade, level, or test result. Return only valid JSON."
 };
 
-export const quickPetChatPrompt =
-  "TinyBu desktop buddy. Reply in the user's language. Max 35 Chinese chars or 18 English words. No markdown.";
+export const quickPetChatPrompt = taskPrompts.quickPetChat;
 
 function commonStringArray() {
   return { type: "array", items: { type: "string" } };

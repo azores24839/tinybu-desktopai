@@ -1,0 +1,11 @@
+{
+  "": {
+    "swift-dependencies": "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype.build/master.swiftdeps"
+  },
+  "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/Sources/TinyBuNotchPrototype/main.swift": {
+    "dependencies": "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype.build/main.d",
+    "object": "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype.build/main.swift.o",
+    "swiftmodule": "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype.build/main~partial.swiftmodule",
+    "swift-dependencies": "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype.build/main.swiftdeps"
+  }
+}

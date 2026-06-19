@@ -1,0 +1,217 @@
+{
+  "builtTestProducts" : [
+
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.TinyBuNotchPrototype-arm64-apple-macosx15.0-debug.module" : {
+      "executable" : "/Library/Developer/CommandLineTools/usr/bin/swiftc",
+      "fileList" : "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype.build/sources",
+      "importPath" : "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/Sources/TinyBuNotchPrototype/main.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype.build/sources"
+        }
+      ],
+      "isLibrary" : false,
+      "moduleName" : "TinyBuNotchPrototype",
+      "moduleOutputPath" : "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/Modules/TinyBuNotchPrototype.swiftmodule",
+      "objects" : [
+        "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype.build/main.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx13.0",
+        "-enable-batch-mode",
+        "-index-store-path",
+        "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j8",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-module-cache-path",
+        "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-Xfrontend",
+        "-entry-point-function-name",
+        "-Xfrontend",
+        "TinyBuNotchPrototype_main",
+        "-swift-version",
+        "5",
+        "-sdk",
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "notch_prototype"
+      ],
+      "outputFileMapPath" : "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype.build/main.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/Modules/TinyBuNotchPrototype.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/Sources/TinyBuNotchPrototype/main.swift"
+      ],
+      "tempsPath" : "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "TinyBuNotchPrototype" : [
+      "/Library/Developer/CommandLineTools/usr/bin/swiftc",
+      "-module-name",
+      "TinyBuNotchPrototype",
+      "-package-name",
+      "notch_prototype",
+      "-incremental",
+      "-c",
+      "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/Sources/TinyBuNotchPrototype/main.swift",
+      "-I",
+      "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx13.0",
+      "-enable-batch-mode",
+      "-index-store-path",
+      "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j8",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-module-cache-path",
+      "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-Xfrontend",
+      "-entry-point-function-name",
+      "-Xfrontend",
+      "TinyBuNotchPrototype_main",
+      "-swift-version",
+      "5",
+      "-sdk",
+      "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "notch_prototype",
+      "-driver-use-frontend-path",
+      "/Library/Developer/CommandLineTools/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "TinyBuNotchPrototype" : [
+
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+
+  },
+  "writeCommands" : {
+    "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype-entitlement.plist" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<entitlement-plist>"
+        },
+        {
+          "kind" : "virtual",
+          "name" : "<com.apple.security.get-task-allow>"
+        }
+      ],
+      "outputFilePath" : "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype-entitlement.plist"
+    },
+    "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/Sources/TinyBuNotchPrototype/main.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype.build/sources"
+    },
+    "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype.build/main.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/TinyBuNotchPrototype.product/Objects.LinkFileList"
+    },
+    "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Library/Developer/CommandLineTools/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/athenaeumzero/Documents/Tinybu/native/notch-prototype/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+    }
+  }
+}
