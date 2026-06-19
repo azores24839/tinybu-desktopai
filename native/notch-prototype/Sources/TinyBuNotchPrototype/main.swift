@@ -2,7 +2,7 @@ import AppKit
 import Carbon.HIToolbox
 
 private let panelSize = NSSize(width: 680, height: 176)
-private let collapsedIslandSize = NSSize(width: 420, height: 48)
+private let collapsedIslandSize = NSSize(width: 357, height: 36)
 private let expandedIslandSize = NSSize(width: 620, height: 154)
 private let notchReservedWidth: CGFloat = 190.0
 private let hotKeySignature = fourCharCode("TBU1")
@@ -46,7 +46,7 @@ final class NotchPanelController: NSObject {
     panel.backgroundColor = .clear
     panel.isOpaque = false
     panel.hasShadow = false
-    panel.level = .screenSaver
+    panel.level = .statusBar
     panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
     panel.hidesOnDeactivate = false
     panel.isMovable = false
@@ -105,11 +105,15 @@ final class NotchView: NSView {
   private let leftCluster = NSStackView()
   private let rightCluster = NSStackView()
   private let detailArea = NSStackView()
-  private let brandLabel = NSTextField(labelWithString: "TinyBu")
+  private let trayTitle = NSTextField(labelWithString: "Tray")
+  private let trayEmptyLabel = NSTextField(labelWithString: "No screenshots collected today")
+  private let thumbnailStrip = NSStackView()
+  private let brandLabel = NSTextField(labelWithString: "Tray")
   private let statusLabel = NSTextField(labelWithString: "")
   private let countBadge = NSTextField(labelWithString: "0")
   private let voiceStatus = NSTextField(labelWithString: "Voice shortcut")
   private let dropStatus = NSTextField(labelWithString: "Drag text, images, or links here")
+  private var capturedImages: [NSImage] = []
   private var expanded = false
   private var count = 0
 
@@ -128,7 +132,9 @@ final class NotchView: NSView {
   func setExpanded(_ nextExpanded: Bool) {
     expanded = nextExpanded
     detailArea.isHidden = !nextExpanded
-    statusLabel.stringValue = nextExpanded ? "Today 0 captures · Native prototype" : ""
+    brandLabel.isHidden = !nextExpanded
+    countBadge.isHidden = nextExpanded
+    statusLabel.stringValue = ""
     animateIsland(to: nextExpanded)
   }
 
@@ -136,6 +142,15 @@ final class NotchView: NSView {
     island.wantsLayer = true
     island.frame = islandCanvasFrame()
     island.expanded = false
+    island.onDraggingEntered = { [weak self] info in
+      self?.handleDraggingEntered(info) ?? []
+    }
+    island.onDraggingExited = { [weak self] info in
+      self?.handleDraggingExited(info)
+    }
+    island.onPerformDrag = { [weak self] info in
+      self?.handlePerformDrag(info) ?? false
+    }
     addSubview(island)
 
     topRow.wantsLayer = true
@@ -152,7 +167,7 @@ final class NotchView: NSView {
 
     rightCluster.orientation = .horizontal
     rightCluster.alignment = .centerY
-    rightCluster.spacing = 10
+    rightCluster.spacing = 8
     rightCluster.translatesAutoresizingMaskIntoConstraints = true
     rightCluster.frame = NSRect(x: topRow.bounds.width - 154, y: 7, width: 130, height: 36)
     topRow.addSubview(rightCluster)
@@ -164,18 +179,17 @@ final class NotchView: NSView {
 
     brandLabel.font = .systemFont(ofSize: 17, weight: .bold)
     brandLabel.textColor = .white
+    brandLabel.isHidden = true
     statusLabel.font = .systemFont(ofSize: 14, weight: .semibold)
     statusLabel.textColor = NSColor.white.withAlphaComponent(0.68)
     statusLabel.lineBreakMode = .byTruncatingTail
 
-    countBadge.font = .systemFont(ofSize: 12, weight: .bold)
-    countBadge.textColor = .black
+    countBadge.font = .systemFont(ofSize: 15, weight: .bold)
+    countBadge.textColor = .white
     countBadge.alignment = .center
-    countBadge.wantsLayer = true
-    countBadge.layer?.backgroundColor = NSColor.white.cgColor
-    countBadge.layer?.cornerRadius = 9
-    countBadge.isHidden = true
-    countBadge.widthAnchor.constraint(greaterThanOrEqualToConstant: 20).isActive = true
+    countBadge.wantsLayer = false
+    countBadge.isHidden = false
+    countBadge.widthAnchor.constraint(greaterThanOrEqualToConstant: 12).isActive = true
     countBadge.heightAnchor.constraint(equalToConstant: 20).isActive = true
 
     leftCluster.addArrangedSubview(brandGroup)
@@ -186,31 +200,19 @@ final class NotchView: NSView {
     rightCluster.addArrangedSubview(actionButton(symbolName: "scissors", title: "Screenshot") { [weak self] in
       self?.flash("Screenshot action")
     })
-    rightCluster.addArrangedSubview(actionButton(symbolName: "arrow.uturn.backward", title: "Undo") { [weak self] in
-      self?.flash("Undo placeholder")
-    })
     rightCluster.addArrangedSubview(statusLabel)
     statusLabel.isHidden = true
 
-    detailArea.orientation = .horizontal
-    detailArea.alignment = .top
-    detailArea.distribution = .fillEqually
-    detailArea.spacing = 18
-    detailArea.edgeInsets = NSEdgeInsets(top: 0, left: 26, bottom: 24, right: 26)
-    detailArea.translatesAutoresizingMaskIntoConstraints = false
+    detailArea.orientation = .vertical
+    detailArea.alignment = .width
+    detailArea.distribution = .fill
+    detailArea.spacing = 12
+    detailArea.edgeInsets = NSEdgeInsets(top: 0, left: 22, bottom: 18, right: 22)
+    detailArea.translatesAutoresizingMaskIntoConstraints = true
     detailArea.isHidden = true
     island.addSubview(detailArea)
 
-    detailArea.addArrangedSubview(infoColumn(title: "Today", value: "0 captures", note: "Browser extension and desktop capture will plug in here."))
-    detailArea.addArrangedSubview(infoColumn(title: "Voice", value: "Press ⌘⇧Space", note: "The native panel owns the system-level shortcut."))
-    detailArea.addArrangedSubview(infoColumn(title: "Drop Zone", value: "Hover to collect", note: "Drag text, images, links, or files into the island."))
-
-    NSLayoutConstraint.activate([
-      detailArea.topAnchor.constraint(equalTo: island.topAnchor, constant: 60),
-      detailArea.leadingAnchor.constraint(equalTo: island.leadingAnchor),
-      detailArea.trailingAnchor.constraint(equalTo: island.trailingAnchor),
-      detailArea.bottomAnchor.constraint(equalTo: island.bottomAnchor)
-    ])
+    detailArea.addArrangedSubview(trayEmptyState())
 
     let click = NSClickGestureRecognizer(target: self, action: #selector(toggleFromClick))
     island.addGestureRecognizer(click)
@@ -233,15 +235,20 @@ final class NotchView: NSView {
 
   private func layoutIslandContent(expanded: Bool) {
     let shapeRect = island.shapeRect(expanded: expanded)
-    topRow.frame = NSRect(x: shapeRect.minX, y: shapeRect.maxY - (expanded ? 54 : 42), width: shapeRect.width, height: 40)
-    leftCluster.frame = NSRect(x: 18, y: 5, width: max(96, (shapeRect.width - notchReservedWidth) / 2 - 24), height: 30)
+    topRow.frame = NSRect(x: shapeRect.minX, y: shapeRect.maxY - (expanded ? 54 : 34), width: shapeRect.width, height: expanded ? 40 : 30)
+    detailArea.frame = NSRect(x: shapeRect.minX + 30, y: shapeRect.minY + 16, width: shapeRect.width - 60, height: max(0, shapeRect.height - 70))
+    let sideInset = expanded ? 70.0 : 30.0
+    let rightWidth = 74.0
+    let clusterY = expanded ? 5.0 : 2.0
+    let clusterHeight = expanded ? 30.0 : 26.0
+    leftCluster.frame = NSRect(x: sideInset, y: clusterY, width: max(96, (shapeRect.width - notchReservedWidth) / 2 - 24), height: clusterHeight)
     rightCluster.frame = NSRect(
-      x: shapeRect.width - max(94, (shapeRect.width - notchReservedWidth) / 2 - 24) - 18,
-      y: 5,
-      width: max(94, (shapeRect.width - notchReservedWidth) / 2 - 36),
-      height: 30
+      x: shapeRect.width - sideInset - rightWidth,
+      y: clusterY,
+      width: rightWidth,
+      height: clusterHeight
     )
-    statusLabel.isHidden = !expanded
+    statusLabel.isHidden = true
   }
 
   @objc private func toggleFromClick() {
@@ -249,54 +256,168 @@ final class NotchView: NSView {
   }
 
   override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-    setExpanded(true)
-    statusLabel.stringValue = "Drop to collect"
-    statusLabel.isHidden = false
-    island.layer?.shadowOpacity = 0.55
-    return .copy
+    handleDraggingEntered(sender)
   }
 
   override func draggingExited(_ sender: NSDraggingInfo?) {
-    statusLabel.stringValue = expanded ? "Today \(count) captures · Native prototype" : ""
-    statusLabel.isHidden = !expanded
-    island.layer?.shadowOpacity = 0.35
+    handleDraggingExited(sender)
   }
 
   override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-    count += 1
+    handlePerformDrag(sender)
+  }
+
+  private func handleDraggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+    print("TinyBuNotch drag entered:", sender.draggingPasteboard.types?.map(\.rawValue) ?? [])
+    setExpanded(true)
+    guard canReadImage(from: sender.draggingPasteboard) else {
+      trayEmptyLabel.stringValue = "Drop an image"
+      print("TinyBuNotch drag rejected: no readable image")
+      return []
+    }
+    trayEmptyLabel.stringValue = "Drop to collect"
+    print("TinyBuNotch drag accepted")
+    return .copy
+  }
+
+  private func handleDraggingExited(_ sender: NSDraggingInfo?) {
+    refreshTray()
+  }
+
+  private func handlePerformDrag(_ sender: NSDraggingInfo) -> Bool {
+    let images = readImages(from: sender.draggingPasteboard)
+    guard !images.isEmpty else {
+      trayEmptyLabel.stringValue = "No image found"
+      print("TinyBuNotch drop failed: no image found")
+      return false
+    }
+
+    capturedImages.append(contentsOf: images)
+    count = capturedImages.count
     countBadge.stringValue = String(count)
-    countBadge.isHidden = false
-    flash("Collected placeholder")
+    refreshTray()
+    print("TinyBuNotch drop stored images:", images.count)
     return true
   }
 
   private func flash(_ text: String) {
-    statusLabel.stringValue = text
+    trayEmptyLabel.stringValue = text
     DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { [weak self] in
       guard let self else { return }
-      self.statusLabel.stringValue = self.expanded ? "Today \(self.count) captures · Native prototype" : ""
-      self.statusLabel.isHidden = !self.expanded
+      self.trayEmptyLabel.stringValue = "No screenshots collected today"
     }
   }
 
-  private func infoColumn(title: String, value: String, note: String) -> NSView {
-    let titleLabel = NSTextField(labelWithString: title.uppercased())
-    titleLabel.font = .systemFont(ofSize: 11, weight: .bold)
-    titleLabel.textColor = NSColor.white.withAlphaComponent(0.45)
+  private func trayEmptyState() -> NSView {
+    let box = DashedTrayBox(frame: NSRect(x: 0, y: 0, width: 1, height: 84))
+    trayEmptyLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+    trayEmptyLabel.textColor = NSColor.white.withAlphaComponent(0.58)
+    trayEmptyLabel.alignment = .center
+    trayEmptyLabel.translatesAutoresizingMaskIntoConstraints = false
+    thumbnailStrip.orientation = .horizontal
+    thumbnailStrip.alignment = .centerY
+    thumbnailStrip.spacing = 22
+    thumbnailStrip.translatesAutoresizingMaskIntoConstraints = false
+    box.addSubview(trayEmptyLabel)
+    box.addSubview(thumbnailStrip)
+    NSLayoutConstraint.activate([
+      box.heightAnchor.constraint(equalToConstant: 84),
+      trayEmptyLabel.centerXAnchor.constraint(equalTo: box.centerXAnchor),
+      trayEmptyLabel.centerYAnchor.constraint(equalTo: box.centerYAnchor),
+      trayEmptyLabel.leadingAnchor.constraint(greaterThanOrEqualTo: box.leadingAnchor, constant: 18),
+      trayEmptyLabel.trailingAnchor.constraint(lessThanOrEqualTo: box.trailingAnchor, constant: -18),
+      thumbnailStrip.leadingAnchor.constraint(greaterThanOrEqualTo: box.leadingAnchor, constant: 24),
+      thumbnailStrip.centerXAnchor.constraint(equalTo: box.centerXAnchor),
+      thumbnailStrip.centerYAnchor.constraint(equalTo: box.centerYAnchor),
+      thumbnailStrip.heightAnchor.constraint(equalToConstant: 64)
+    ])
+    refreshTray()
+    return box
+  }
 
-    let valueLabel = NSTextField(labelWithString: value)
-    valueLabel.font = .systemFont(ofSize: 20, weight: .bold)
-    valueLabel.textColor = .white
+  private func refreshTray() {
+    thumbnailStrip.arrangedSubviews.forEach { view in
+      thumbnailStrip.removeArrangedSubview(view)
+      view.removeFromSuperview()
+    }
 
-    let noteLabel = NSTextField(wrappingLabelWithString: note)
-    noteLabel.font = .systemFont(ofSize: 12, weight: .medium)
-    noteLabel.textColor = NSColor.white.withAlphaComponent(0.58)
+    if capturedImages.isEmpty {
+      trayEmptyLabel.isHidden = false
+      trayEmptyLabel.stringValue = "No screenshots collected today"
+      thumbnailStrip.isHidden = true
+      return
+    }
 
-    let stack = NSStackView(views: [titleLabel, valueLabel, noteLabel])
-    stack.orientation = .vertical
-    stack.alignment = .leading
-    stack.spacing = 7
-    return stack
+    trayEmptyLabel.isHidden = true
+    thumbnailStrip.isHidden = false
+    for image in capturedImages.suffix(5) {
+      thumbnailStrip.addArrangedSubview(thumbnailView(for: image))
+    }
+  }
+
+  private func thumbnailView(for image: NSImage) -> NSView {
+    let container = NSView(frame: NSRect(x: 0, y: 0, width: 78, height: 58))
+
+    let imageView = NSImageView(image: image)
+    imageView.imageScaling = .scaleProportionallyUpOrDown
+    imageView.wantsLayer = true
+    imageView.layer?.cornerRadius = 6
+    imageView.layer?.cornerCurve = .continuous
+    imageView.layer?.masksToBounds = true
+    imageView.translatesAutoresizingMaskIntoConstraints = false
+    container.addSubview(imageView)
+    NSLayoutConstraint.activate([
+      container.widthAnchor.constraint(equalToConstant: 78),
+      container.heightAnchor.constraint(equalToConstant: 58),
+      imageView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+      imageView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+      imageView.topAnchor.constraint(equalTo: container.topAnchor),
+      imageView.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+    ])
+    return container
+  }
+
+  private func canReadImage(from pasteboard: NSPasteboard) -> Bool {
+    !readImages(from: pasteboard, limit: 1).isEmpty
+  }
+
+  private func readImages(from pasteboard: NSPasteboard, limit: Int = 8) -> [NSImage] {
+    var images: [NSImage] = []
+
+    if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [NSURL] {
+      for url in urls where images.count < limit {
+        let fileUrl = url as URL
+        guard isImageFile(fileUrl), let image = NSImage(contentsOf: fileUrl) else { continue }
+        images.append(image)
+      }
+    }
+
+    if images.isEmpty, let fileNames = pasteboard.propertyList(forType: .init("NSFilenamesPboardType")) as? [String] {
+      for path in fileNames where images.count < limit {
+        let url = URL(fileURLWithPath: path)
+        guard isImageFile(url), let image = NSImage(contentsOf: url) else { continue }
+        images.append(image)
+      }
+    }
+
+    if images.isEmpty, let data = pasteboard.data(forType: .png), let image = NSImage(data: data) {
+      images.append(image)
+    }
+
+    if images.isEmpty, let data = pasteboard.data(forType: .tiff), let image = NSImage(data: data) {
+      images.append(image)
+    }
+
+    if images.isEmpty, let image = NSImage(pasteboard: pasteboard) {
+      images.append(image)
+    }
+
+    return images
+  }
+
+  private func isImageFile(_ url: URL) -> Bool {
+    let imageExtensions = ["png", "jpg", "jpeg", "heic", "heif", "gif", "tiff", "tif", "webp", "bmp"]
+    return imageExtensions.contains(url.pathExtension.lowercased())
   }
 
   private func actionButton(symbolName: String, title: String, handler: @escaping () -> Void) -> NSButton {
@@ -305,8 +426,8 @@ final class NotchView: NSView {
     button.isBordered = false
     button.contentTintColor = NSColor.white.withAlphaComponent(0.82)
     button.toolTip = title
-    button.widthAnchor.constraint(equalToConstant: 32).isActive = true
-    button.heightAnchor.constraint(equalToConstant: 32).isActive = true
+    button.widthAnchor.constraint(equalToConstant: 28).isActive = true
+    button.heightAnchor.constraint(equalToConstant: 28).isActive = true
     button.handler = handler
     button.target = button
     button.action = #selector(HandlerButton.invoke)
@@ -326,6 +447,9 @@ final class NotchView: NSView {
 
 final class BlackIslandView: NSView {
   private let shapeLayer = CAShapeLayer()
+  var onDraggingEntered: ((NSDraggingInfo) -> NSDragOperation)?
+  var onDraggingExited: ((NSDraggingInfo?) -> Void)?
+  var onPerformDrag: ((NSDraggingInfo) -> Bool)?
 
   var expanded = false {
     didSet {
@@ -339,10 +463,11 @@ final class BlackIslandView: NSView {
     layer?.backgroundColor = NSColor.clear.cgColor
     shapeLayer.fillColor = NSColor.black.cgColor
     shapeLayer.shadowColor = NSColor.black.cgColor
-    shapeLayer.shadowOpacity = 0.42
-    shapeLayer.shadowRadius = 24
-    shapeLayer.shadowOffset = NSSize(width: 0, height: -8)
+    shapeLayer.shadowOpacity = 0
+    shapeLayer.shadowRadius = 0
+    shapeLayer.shadowOffset = .zero
     layer?.addSublayer(shapeLayer)
+    registerForDraggedTypes([.fileURL, .string, .URL, .tiff, .png, .init("NSFilenamesPboardType")])
   }
 
   required init?(coder: NSCoder) {
@@ -369,6 +494,18 @@ final class BlackIslandView: NSView {
       width: size.width,
       height: size.height
     )
+  }
+
+  override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+    onDraggingEntered?(sender) ?? []
+  }
+
+  override func draggingExited(_ sender: NSDraggingInfo?) {
+    onDraggingExited?(sender)
+  }
+
+  override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+    onPerformDrag?(sender) ?? false
   }
 
   private func updateShape(animated: Bool) {
@@ -419,7 +556,7 @@ final class BlackIslandView: NSView {
 
   private static func compactCollapsedPath(in rect: NSRect) -> CGPath {
     let referenceWidth = 982.0
-    let referenceRadius = 78.0
+    let referenceRadius = 32.0
     let rx = min(CGFloat(referenceRadius / referenceWidth) * rect.width, rect.width / 2)
     let ry = min(rect.height / 2, rx)
     let k = 0.5522847498
@@ -507,6 +644,29 @@ final class BlackIslandView: NSView {
 private extension NSSize {
   var bounds: NSRect {
     NSRect(origin: .zero, size: self)
+  }
+}
+
+final class DashedTrayBox: NSView {
+  override init(frame frameRect: NSRect) {
+    super.init(frame: frameRect)
+    wantsLayer = true
+    translatesAutoresizingMaskIntoConstraints = false
+  }
+
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  override func draw(_ dirtyRect: NSRect) {
+    super.draw(dirtyRect)
+    let rect = bounds.insetBy(dx: 1.5, dy: 1.5)
+    let path = NSBezierPath(roundedRect: rect, xRadius: 18, yRadius: 18)
+    path.lineWidth = 2
+    let pattern: [CGFloat] = [7, 8]
+    path.setLineDash(pattern, count: pattern.count, phase: 0)
+    NSColor.white.withAlphaComponent(0.13).setStroke()
+    path.stroke()
   }
 }
 
