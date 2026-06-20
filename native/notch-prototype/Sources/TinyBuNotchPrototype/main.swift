@@ -53,6 +53,7 @@ final class NotchPanelController: NSObject {
     panel.contentView = notchView
 
     notchView.onToggle = { [weak self] in self?.toggleExpanded() }
+    notchView.onExpand = { [weak self] in self?.setExpanded(true) }
     notchView.onCollapse = { [weak self] in self?.setExpanded(false) }
   }
 
@@ -98,6 +99,7 @@ final class NotchPanel: NSPanel {
 
 final class NotchView: NSView {
   var onToggle: (() -> Void)?
+  var onExpand: (() -> Void)?
   var onCollapse: (() -> Void)?
 
   private let island = BlackIslandView(frame: .zero)
@@ -105,15 +107,25 @@ final class NotchView: NSView {
   private let leftCluster = NSStackView()
   private let rightCluster = NSStackView()
   private let detailArea = NSStackView()
-  private let trayTitle = NSTextField(labelWithString: "Tray")
   private let trayEmptyLabel = NSTextField(labelWithString: "No screenshots collected today")
   private let thumbnailStrip = NSStackView()
+  private let previewContainer = NSView()
+  private let previewImageView = NSImageView()
+  private let previewActionStack = NSStackView()
+  private let previewStatusLabel = NSTextField(labelWithString: "")
+  private let questionFieldContainer = NSView()
+  private let questionInput = NSTextField(string: "")
+  private let askProgress = NSProgressIndicator()
+  private let titleIconView = NSImageView()
   private let brandLabel = NSTextField(labelWithString: "Tray")
   private let statusLabel = NSTextField(labelWithString: "")
   private let countBadge = NSTextField(labelWithString: "0")
   private let voiceStatus = NSTextField(labelWithString: "Voice shortcut")
   private let dropStatus = NSTextField(labelWithString: "Drag text, images, or links here")
+  private weak var trayBox: DashedTrayBox?
   private var capturedImages: [NSImage] = []
+  private var selectedImageIndex: Int?
+  private var askWorkItem: DispatchWorkItem?
   private var expanded = false
   private var count = 0
 
@@ -131,10 +143,17 @@ final class NotchView: NSView {
 
   func setExpanded(_ nextExpanded: Bool) {
     expanded = nextExpanded
+    if !nextExpanded {
+      askWorkItem?.cancel()
+      selectedImageIndex = nil
+      refreshTray()
+    }
     detailArea.isHidden = !nextExpanded
     brandLabel.isHidden = !nextExpanded
     countBadge.isHidden = nextExpanded
+    rightCluster.isHidden = !nextExpanded
     statusLabel.stringValue = ""
+    updateTitleState()
     animateIsland(to: nextExpanded)
   }
 
@@ -150,6 +169,9 @@ final class NotchView: NSView {
     }
     island.onPerformDrag = { [weak self] info in
       self?.handlePerformDrag(info) ?? false
+    }
+    island.onBackgroundClick = { [weak self] in
+      self?.handleBackgroundClick()
     }
     addSubview(island)
 
@@ -170,12 +192,18 @@ final class NotchView: NSView {
     rightCluster.spacing = 8
     rightCluster.translatesAutoresizingMaskIntoConstraints = true
     rightCluster.frame = NSRect(x: topRow.bounds.width - 154, y: 7, width: 130, height: 36)
+    rightCluster.isHidden = true
     topRow.addSubview(rightCluster)
 
-    let brandGroup = NSStackView(views: [symbol("tray.fill"), brandLabel, countBadge])
+    configureTitleIcon("tray.fill")
+    let brandGroup = NSStackView(views: [titleIconView, brandLabel, countBadge])
     brandGroup.orientation = .horizontal
     brandGroup.alignment = .centerY
     brandGroup.spacing = 8
+    titleIconView.widthAnchor.constraint(equalToConstant: 20).isActive = true
+    titleIconView.heightAnchor.constraint(equalToConstant: 20).isActive = true
+    let titleClick = NSClickGestureRecognizer(target: self, action: #selector(backToTrayFromTitle))
+    brandGroup.addGestureRecognizer(titleClick)
 
     brandLabel.font = .systemFont(ofSize: 17, weight: .bold)
     brandLabel.textColor = .white
@@ -214,8 +242,6 @@ final class NotchView: NSView {
 
     detailArea.addArrangedSubview(trayEmptyState())
 
-    let click = NSClickGestureRecognizer(target: self, action: #selector(toggleFromClick))
-    island.addGestureRecognizer(click)
     layoutIslandContent(expanded: false)
   }
 
@@ -248,10 +274,26 @@ final class NotchView: NSView {
       width: rightWidth,
       height: clusterHeight
     )
+    rightCluster.isHidden = !expanded
     statusLabel.isHidden = true
   }
 
-  @objc private func toggleFromClick() {
+  @objc private func backToTrayFromTitle() {
+    guard selectedImageIndex != nil else { return }
+    selectedImageIndex = nil
+    refreshTray()
+  }
+
+  override func mouseUp(with event: NSEvent) {
+    guard expanded else { return }
+    let location = convert(event.locationInWindow, from: nil)
+    let islandLocation = island.convert(location, from: self)
+    if !island.containsVisibleShape(islandLocation) {
+      onCollapse?()
+    }
+  }
+
+  private func handleBackgroundClick() {
     onToggle?()
   }
 
@@ -269,7 +311,7 @@ final class NotchView: NSView {
 
   private func handleDraggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
     print("TinyBuNotch drag entered:", sender.draggingPasteboard.types?.map(\.rawValue) ?? [])
-    setExpanded(true)
+    onExpand?()
     guard canReadImage(from: sender.draggingPasteboard) else {
       trayEmptyLabel.stringValue = "Drop an image"
       print("TinyBuNotch drag rejected: no readable image")
@@ -295,6 +337,7 @@ final class NotchView: NSView {
     capturedImages.append(contentsOf: images)
     count = capturedImages.count
     countBadge.stringValue = String(count)
+    selectedImageIndex = nil
     refreshTray()
     print("TinyBuNotch drop stored images:", images.count)
     return true
@@ -310,6 +353,7 @@ final class NotchView: NSView {
 
   private func trayEmptyState() -> NSView {
     let box = DashedTrayBox(frame: NSRect(x: 0, y: 0, width: 1, height: 84))
+    trayBox = box
     trayEmptyLabel.font = .systemFont(ofSize: 13, weight: .semibold)
     trayEmptyLabel.textColor = NSColor.white.withAlphaComponent(0.58)
     trayEmptyLabel.alignment = .center
@@ -320,6 +364,7 @@ final class NotchView: NSView {
     thumbnailStrip.translatesAutoresizingMaskIntoConstraints = false
     box.addSubview(trayEmptyLabel)
     box.addSubview(thumbnailStrip)
+    setupPreviewState(in: box)
     NSLayoutConstraint.activate([
       box.heightAnchor.constraint(equalToConstant: 84),
       trayEmptyLabel.centerXAnchor.constraint(equalTo: box.centerXAnchor),
@@ -342,39 +387,240 @@ final class NotchView: NSView {
     }
 
     if capturedImages.isEmpty {
+      selectedImageIndex = nil
+      updateTitleState()
+      trayBox?.showsBorder = true
       trayEmptyLabel.isHidden = false
       trayEmptyLabel.stringValue = "No screenshots collected today"
       thumbnailStrip.isHidden = true
+      previewContainer.isHidden = true
+      return
+    }
+
+    if let selectedImageIndex, capturedImages.indices.contains(selectedImageIndex) {
+      showPreview(for: selectedImageIndex)
       return
     }
 
     trayEmptyLabel.isHidden = true
     thumbnailStrip.isHidden = false
-    for image in capturedImages.suffix(5) {
-      thumbnailStrip.addArrangedSubview(thumbnailView(for: image))
+    previewContainer.isHidden = true
+    trayBox?.showsBorder = true
+    updateTitleState()
+    let startIndex = max(0, capturedImages.count - 5)
+    for index in startIndex..<capturedImages.count {
+      thumbnailStrip.addArrangedSubview(thumbnailView(for: capturedImages[index], index: index))
     }
   }
 
-  private func thumbnailView(for image: NSImage) -> NSView {
-    let container = NSView(frame: NSRect(x: 0, y: 0, width: 78, height: 58))
-
-    let imageView = NSImageView(image: image)
-    imageView.imageScaling = .scaleProportionallyUpOrDown
-    imageView.wantsLayer = true
-    imageView.layer?.cornerRadius = 6
-    imageView.layer?.cornerCurve = .continuous
-    imageView.layer?.masksToBounds = true
-    imageView.translatesAutoresizingMaskIntoConstraints = false
-    container.addSubview(imageView)
+  private func thumbnailView(for image: NSImage, index: Int) -> NSView {
+    let button = HandlerButton(image: image, target: nil, action: nil)
+    button.isBordered = false
+    button.imagePosition = .imageOnly
+    button.imageScaling = .scaleProportionallyUpOrDown
+    button.toolTip = "Preview image"
+    button.wantsLayer = true
+    button.layer?.cornerRadius = 6
+    button.layer?.cornerCurve = .continuous
+    button.layer?.masksToBounds = true
+    button.translatesAutoresizingMaskIntoConstraints = false
+    button.handler = { [weak self] in
+      self?.selectImage(at: index)
+    }
+    button.target = button
+    button.action = #selector(HandlerButton.invoke)
     NSLayoutConstraint.activate([
-      container.widthAnchor.constraint(equalToConstant: 78),
-      container.heightAnchor.constraint(equalToConstant: 58),
-      imageView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-      imageView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-      imageView.topAnchor.constraint(equalTo: container.topAnchor),
-      imageView.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+      button.widthAnchor.constraint(equalToConstant: 78),
+      button.heightAnchor.constraint(equalToConstant: 58)
     ])
-    return container
+    return button
+  }
+
+  private func setupPreviewState(in box: NSView) {
+    previewContainer.translatesAutoresizingMaskIntoConstraints = false
+    previewContainer.isHidden = true
+    box.addSubview(previewContainer)
+
+    previewImageView.imageScaling = .scaleProportionallyUpOrDown
+    previewImageView.wantsLayer = true
+    previewImageView.layer?.cornerRadius = 8
+    previewImageView.layer?.cornerCurve = .continuous
+    previewImageView.layer?.masksToBounds = true
+    previewImageView.translatesAutoresizingMaskIntoConstraints = false
+    previewContainer.addSubview(previewImageView)
+
+    previewActionStack.orientation = .horizontal
+    previewActionStack.alignment = .centerY
+    previewActionStack.spacing = 6
+    previewActionStack.translatesAutoresizingMaskIntoConstraints = false
+    previewContainer.addSubview(previewActionStack)
+
+    let askButton = askPillButton { [weak self] in
+      self?.beginAskFlow()
+    }
+    let deleteButton = actionButton(symbolName: "trash", title: "Delete") { [weak self] in
+      self?.deleteSelectedImage()
+    }
+    deleteButton.contentTintColor = NSColor.white.withAlphaComponent(0.7)
+    previewActionStack.addArrangedSubview(askButton)
+    previewActionStack.addArrangedSubview(deleteButton)
+
+    askProgress.style = .spinning
+    askProgress.controlSize = .small
+    askProgress.isDisplayedWhenStopped = false
+    askProgress.translatesAutoresizingMaskIntoConstraints = false
+    previewContainer.addSubview(askProgress)
+
+    previewStatusLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+    previewStatusLabel.textColor = NSColor.white.withAlphaComponent(0.58)
+    previewStatusLabel.alignment = .left
+    previewStatusLabel.stringValue = "Reading"
+    previewStatusLabel.translatesAutoresizingMaskIntoConstraints = false
+    previewStatusLabel.isHidden = true
+    previewContainer.addSubview(previewStatusLabel)
+
+    questionFieldContainer.wantsLayer = true
+    questionFieldContainer.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.09).cgColor
+    questionFieldContainer.layer?.cornerRadius = 12
+    questionFieldContainer.layer?.cornerCurve = .continuous
+    questionFieldContainer.translatesAutoresizingMaskIntoConstraints = false
+    questionFieldContainer.isHidden = true
+    previewContainer.addSubview(questionFieldContainer)
+
+    questionInput.font = .systemFont(ofSize: 13, weight: .medium)
+    questionInput.textColor = .white
+    questionInput.placeholderString = "Ask about this image..."
+    questionInput.backgroundColor = .clear
+    questionInput.focusRingType = .none
+    questionInput.isBezeled = false
+    questionInput.translatesAutoresizingMaskIntoConstraints = false
+    questionFieldContainer.addSubview(questionInput)
+
+    let sendButton = actionButton(symbolName: "paperplane.fill", title: "Send") { [weak self] in
+      self?.submitQuestion()
+    }
+    sendButton.contentTintColor = NSColor.white.withAlphaComponent(0.72)
+    sendButton.translatesAutoresizingMaskIntoConstraints = false
+    questionFieldContainer.addSubview(sendButton)
+
+    NSLayoutConstraint.activate([
+      previewContainer.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: 22),
+      previewContainer.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -22),
+      previewContainer.topAnchor.constraint(equalTo: box.topAnchor, constant: 8),
+      previewContainer.bottomAnchor.constraint(equalTo: box.bottomAnchor, constant: -8),
+
+      previewImageView.leadingAnchor.constraint(equalTo: previewContainer.leadingAnchor, constant: 70),
+      previewImageView.centerYAnchor.constraint(equalTo: previewContainer.centerYAnchor),
+      previewImageView.widthAnchor.constraint(equalToConstant: 118),
+      previewImageView.heightAnchor.constraint(equalToConstant: 58),
+
+      previewActionStack.leadingAnchor.constraint(equalTo: previewImageView.trailingAnchor, constant: 12),
+      previewActionStack.centerYAnchor.constraint(equalTo: previewContainer.centerYAnchor),
+
+      askProgress.leadingAnchor.constraint(equalTo: previewImageView.trailingAnchor, constant: 20),
+      askProgress.centerYAnchor.constraint(equalTo: previewContainer.centerYAnchor),
+      askProgress.widthAnchor.constraint(equalToConstant: 18),
+      askProgress.heightAnchor.constraint(equalToConstant: 18),
+
+      previewStatusLabel.leadingAnchor.constraint(equalTo: askProgress.trailingAnchor, constant: 8),
+      previewStatusLabel.centerYAnchor.constraint(equalTo: previewContainer.centerYAnchor),
+
+      questionFieldContainer.leadingAnchor.constraint(equalTo: previewImageView.trailingAnchor, constant: 18),
+      questionFieldContainer.trailingAnchor.constraint(equalTo: previewContainer.trailingAnchor, constant: -44),
+      questionFieldContainer.centerYAnchor.constraint(equalTo: previewContainer.centerYAnchor),
+      questionFieldContainer.heightAnchor.constraint(equalToConstant: 32),
+
+      questionInput.leadingAnchor.constraint(equalTo: questionFieldContainer.leadingAnchor, constant: 12),
+      questionInput.trailingAnchor.constraint(equalTo: sendButton.leadingAnchor, constant: -6),
+      questionInput.centerYAnchor.constraint(equalTo: questionFieldContainer.centerYAnchor),
+
+      sendButton.trailingAnchor.constraint(equalTo: questionFieldContainer.trailingAnchor, constant: -4),
+      sendButton.centerYAnchor.constraint(equalTo: questionFieldContainer.centerYAnchor)
+    ])
+  }
+
+  private func selectImage(at index: Int) {
+    guard capturedImages.indices.contains(index) else { return }
+    selectedImageIndex = index
+    showPreview(for: index)
+  }
+
+  private func showPreview(for index: Int) {
+    askWorkItem?.cancel()
+    askProgress.stopAnimation(nil)
+    previewImageView.image = capturedImages[index]
+    trayBox?.showsBorder = false
+    updateTitleState()
+    trayEmptyLabel.isHidden = true
+    thumbnailStrip.isHidden = true
+    previewContainer.isHidden = false
+    previewActionStack.isHidden = false
+    askProgress.isHidden = true
+    previewStatusLabel.isHidden = true
+    questionFieldContainer.isHidden = true
+    questionInput.stringValue = ""
+  }
+
+  private func deleteSelectedImage() {
+    guard let selectedImageIndex, capturedImages.indices.contains(selectedImageIndex) else { return }
+    capturedImages.remove(at: selectedImageIndex)
+    self.selectedImageIndex = nil
+    count = capturedImages.count
+    countBadge.stringValue = String(count)
+    refreshTray()
+  }
+
+  private func beginAskFlow() {
+    guard selectedImageIndex != nil else { return }
+    askWorkItem?.cancel()
+    previewActionStack.isHidden = true
+    questionFieldContainer.isHidden = true
+    previewStatusLabel.isHidden = false
+    askProgress.isHidden = false
+    askProgress.startAnimation(nil)
+
+    let workItem = DispatchWorkItem { [weak self] in
+      guard let self else { return }
+      self.askProgress.stopAnimation(nil)
+      self.askProgress.isHidden = true
+      self.previewStatusLabel.isHidden = true
+      self.questionFieldContainer.isHidden = false
+      self.window?.makeFirstResponder(self.questionInput)
+    }
+    askWorkItem = workItem
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.85, execute: workItem)
+  }
+
+  private func submitQuestion() {
+    guard !questionInput.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+    questionFieldContainer.isHidden = true
+    previewStatusLabel.stringValue = "Sending"
+    previewStatusLabel.isHidden = false
+    askProgress.isHidden = false
+    askProgress.startAnimation(nil)
+
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) { [weak self] in
+      guard let self else { return }
+      self.askProgress.stopAnimation(nil)
+      self.askProgress.isHidden = true
+      self.previewStatusLabel.isHidden = true
+      self.questionInput.stringValue = ""
+      self.questionFieldContainer.isHidden = false
+      self.window?.makeFirstResponder(self.questionInput)
+    }
+  }
+
+  private func updateTitleState() {
+    if selectedImageIndex == nil {
+      configureTitleIcon("tray.fill")
+      brandLabel.stringValue = "Tray"
+      countBadge.isHidden = expanded
+      return
+    }
+
+    configureTitleIcon("chevron.left")
+    brandLabel.stringValue = "Back"
+    countBadge.isHidden = true
   }
 
   private func canReadImage(from pasteboard: NSPasteboard) -> Bool {
@@ -434,6 +680,28 @@ final class NotchView: NSView {
     return button
   }
 
+  private func askPillButton(handler: @escaping () -> Void) -> NSButton {
+    let button = HandlerButton(title: "Ask", target: nil, action: nil)
+    button.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Ask")
+    button.imagePosition = .imageLeading
+    button.imageHugsTitle = true
+    button.bezelStyle = .regularSquare
+    button.isBordered = false
+    button.font = .systemFont(ofSize: 13, weight: .semibold)
+    button.contentTintColor = NSColor.black.withAlphaComponent(0.86)
+    button.wantsLayer = true
+    button.layer?.backgroundColor = NSColor.systemYellow.cgColor
+    button.layer?.cornerRadius = 14
+    button.layer?.cornerCurve = .continuous
+    button.toolTip = "Ask"
+    button.widthAnchor.constraint(equalToConstant: 82).isActive = true
+    button.heightAnchor.constraint(equalToConstant: 28).isActive = true
+    button.handler = handler
+    button.target = button
+    button.action = #selector(HandlerButton.invoke)
+    return button
+  }
+
   private func symbol(_ name: String) -> NSImageView {
     let image = NSImage(systemSymbolName: name, accessibilityDescription: nil) ?? NSImage()
     let view = NSImageView(image: image)
@@ -443,6 +711,12 @@ final class NotchView: NSView {
     view.heightAnchor.constraint(equalToConstant: 20).isActive = true
     return view
   }
+
+  private func configureTitleIcon(_ name: String) {
+    titleIconView.image = NSImage(systemSymbolName: name, accessibilityDescription: nil) ?? NSImage()
+    titleIconView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: name == "chevron.left" ? 15 : 16, weight: .semibold)
+    titleIconView.contentTintColor = .white
+  }
 }
 
 final class BlackIslandView: NSView {
@@ -450,6 +724,7 @@ final class BlackIslandView: NSView {
   var onDraggingEntered: ((NSDraggingInfo) -> NSDragOperation)?
   var onDraggingExited: ((NSDraggingInfo?) -> Void)?
   var onPerformDrag: ((NSDraggingInfo) -> Bool)?
+  var onBackgroundClick: (() -> Void)?
 
   var expanded = false {
     didSet {
@@ -496,6 +771,26 @@ final class BlackIslandView: NSView {
     )
   }
 
+  func containsVisibleShape(_ point: NSPoint) -> Bool {
+    Self.path(in: shapeRect(expanded: expanded), expanded: expanded).contains(point)
+  }
+
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    guard !isHidden, alphaValue > 0, bounds.contains(point) else { return nil }
+    guard containsVisibleShape(point) else { return nil }
+
+    for subview in subviews.reversed() {
+      let convertedPoint = subview.convert(point, from: self)
+      guard let hitView = subview.hitTest(convertedPoint) else { continue }
+      if hitView.isInteractiveHitTarget {
+        return hitView
+      }
+      return self
+    }
+
+    return self
+  }
+
   override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
     onDraggingEntered?(sender) ?? []
   }
@@ -508,6 +803,10 @@ final class BlackIslandView: NSView {
     onPerformDrag?(sender) ?? false
   }
 
+  override func mouseUp(with event: NSEvent) {
+    onBackgroundClick?()
+  }
+
   private func updateShape(animated: Bool) {
     let nextPath = Self.path(in: shapeRect(expanded: expanded), expanded: expanded)
     let previousPath = (shapeLayer.presentation()?.path ?? shapeLayer.path) ?? nextPath
@@ -516,30 +815,38 @@ final class BlackIslandView: NSView {
 
     guard animated else { return }
 
-    let pathAnimation = CABasicAnimation(keyPath: "path")
-    pathAnimation.fromValue = previousPath
-    pathAnimation.toValue = nextPath
-    pathAnimation.duration = 0.28
-    pathAnimation.timingFunction = CAMediaTimingFunction(controlPoints: 0.18, 0.95, 0.28, 1.08)
+    let targetSize = expanded ? expandedIslandSize : collapsedIslandSize
+    let bounceScale: CGFloat = expanded ? 1.018 : 0.982
+    let bounceSize = NSSize(
+      width: targetSize.width * bounceScale,
+      height: targetSize.height * bounceScale
+    )
+    let bounceRect = NSRect(
+      x: (bounds.width - bounceSize.width) / 2,
+      y: bounds.height - bounceSize.height,
+      width: bounceSize.width,
+      height: bounceSize.height
+    )
+    let bouncePath = Self.path(in: bounceRect, expanded: expanded)
+    let timingFunctions = [
+      CAMediaTimingFunction(controlPoints: 0.18, 0.84, 0.24, 1.0),
+      CAMediaTimingFunction(name: .easeInEaseOut)
+    ]
 
-    let shadowAnimation = CABasicAnimation(keyPath: "shadowPath")
-    shadowAnimation.fromValue = previousPath
-    shadowAnimation.toValue = nextPath
+    let pathAnimation = CAKeyframeAnimation(keyPath: "path")
+    pathAnimation.values = [previousPath, bouncePath, nextPath]
+    pathAnimation.keyTimes = [0, 0.78, 1]
+    pathAnimation.timingFunctions = timingFunctions
+    pathAnimation.duration = 0.34
+
+    let shadowAnimation = CAKeyframeAnimation(keyPath: "shadowPath")
+    shadowAnimation.values = pathAnimation.values
+    shadowAnimation.keyTimes = pathAnimation.keyTimes
+    shadowAnimation.timingFunctions = timingFunctions
     shadowAnimation.duration = pathAnimation.duration
-    shadowAnimation.timingFunction = pathAnimation.timingFunction
-
-    let scaleAnimation = CASpringAnimation(keyPath: "transform.scale.y")
-    scaleAnimation.fromValue = expanded ? 0.98 : 1.015
-    scaleAnimation.toValue = 1
-    scaleAnimation.mass = 0.65
-    scaleAnimation.stiffness = 230
-    scaleAnimation.damping = 18
-    scaleAnimation.initialVelocity = 0.15
-    scaleAnimation.duration = scaleAnimation.settlingDuration
 
     shapeLayer.add(pathAnimation, forKey: "tinybu.path.morph")
     shapeLayer.add(shadowAnimation, forKey: "tinybu.shadow.morph")
-    shapeLayer.add(scaleAnimation, forKey: "tinybu.path.bounce")
   }
 
   static func path(in rect: NSRect, expanded: Bool) -> CGPath {
@@ -647,7 +954,25 @@ private extension NSSize {
   }
 }
 
+private extension NSView {
+  var isInteractiveHitTarget: Bool {
+    if self is NSButton || self is NSTextView {
+      return true
+    }
+    if let textField = self as? NSTextField {
+      return textField.isEditable || textField.isSelectable
+    }
+    return false
+  }
+}
+
 final class DashedTrayBox: NSView {
+  var showsBorder = true {
+    didSet {
+      needsDisplay = true
+    }
+  }
+
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
     wantsLayer = true
@@ -660,6 +985,7 @@ final class DashedTrayBox: NSView {
 
   override func draw(_ dirtyRect: NSRect) {
     super.draw(dirtyRect)
+    guard showsBorder else { return }
     let rect = bounds.insetBy(dx: 1.5, dy: 1.5)
     let path = NSBezierPath(roundedRect: rect, xRadius: 18, yRadius: 18)
     path.lineWidth = 2

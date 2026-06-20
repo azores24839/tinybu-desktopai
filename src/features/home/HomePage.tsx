@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
-import { ArrowUpRight, BookMarked, CheckCircle2, ChevronDown, Gift, Phone, Plus, Sparkles } from "lucide-react";
+import { ArrowRight, BookMarked, BriefcaseBusiness, CheckCircle2, ChevronDown, Clock3, Coffee, Gift, Luggage, Phone, Plus, Sparkles } from "lucide-react";
 import type { AppStateRecord, CaptureItem, MemoryItem, PracticeTask, Screen, TopicItem } from "../../types";
 import { captureText } from "../captures/captureUtils";
 import { MaterialLibraryPanel, type MaterialKind } from "../captures/MaterialLibraryPanel";
@@ -111,6 +111,45 @@ export function HomePage({
     [captures, memories, appState.profile]
   );
   const topicCards = tasks.filter((task) => task.taskType !== "find-material").slice(0, 3);
+  const featuredTask = topicCards[0];
+  const scenarioTasks = useMemo<PracticeTask[]>(
+    () => [
+      {
+        id: "home-scenario-work",
+        title: isChinese ? "工作沟通" : "Work communication",
+        description: isChinese ? "练习清晰、得体地表达工作想法。" : "Practice expressing work ideas clearly and naturally.",
+        taskType: "scenario",
+        sourceText: isChinese ? "工作沟通场景" : "A workplace communication scenario",
+        targetGoal: isChinese ? "完成一次自然的工作沟通" : "Complete one natural workplace exchange",
+        starterQuestion: isChinese ? "最近有什么工作场景让你不知道该怎么表达？" : "Which work situation would you like to practice?",
+        status: "new",
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: "home-scenario-travel",
+        title: isChinese ? "旅行英语" : "Travel English",
+        description: isChinese ? "练习旅途中常见的真实对话。" : "Practice useful conversations for real trips.",
+        taskType: "scenario",
+        sourceText: isChinese ? "旅行英语场景" : "A travel English scenario",
+        targetGoal: isChinese ? "在旅行场景中自然开口" : "Speak naturally in a travel situation",
+        starterQuestion: isChinese ? "这次想练习机场、酒店，还是餐厅里的对话？" : "Would you like to practice at an airport, hotel, or restaurant?",
+        status: "new",
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: "home-scenario-daily",
+        title: isChinese ? "日常聊天" : "Daily chat",
+        description: isChinese ? "从轻松话题开始自然表达。" : "Build confidence through relaxed everyday topics.",
+        taskType: "open-chat",
+        sourceText: isChinese ? "日常聊天场景" : "An everyday conversation",
+        targetGoal: isChinese ? "自然说出一个真实想法" : "Express one real thought naturally",
+        starterQuestion: isChinese ? "今天有什么小事让你印象很深？" : "What small moment stood out to you today?",
+        status: "new",
+        createdAt: new Date().toISOString()
+      }
+    ],
+    [isChinese]
+  );
   const hasTodayCapture = captures.some((capture) => {
     const capturedAt = new Date(capture.capturedAt);
     const now = new Date();
@@ -243,22 +282,40 @@ export function HomePage({
         <main className="clean-home-main">
           <h1 className="clean-home-animate">{isChinese ? "今天想聊点什么？" : "What shall we talk about today?"}</h1>
 
-          <div className="topic-recommend-row clean-home-animate" aria-label={isChinese ? "话题推荐" : "Topic recommendations"}>
-            {topicCards.map((task, index) => (
-              <button
-                className={`topic-recommend-card tilt-${index}`}
-                key={task.id}
-                onClick={() => startTask(task)}
-              >
-                <span className="topic-card-tag">{topicTag(task, isChinese)}</span>
-                <strong>{task.title}</strong>
-                <p>{task.description}</p>
-                <i>
-                  {isChinese ? "开始聊" : "Start"}
-                  <ArrowUpRight size={16} />
-                </i>
-              </button>
-            ))}
+          {featuredTask && (
+            <section className="home-recommendation clean-home-animate" aria-label={isChinese ? "今日推荐" : "Today's recommendation"}>
+              <div className="home-recommendation-copy">
+                <span className="home-recommendation-eyebrow">
+                  <i aria-hidden="true" />
+                  {isChinese ? "今日推荐" : "Today's pick"}
+                </span>
+                <h2>{featuredTask.title}</h2>
+                <p>{featuredTask.description}</p>
+                <span className="home-recommendation-source">{topicTag(featuredTask, isChinese)}</span>
+                <span className="home-recommendation-duration">
+                  <Clock3 size={17} />
+                  {isChinese ? "预计 10 分钟" : "About 10 minutes"}
+                </span>
+                <button className="home-recommendation-start" onClick={() => startTask(featuredTask)}>
+                  {isChinese ? "开始练习" : "Start practice"}
+                  <span><ArrowRight size={18} /></span>
+                </button>
+              </div>
+              <div className="home-recommendation-art" aria-hidden="true" />
+            </section>
+          )}
+
+          <div className="home-scenario-row clean-home-animate" aria-label={isChinese ? "练习场景" : "Practice scenarios"}>
+            {scenarioTasks.map((task, index) => {
+              const Icon = [BriefcaseBusiness, Luggage, Coffee][index];
+              return (
+                <button className={`home-scenario-card tone-${index}`} key={task.id} onClick={() => startTask(task)}>
+                  <span className="home-scenario-icon"><Icon size={23} /></span>
+                  <strong>{task.title}</strong>
+                  <ArrowRight className="home-scenario-arrow" size={21} />
+                </button>
+              );
+            })}
           </div>
 
           <section className="conversation-start-box clean-home-animate" aria-label={isChinese ? "开始对话" : "Start conversation"}>
