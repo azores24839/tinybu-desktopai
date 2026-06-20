@@ -280,8 +280,6 @@ export function HomePage({
         </header>
 
         <main className="clean-home-main">
-          <h1 className="clean-home-animate">{isChinese ? "今天想聊点什么？" : "What shall we talk about today?"}</h1>
-
           {featuredTask && (
             <section className="home-recommendation clean-home-animate" aria-label={isChinese ? "今日推荐" : "Today's recommendation"}>
               <div className="home-recommendation-copy">

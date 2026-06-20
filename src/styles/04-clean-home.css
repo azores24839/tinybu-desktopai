@@ -130,31 +130,22 @@
 
 .clean-home-main {
   display: grid;
-  align-content: center;
+  align-content: start;
   justify-items: center;
-  gap: clamp(30px, 4.2vh, 52px);
-  min-height: calc(100vh - 150px);
-  padding: 20px 5vw 70px;
-}
-
-.clean-home-main h1 {
-  max-width: 820px;
-  color: #183027;
-  font-size: clamp(42px, 5vw, 72px);
-  font-weight: 850;
-  line-height: 1.06;
-  text-align: center;
+  gap: 18px;
+  min-height: 0;
+  padding: 16px 5vw 20px;
 }
 
 .home-recommendation {
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(250px, 0.92fr);
   width: min(920px, 100%);
-  min-height: 290px;
+  height: 256px;
   overflow: hidden;
   border: 1px solid rgba(17, 17, 17, 0.04);
   border-radius: 24px;
-  background: #f7f3ef;
+  background: #ffffff;
   box-shadow: 0 18px 54px rgba(17, 17, 17, 0.055);
 }
 
@@ -162,7 +153,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: clamp(28px, 4vw, 46px);
+  padding: 16px 28px;
   color: #111111;
 }
 
@@ -185,33 +176,33 @@
   display: -webkit-box;
   overflow: hidden;
   max-width: 560px;
-  margin-top: 24px;
+  margin-top: 10px;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   color: #111111;
-  font-size: clamp(28px, 2.8vw, 40px);
+  font-size: 27px;
   font-weight: 850;
-  line-height: 1.18;
+  line-height: 1.12;
 }
 
 .home-recommendation p {
   display: -webkit-box;
   overflow: hidden;
   max-width: 560px;
-  margin-top: 10px;
+  margin-top: 5px;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   color: rgba(17, 17, 17, 0.55);
   font-size: 15px;
   line-height: 1.6;
 }
 
 .home-recommendation-source {
-  margin-top: 22px;
+  margin-top: 8px;
   border-radius: 999px;
   background: #f7f3ef;
   color: #111111;
-  padding: 7px 13px;
+  padding: 5px 11px;
   font-size: 12px;
   font-weight: 720;
 }
@@ -220,7 +211,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-top: 17px;
+  margin-top: 8px;
   color: rgba(17, 17, 17, 0.58);
   font-size: 13px;
   font-weight: 620;
@@ -230,13 +221,13 @@
   display: inline-flex;
   align-items: center;
   gap: 16px;
-  min-height: 48px;
-  margin-top: 20px;
+  min-height: 38px;
+  margin-top: 8px;
   border-radius: 999px;
   background: #111111;
   color: #f7f3ef;
-  padding: 0 9px 0 23px;
-  font-size: 15px;
+  padding: 0 6px 0 18px;
+  font-size: 14px;
   font-weight: 720;
 }
 
@@ -244,8 +235,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: #ffe59a;
   color: #111111;
@@ -253,7 +244,7 @@
 
 .home-recommendation-art {
   min-height: 100%;
-  background: #f7f3ef;
+  background: #ffffff;
 }
 
 .home-scenario-row {
@@ -268,12 +259,12 @@
   grid-template-columns: 52px minmax(0, 1fr) 24px;
   align-items: center;
   gap: 14px;
-  min-height: 86px;
+  min-height: 72px;
   border: 1px solid rgba(17, 17, 17, 0.04);
   border-radius: 20px;
-  background: #f7f3ef;
+  background: #ffffff;
   box-shadow: 0 12px 34px rgba(17, 17, 17, 0.045);
-  padding: 16px 18px;
+  padding: 10px 16px;
   color: #111111;
   text-align: left;
   transition: transform 180ms ease, box-shadow 180ms ease;
@@ -320,61 +311,6 @@
   justify-self: end;
 }
 
-@media (max-height: 850px) and (min-width: 981px) {
-  .clean-home-page,
-  .clean-home-surface {
-    overflow: auto;
-  }
-
-  .clean-home-main {
-    align-content: start;
-    gap: 24px;
-    min-height: auto;
-    padding-top: 18px;
-    padding-bottom: 36px;
-  }
-
-  .clean-home-main h1 {
-    font-size: 48px;
-  }
-
-  .home-recommendation {
-    min-height: 260px;
-  }
-
-  .home-recommendation-copy {
-    padding: 26px 34px;
-  }
-
-  .home-recommendation h2 {
-    margin-top: 14px;
-    font-size: 30px;
-  }
-
-  .home-recommendation-source {
-    margin-top: 12px;
-  }
-
-  .home-recommendation-duration {
-    margin-top: 10px;
-  }
-
-  .home-recommendation-start {
-    min-height: 42px;
-    margin-top: 12px;
-  }
-
-  .home-recommendation-start span {
-    width: 28px;
-    height: 28px;
-  }
-
-  .home-scenario-card {
-    min-height: 76px;
-    padding-block: 12px;
-  }
-}
-
 .conversation-start-box {
   position: relative;
   display: grid;
@@ -383,12 +319,12 @@
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 22px 54px rgba(31, 52, 43, 0.08);
-  padding: 16px;
+  padding: 12px;
   will-change: transform, opacity;
 }
 
 .conversation-start-box textarea {
-  min-height: 76px;
+  min-height: 48px;
   border: 0;
   background: transparent;
   color: #17251f;
@@ -421,7 +357,7 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-  padding-top: 12px;
+  padding-top: 8px;
 }
 
 .start-tool-button,

@@ -36,20 +36,6 @@
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "shadow": false
-      },
-      {
-        "label": "notch",
-        "title": "TinyBu Notch",
-        "url": "/?view=notch",
-        "width": 360,
-        "height": 76,
-        "resizable": false,
-        "fullscreen": false,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "shadow": false
       }
     ],
     "security": {

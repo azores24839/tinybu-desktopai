@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capabilities for the TinyBu desktop window",
-  "windows": ["main", "pet", "notch", "screenshot"],
+  "windows": ["main", "pet", "screenshot"],
   "permissions": [
     "core:default",
     "core:window:allow-outer-position",
