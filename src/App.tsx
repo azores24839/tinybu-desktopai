@@ -9,6 +9,7 @@ import { clearLearningData, db, saveAppState } from "./lib/db";
 import { clearUserApiKey, loadUserApiKey, saveUserApiKey } from "./lib/secureKey";
 import { showToast } from "./lib/toast";
 import { defaultAppState, nowIso } from "./lib/defaults";
+import { applyDesktopCompanionMode, listenTauri } from "./lib/tauriBridge";
 import {
   captureText,
 } from "./features/captures/captureUtils";
@@ -57,6 +58,8 @@ export default function App() {
   const [apiKeyDraft, setApiKeyDraft] = useState("");
   const [apiKeyStatus, setApiKeyStatus] = useState("");
   const [busyLabel, setBusyLabel] = useState("");
+  const [bootstrapped, setBootstrapped] = useState(false);
+  const appliedDesktopModeRef = useRef<AppStateRecord["settings"]["desktopCompanionMode"] | null>(null);
 
   const activeTopic = useMemo(
     () => topics.find((topic) => topic.id === appState.activeTopicId) ?? topics[0],
@@ -120,7 +123,8 @@ export default function App() {
     setExpressions,
     setMemories,
     setHomePasteDraft,
-    setScreen
+    setScreen,
+    setBootstrapped
   });
 
   useExternalCaptureImports({
@@ -222,15 +226,45 @@ export default function App() {
 
   async function saveSettings(nextState: AppStateRecord, key?: string) {
     setApiKeyStatus("");
-    if (key?.trim()) {
-      await saveUserApiKey(key.trim());
-      nextState.settings.apiKeySaved = true;
-      setApiKeyDraft("");
-      setApiKeyStatus("API key saved for this device.");
-    } else {
-      setApiKeyStatus("Settings saved.");
+    const previousMode = appStateRef.current.settings.desktopCompanionMode;
+    const nextMode = nextState.settings.desktopCompanionMode;
+    const modeChanged = nextMode !== previousMode;
+    if (modeChanged) {
+      if (!(await applyDesktopCompanionMode(nextMode))) {
+        setApiKeyStatus("Could not switch desktop companion mode. The previous mode is still active.");
+        showToast("Could not switch desktop companion mode. TinyBu kept the previous mode.");
+        return false;
+      }
+      appliedDesktopModeRef.current = nextMode;
     }
-    await persistState(nextState);
+
+    try {
+      if (key?.trim()) {
+        await saveUserApiKey(key.trim());
+        nextState.settings.apiKeySaved = true;
+        setApiKeyDraft("");
+        setApiKeyStatus("API key saved for this device.");
+      } else {
+        setApiKeyStatus("Settings saved.");
+      }
+      await persistState(nextState);
+      return true;
+    } catch (error) {
+      console.error("saveSettings failed", error);
+      const modeRestored = !modeChanged || (await applyDesktopCompanionMode(previousMode));
+      if (modeRestored) {
+        appliedDesktopModeRef.current = previousMode;
+      } else {
+        appliedDesktopModeRef.current = null;
+      }
+      setApiKeyStatus(
+        modeRestored
+          ? "Settings could not be saved. The previous desktop mode is still active."
+          : "Settings could not be saved or restored. Restart TinyBu to recover the saved mode."
+      );
+      showToast("Settings could not be saved. Please try again.");
+      return false;
+    }
   }
 
   async function resetOnboarding() {
@@ -314,6 +348,57 @@ export default function App() {
       loadTopicPracticeChatReviews(activeTopic.id);
     }
   }, [screen, activeTopic?.id]);
+
+  useEffect(() => {
+    if (!bootstrapped) return;
+    const mode = appState.settings.desktopCompanionMode;
+    if (appliedDesktopModeRef.current === mode) return;
+
+    let cancelled = false;
+    void applyDesktopCompanionMode(mode).then(async (applied) => {
+      if (cancelled) return;
+      if (applied) {
+        appliedDesktopModeRef.current = mode;
+        return;
+      }
+
+      const currentState = appStateRef.current;
+      const fallbackState = {
+        ...currentState,
+        settings: { ...currentState.settings, desktopCompanionMode: "pet" as const }
+      };
+      appliedDesktopModeRef.current = "pet";
+      await persistState(fallbackState);
+      showToast("Swift notch could not start. TinyBu restored pet mode.");
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bootstrapped, appState.settings.desktopCompanionMode]);
+
+  useEffect(() => {
+    let active = true;
+    let unlisten = () => {};
+    void listenTauri<string>("tinybu-desktop-companion-fallback", async () => {
+      const currentState = appStateRef.current;
+      if (currentState.settings.desktopCompanionMode === "pet") return;
+      appliedDesktopModeRef.current = "pet";
+      await persistState({
+        ...currentState,
+        settings: { ...currentState.settings, desktopCompanionMode: "pet" }
+      });
+      showToast("Swift notch stopped unexpectedly. TinyBu restored pet mode.");
+    }).then((cleanup) => {
+      if (active) unlisten = cleanup;
+      else cleanup();
+    });
+
+    return () => {
+      active = false;
+      unlisten();
+    };
+  }, []);
 
   return (
     <ErrorBoundary>

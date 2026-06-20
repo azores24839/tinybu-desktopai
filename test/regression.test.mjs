@@ -14,7 +14,15 @@ import { quickPetChatPrompt, schemaFor, taskPrompts as apiTaskPrompts } from "..
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const retiredProductNamePattern = /\b(?:NOMI|Nomi|nomi|NORI|Nori|nori|Mirror|mirror)[A-Za-z0-9_-]*/g;
-const ignoredRetiredNameDirs = new Set([".git", "dist", "node_modules", "src-tauri/target"]);
+const ignoredRetiredNameDirs = new Set([
+  ".git",
+  "dist",
+  "node_modules",
+  "src-tauri/bin",
+  "src-tauri/swift-build",
+  "src-tauri/target",
+  "src-tauri/target-check"
+]);
 const tsModuleUrlCache = new Map();
 
 async function resolveTsImport(fromFile, specifier) {
@@ -113,6 +121,22 @@ test("retired product names are absent from project files", async () => {
   }
 
   assert.deepEqual(violations, []);
+});
+
+test("desktop companion mode defaults to pet and bundles only the native Swift notch sidecar", async () => {
+  const { defaultSettings } = await loadTsModule("src/lib/defaults.ts");
+  const tauriConfig = JSON.parse(await readFile(resolve(root, "src-tauri/tauri.conf.json"), "utf8"));
+  const macConfig = JSON.parse(await readFile(resolve(root, "src-tauri/tauri.macos.conf.json"), "utf8"));
+  const settingsSource = await readFile(resolve(root, "src/features/settings/SettingsPage.tsx"), "utf8");
+
+  assert.equal(defaultSettings.desktopCompanionMode, "pet");
+  assert.deepEqual(
+    tauriConfig.app.windows.map((window) => window.label),
+    ["main", "pet"]
+  );
+  assert.deepEqual(macConfig.bundle.externalBin, ["bin/tinybu-notch"]);
+  assert.match(settingsSource, /\["pet", "swift-notch"\]/);
+  assert.doesNotMatch(settingsSource, /view=notch|NotchApp/);
 });
 
 test("provider routing keeps MiniMax on Anthropic-compatible when user token exists", () => {

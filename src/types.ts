@@ -36,6 +36,7 @@ export type CompanionState =
   | "encouraging"
   | "celebrating";
 export type AiProviderMode = "rules" | "user-key" | "cloud-proxy";
+export type DesktopCompanionMode = "pet" | "swift-notch";
 export type ExternalCaptureKind = "selection" | "article" | "youtube" | "video" | "screenshot" | "manual";
 export type PracticeQuestionType = "understanding" | "opinion" | "personal" | "expression";
 export type CaptureStatus = "unsorted" | "suggested" | "needs_review" | "in-topic" | "studied" | "practiced" | "archived";
@@ -84,6 +85,7 @@ export interface AppSettings {
   openRouterBaseUrl: string;
   cloudProxyUrl: string;
   apiKeySaved: boolean;
+  desktopCompanionMode: DesktopCompanionMode;
 }
 
 export interface AppStateRecord {

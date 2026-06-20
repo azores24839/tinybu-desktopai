@@ -20,6 +20,7 @@ export default function PetApp() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuSide, setMenuSide] = useState<MenuSide>("right");
   const [shortcutMessage, setShortcutMessage] = useState("");
+  const [petModeActive, setPetModeActive] = useState(true);
   const shortcutMessageTimer = useRef<number>(0);
   const dragIdleTimer = useRef<number>(0);
   const pointerStart = useRef<PetPointerStart | null>(null);
@@ -35,6 +36,7 @@ export default function PetApp() {
     acceptClipboardPrompt,
     toggleClipboardShortcut
   } = usePetClipboardCapture({
+    active: petModeActive,
     closePetMenu,
     setActivity,
     setCount,
@@ -57,6 +59,7 @@ export default function PetApp() {
     let unlistenBridge = () => {};
     let unlistenPrompt = () => {};
     let unlistenSuppress = () => {};
+    let unlistenMode = () => {};
     let unlistenMoved = () => {};
 
     async function boot() {
@@ -76,6 +79,13 @@ export default function PetApp() {
         suppressClipboardText(event.payload.text);
       });
 
+      unlistenMode = await listenTauri<boolean>("tinybu-pet-mode-active", (event) => {
+        setPetModeActive(event.payload);
+      });
+
+      const desktopMode = await invokeTauri<"pet" | "swift-notch">("get_desktop_companion_mode");
+      if (mounted && desktopMode) setPetModeActive(desktopMode === "pet");
+
       if (isRunningInTauri()) {
         unlistenMoved = await getCurrentWindow().onMoved(() => {
           const start = pointerStart.current;
@@ -93,6 +103,7 @@ export default function PetApp() {
       unlistenBridge();
       unlistenPrompt();
       unlistenSuppress();
+      unlistenMode();
       unlistenMoved();
       window.clearTimeout(shortcutMessageTimer.current);
       window.clearTimeout(dragIdleTimer.current);

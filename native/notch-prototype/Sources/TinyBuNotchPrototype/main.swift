@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import Darwin
 
 private let panelSize = NSSize(width: 680, height: 176)
 private let collapsedIslandSize = NSSize(width: 357, height: 36)
@@ -10,6 +11,7 @@ private let hotKeySignature = fourCharCode("TBU1")
 final class AppDelegate: NSObject, NSApplicationDelegate {
   private var controller: NotchPanelController?
   private var hotKey: HotKeyCenter?
+  private let parentMonitor = ParentProcessMonitor(arguments: CommandLine.arguments)
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.accessory)
@@ -21,10 +23,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     hotKey = HotKeyCenter {
       controller.toggleExpanded()
     }
+    parentMonitor.start()
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     false
+  }
+}
+
+final class ParentProcessMonitor {
+  private let parentPID: pid_t?
+  private var timer: DispatchSourceTimer?
+
+  init(arguments: [String]) {
+    guard
+      let flagIndex = arguments.firstIndex(of: "--parent-pid"),
+      arguments.indices.contains(flagIndex + 1),
+      let value = Int32(arguments[flagIndex + 1]),
+      value > 0
+    else {
+      parentPID = nil
+      return
+    }
+    parentPID = pid_t(value)
+  }
+
+  func start() {
+    guard let parentPID else { return }
+    let timer = DispatchSource.makeTimerSource(queue: .main)
+    timer.schedule(deadline: .now() + 1, repeating: 1)
+    timer.setEventHandler {
+      if kill(parentPID, 0) == -1 && errno == ESRCH {
+        NSApp.terminate(nil)
+      }
+    }
+    self.timer = timer
+    timer.resume()
   }
 }
 

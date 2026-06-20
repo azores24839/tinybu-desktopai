@@ -24,6 +24,7 @@ type UseAppBootstrapArgs = {
   setMemories: (memories: MemoryItem[]) => void;
   setHomePasteDraft: (draft: string) => void;
   setScreen: (screen: Screen) => void;
+  setBootstrapped: (bootstrapped: boolean) => void;
 };
 
 function parseIncomingCapture(): ExternalCapturePayload | null {
@@ -49,7 +50,8 @@ export function useAppBootstrap({
   setExpressions,
   setMemories,
   setHomePasteDraft,
-  setScreen
+  setScreen,
+  setBootstrapped
 }: UseAppBootstrapArgs) {
   useEffect(() => {
     async function boot() {
@@ -99,10 +101,12 @@ export function useAppBootstrap({
         setExpressions(storedExpressions);
         setMemories(storedMemories);
         setScreen(bootState.onboarded ? (bootState.companionReady ? "home" : "companion") : "welcome");
+        setBootstrapped(true);
       } catch (error) {
         console.error("boot() failed, starting with empty state", error);
         setAppState(defaultAppState);
         setScreen("welcome");
+        setBootstrapped(true);
       }
     }
 

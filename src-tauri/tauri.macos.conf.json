@@ -1,0 +1,9 @@
+{
+  "build": {
+    "beforeDevCommand": "npm run swift:notch:dev && npm run dev",
+    "beforeBuildCommand": "npm run swift:notch:release && npm run build"
+  },
+  "bundle": {
+    "externalBin": ["bin/tinybu-notch"]
+  }
+}

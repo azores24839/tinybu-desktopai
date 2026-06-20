@@ -2,14 +2,14 @@ import { useEffect, useState } from "react";
 import { AppHeader } from "../../components/AppHeader";
 import { interfaceLanguageOptions, languageOptions, targetLanguageOptions } from "../../lib/appOptions";
 import { uiCopy } from "../../lib/uiCopy";
-import type { AiProviderMode, AppStateRecord, SupportPreference, UserProfile } from "../../types";
+import type { AiProviderMode, AppStateRecord, DesktopCompanionMode, SupportPreference, UserProfile } from "../../types";
 
 type SettingsPageProps = {
   appState: AppStateRecord;
   apiKeyDraft: string;
   apiKeyStatus: string;
   setApiKeyDraft: (value: string) => void;
-  saveSettings: (state: AppStateRecord, key?: string) => void;
+  saveSettings: (state: AppStateRecord, key?: string) => Promise<boolean>;
   checkUserKey: () => void;
   clearUserKey: () => void;
   clearMemory: () => void;
@@ -68,6 +68,7 @@ function SettingsSelect({ label, value, options, onChange }: SettingsSelectProps
 
 const supportOptions: SupportPreference[] = ["Gentle", "Balanced", "Direct"];
 const providerOptions: AiProviderMode[] = ["rules", "user-key", "cloud-proxy"];
+const desktopCompanionOptions: DesktopCompanionMode[] = ["pet", "swift-notch"];
 
 export function SettingsPage({
   appState,
@@ -85,6 +86,7 @@ export function SettingsPage({
 
   useEffect(() => setDraft(appState), [appState]);
   const copy = uiCopy[draft.profile.interfaceLanguage].settings;
+  const isChinese = draft.profile.interfaceLanguage === "中文";
 
   return (
     <section className="page settings-page">
@@ -169,6 +171,22 @@ export function SettingsPage({
           <section className="panel settings-card settings-desktop-card">
             <h2>Desktop / extension</h2>
             <p>Desktop capture and browser extension captures land in Inbox automatically.</p>
+            <OptionControl<DesktopCompanionMode>
+              label={isChinese ? "桌面形态" : "Desktop companion"}
+              value={draft.settings.desktopCompanionMode}
+              options={desktopCompanionOptions}
+              columns="two"
+              labels={{
+                pet: isChinese ? "宠物模式" : "Pet mode",
+                "swift-notch": isChinese ? "Swift 小黑岛" : "Swift notch"
+              }}
+              onChange={(desktopCompanionMode) =>
+                setDraft({ ...draft, settings: { ...draft.settings, desktopCompanionMode } })
+              }
+            />
+            <p className="settings-note">
+              {isChinese ? "保存后立即切换，重启 TinyBu 后保持上次选择。" : "Applies when saved and is restored after restarting TinyBu."}
+            </p>
             <label className="settings-toggle-row">
               <input
                 type="checkbox"
@@ -195,7 +213,12 @@ export function SettingsPage({
         </div>
       </div>
       <div className="bottom-actions settings-actions">
-        <button className="primary" onClick={() => saveSettings(draft, apiKeyDraft)}>
+        <button
+          className="primary"
+          onClick={async () => {
+            if (!(await saveSettings(draft, apiKeyDraft))) setDraft(appState);
+          }}
+        >
           {copy.save}
         </button>
       </div>

@@ -11,6 +11,8 @@ use std::{
   time::Duration
 };
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_global_shortcut::GlobalShortcutExt;
+use tauri_plugin_shell::{process::{CommandChild, CommandEvent}, ShellExt};
 
 const SERVICE_NAME: &str = "TinyBu";
 const OPENAI_ACCOUNT: &str = "openai_api_key";
@@ -20,9 +22,14 @@ const CLIPBOARD_PROMPT_EVENT: &str = "tinybu-clipboard-prompt";
 const CLIPBOARD_SUPPRESS_EVENT: &str = "tinybu-clipboard-suppress";
 const OPEN_CAPTURES_EVENT: &str = "tinybu-open-captures";
 const SCREENSHOT_CAPTURE_EVENT: &str = "tinybu-screenshot-captured";
+const DESKTOP_COMPANION_FALLBACK_EVENT: &str = "tinybu-desktop-companion-fallback";
+const PET_MODE_ACTIVE_EVENT: &str = "tinybu-pet-mode-active";
+const PET_CLIPBOARD_SHORTCUT: &str = "CommandOrControl+Shift+Space";
+const SWIFT_NOTCH_SIDECAR: &str = "tinybu-notch";
 
 type SharedCaptureBridge = Arc<Mutex<CaptureBridgeState>>;
 type SharedScreenshotVisibility = Arc<Mutex<ScreenshotVisibilityState>>;
+type SharedSwiftNotchState = Arc<Mutex<SwiftNotchState>>;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,7 +96,19 @@ struct CaptureBridgeState {
 #[derive(Default)]
 struct ScreenshotVisibilityState {
   main_was_visible: bool,
-  pet_was_visible: bool
+  pet_was_visible: bool,
+  swift_notch_was_running: bool
+}
+
+struct SwiftNotchProcess {
+  pid: u32,
+  child: CommandChild
+}
+
+#[derive(Default)]
+struct SwiftNotchState {
+  selected: bool,
+  process: Option<SwiftNotchProcess>
 }
 
 impl CaptureBridgeState {
@@ -216,7 +235,8 @@ fn hide_pet_window(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn open_screenshot_capture(
   app: tauri::AppHandle,
-  visibility_state: tauri::State<'_, SharedScreenshotVisibility>
+  visibility_state: tauri::State<'_, SharedScreenshotVisibility>,
+  notch_state: tauri::State<'_, SharedSwiftNotchState>
 ) -> Result<bool, String> {
   if let Some(window) = app.get_webview_window("screenshot") {
     let _ = window.close();
@@ -241,10 +261,12 @@ fn open_screenshot_capture(
     .get_webview_window("pet")
     .and_then(|window| window.is_visible().ok())
     .unwrap_or(false);
+  let swift_notch_was_running = stop_swift_notch(notch_state.inner())?;
   {
     let mut visibility = visibility_state.lock().map_err(|error| error.to_string())?;
     visibility.main_was_visible = main_was_visible;
     visibility.pet_was_visible = pet_was_visible;
+    visibility.swift_notch_was_running = swift_notch_was_running;
   }
 
   if let Some(window) = app.get_webview_window("main") {
@@ -278,7 +300,7 @@ fn open_screenshot_capture(
     .shadow(false)
     .build()
     .map_err(|error| {
-      restore_screenshot_windows(&app, visibility_state.inner(), false);
+      restore_screenshot_windows(&app, visibility_state.inner(), notch_state.inner(), false);
       error.to_string()
     })?;
 
@@ -288,13 +310,14 @@ fn open_screenshot_capture(
 #[tauri::command]
 fn cancel_screenshot_capture(
   app: tauri::AppHandle,
-  visibility_state: tauri::State<'_, SharedScreenshotVisibility>
+  visibility_state: tauri::State<'_, SharedScreenshotVisibility>,
+  notch_state: tauri::State<'_, SharedSwiftNotchState>
 ) -> Result<(), String> {
   if let Some(window) = app.get_webview_window("screenshot") {
     let _ = window.close();
   }
 
-  restore_screenshot_windows(&app, visibility_state.inner(), false);
+  restore_screenshot_windows(&app, visibility_state.inner(), notch_state.inner(), false);
   Ok(())
 }
 
@@ -327,9 +350,10 @@ fn capture_screen_area(area: ScreenshotArea) -> Result<ScreenshotCaptureResult, 
 fn submit_screenshot_capture(
   app: tauri::AppHandle,
   visibility_state: tauri::State<'_, SharedScreenshotVisibility>,
+  notch_state: tauri::State<'_, SharedSwiftNotchState>,
   payload: ScreenshotCapturePayload
 ) -> Result<(), String> {
-  restore_screenshot_windows(&app, visibility_state.inner(), true);
+  restore_screenshot_windows(&app, visibility_state.inner(), notch_state.inner(), true);
 
   if let Some(window) = app.get_webview_window("main") {
     window.show().map_err(|error| error.to_string())?;
@@ -340,15 +364,159 @@ fn submit_screenshot_capture(
     .map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+fn set_desktop_companion_mode(
+  app: tauri::AppHandle,
+  notch_state: tauri::State<'_, SharedSwiftNotchState>,
+  mode: String
+) -> Result<(), String> {
+  match mode.as_str() {
+    "pet" => {
+      stop_swift_notch(notch_state.inner())?;
+      set_swift_notch_selected(notch_state.inner(), false)?;
+      show_pet_window(&app)?;
+      set_pet_mode_active(&app, true);
+      Ok(())
+    }
+    "swift-notch" => {
+      #[cfg(not(target_os = "macos"))]
+      {
+        set_swift_notch_selected(notch_state.inner(), false)?;
+        show_pet_window(&app)?;
+        set_pet_mode_active(&app, true);
+        return Err("Swift notch is only available on macOS.".to_string());
+      }
+
+      #[cfg(target_os = "macos")]
+      {
+        set_swift_notch_selected(notch_state.inner(), true)?;
+        set_pet_mode_active(&app, false);
+        if let Err(error) = hide_pet_window(app.clone()) {
+          let _ = set_swift_notch_selected(notch_state.inner(), false);
+          set_pet_mode_active(&app, true);
+          return Err(error);
+        }
+        if let Err(error) = start_swift_notch(&app, notch_state.inner()) {
+          let _ = set_swift_notch_selected(notch_state.inner(), false);
+          let _ = show_pet_window(&app);
+          set_pet_mode_active(&app, true);
+          return Err(error);
+        }
+        Ok(())
+      }
+    }
+    _ => Err(format!("Unsupported desktop companion mode: {mode}"))
+  }
+}
+
+#[tauri::command]
+fn get_desktop_companion_mode(
+  notch_state: tauri::State<'_, SharedSwiftNotchState>
+) -> Result<&'static str, String> {
+  let state = notch_state.lock().map_err(|error| error.to_string())?;
+  Ok(if state.selected { "swift-notch" } else { "pet" })
+}
+
+fn start_swift_notch(app: &tauri::AppHandle, state: &SharedSwiftNotchState) -> Result<(), String> {
+  {
+    let state = state.lock().map_err(|error| error.to_string())?;
+    if state.process.is_some() {
+      return Ok(());
+    }
+  }
+
+  let (mut events, child) = app
+    .shell()
+    .sidecar(SWIFT_NOTCH_SIDECAR)
+    .map_err(|error| error.to_string())?
+    .args(["--parent-pid", &std::process::id().to_string()])
+    .spawn()
+    .map_err(|error| error.to_string())?;
+  let pid = child.pid();
+
+  {
+    let mut state = state.lock().map_err(|error| error.to_string())?;
+    state.process = Some(SwiftNotchProcess { pid, child });
+  }
+
+  let app = app.clone();
+  let state = state.clone();
+  tauri::async_runtime::spawn(async move {
+    while let Some(event) = events.recv().await {
+      match event {
+        CommandEvent::Terminated(_) | CommandEvent::Error(_) => {
+          let exited_unexpectedly = match state.lock() {
+            Ok(mut state) if state.process.as_ref().map(|process| process.pid) == Some(pid) => {
+              state.process.take();
+              state.selected = false;
+              true
+            }
+            _ => false
+          };
+
+          if exited_unexpectedly {
+            let _ = show_pet_window(&app);
+            set_pet_mode_active(&app, true);
+            let _ = app.emit_to("main", DESKTOP_COMPANION_FALLBACK_EVENT, "pet");
+          }
+          break;
+        }
+        _ => {}
+      }
+    }
+  });
+
+  Ok(())
+}
+
+fn stop_swift_notch(state: &SharedSwiftNotchState) -> Result<bool, String> {
+  let process = {
+    let mut state = state.lock().map_err(|error| error.to_string())?;
+    state.process.take()
+  };
+
+  if let Some(process) = process {
+    if let Err(error) = process.child.kill() {
+      eprintln!("TinyBu Swift notch was already stopped: {error}");
+    }
+    return Ok(true);
+  }
+
+  Ok(false)
+}
+
+fn set_swift_notch_selected(state: &SharedSwiftNotchState, selected: bool) -> Result<(), String> {
+  let mut state = state.lock().map_err(|error| error.to_string())?;
+  state.selected = selected;
+  Ok(())
+}
+
+fn show_pet_window(app: &tauri::AppHandle) -> Result<(), String> {
+  if let Some(window) = app.get_webview_window("pet") {
+    window.show().map_err(|error| error.to_string())?;
+  }
+  Ok(())
+}
+
+fn set_pet_mode_active(app: &tauri::AppHandle, active: bool) {
+  if !active {
+    let _ = app.global_shortcut().unregister(PET_CLIPBOARD_SHORTCUT);
+  }
+  let _ = app.emit_to("pet", PET_MODE_ACTIVE_EVENT, active);
+}
+
 pub fn run() {
   let capture_bridge: SharedCaptureBridge = Arc::new(Mutex::new(CaptureBridgeState::default()));
   let screenshot_visibility: SharedScreenshotVisibility = Arc::new(Mutex::new(ScreenshotVisibilityState::default()));
+  let swift_notch_state: SharedSwiftNotchState = Arc::new(Mutex::new(SwiftNotchState::default()));
 
-  tauri::Builder::default()
+  let app = tauri::Builder::default()
     .manage(capture_bridge.clone())
     .manage(screenshot_visibility)
+    .manage(swift_notch_state)
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+    .plugin(tauri_plugin_shell::init())
     .plugin(
       tauri_plugin_window_state::Builder::new()
         .skip_initial_state("pet")
@@ -356,7 +524,8 @@ pub fn run() {
         .build()
     )
     .setup(move |app| {
-      start_capture_bridge(app.handle().clone(), capture_bridge.clone());
+      let notch_state = app.state::<SharedSwiftNotchState>().inner().clone();
+      start_capture_bridge(app.handle().clone(), capture_bridge.clone(), notch_state);
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -373,17 +542,32 @@ pub fn run() {
       open_screenshot_capture,
       cancel_screenshot_capture,
       capture_screen_area,
-      submit_screenshot_capture
+      submit_screenshot_capture,
+      set_desktop_companion_mode,
+      get_desktop_companion_mode
     ])
-    .run(tauri::generate_context!())
-    .expect("error while running TinyBu");
+    .build(tauri::generate_context!())
+    .expect("error while building TinyBu");
+
+  app.run(|app, event| {
+    if let tauri::RunEvent::Exit = event {
+      let state = app.state::<SharedSwiftNotchState>();
+      let _ = stop_swift_notch(state.inner());
+    }
+  });
 }
 
-fn restore_screenshot_windows(app: &tauri::AppHandle, state: &SharedScreenshotVisibility, force_main: bool) {
+fn restore_screenshot_windows(
+  app: &tauri::AppHandle,
+  state: &SharedScreenshotVisibility,
+  notch_state: &SharedSwiftNotchState,
+  force_main: bool
+) {
   let visibility = match state.lock() {
     Ok(visibility) => ScreenshotVisibilityState {
       main_was_visible: visibility.main_was_visible,
-      pet_was_visible: visibility.pet_was_visible
+      pet_was_visible: visibility.pet_was_visible,
+      swift_notch_was_running: visibility.swift_notch_was_running
     },
     Err(error) => {
       eprintln!("TinyBu could not restore screenshot windows: {error}");
@@ -402,9 +586,23 @@ fn restore_screenshot_windows(app: &tauri::AppHandle, state: &SharedScreenshotVi
       let _ = window.show();
     }
   }
+
+  if visibility.swift_notch_was_running {
+    if let Err(error) = start_swift_notch(app, notch_state) {
+      eprintln!("TinyBu could not restore the Swift notch after screenshot capture: {error}");
+      let _ = set_swift_notch_selected(notch_state, false);
+      let _ = show_pet_window(app);
+      set_pet_mode_active(app, true);
+      let _ = app.emit_to("main", DESKTOP_COMPANION_FALLBACK_EVENT, "pet");
+    }
+  }
 }
 
-fn start_capture_bridge(app: tauri::AppHandle, state: SharedCaptureBridge) {
+fn start_capture_bridge(
+  app: tauri::AppHandle,
+  state: SharedCaptureBridge,
+  notch_state: SharedSwiftNotchState
+) {
   thread::spawn(move || {
     let listener = match TcpListener::bind(CAPTURE_BRIDGE_ADDR) {
       Ok(listener) => listener,
@@ -419,7 +617,8 @@ fn start_capture_bridge(app: tauri::AppHandle, state: SharedCaptureBridge) {
         Ok(stream) => {
           let app = app.clone();
           let state = state.clone();
-          thread::spawn(move || handle_bridge_stream(stream, app, state));
+          let notch_state = notch_state.clone();
+          thread::spawn(move || handle_bridge_stream(stream, app, state, notch_state));
         }
         Err(error) => eprintln!("TinyBu capture bridge connection failed: {error}")
       }
@@ -427,7 +626,12 @@ fn start_capture_bridge(app: tauri::AppHandle, state: SharedCaptureBridge) {
   });
 }
 
-fn handle_bridge_stream(mut stream: TcpStream, app: tauri::AppHandle, state: SharedCaptureBridge) {
+fn handle_bridge_stream(
+  mut stream: TcpStream,
+  app: tauri::AppHandle,
+  state: SharedCaptureBridge,
+  notch_state: SharedSwiftNotchState
+) {
   let (headers, body) = match read_http_request(&mut stream) {
     Ok(request) => request,
     Err(error) => {
@@ -460,7 +664,8 @@ fn handle_bridge_stream(mut stream: TcpStream, app: tauri::AppHandle, state: Sha
     };
 
     if let Some(window) = app.get_webview_window("pet") {
-      let result = if payload.hidden { window.hide() } else { window.show() };
+      let notch_is_active = notch_state.lock().map(|state| state.selected).unwrap_or(false);
+      let result = if payload.hidden || notch_is_active { window.hide() } else { window.show() };
       if let Err(error) = result {
         eprintln!("TinyBu could not update pet visibility: {error}");
       }
@@ -483,14 +688,17 @@ fn handle_bridge_stream(mut stream: TcpStream, app: tauri::AppHandle, state: Sha
       }
     };
 
-    if let Some(window) = app.get_webview_window("pet") {
-      if let Err(error) = window.show() {
-        eprintln!("TinyBu could not show pet window for clipboard prompt: {error}");
+    let notch_is_active = notch_state.lock().map(|state| state.selected).unwrap_or(false);
+    if !notch_is_active {
+      if let Some(window) = app.get_webview_window("pet") {
+        if let Err(error) = window.show() {
+          eprintln!("TinyBu could not show pet window for clipboard prompt: {error}");
+        }
       }
-    }
 
-    if let Err(error) = app.emit_to("pet", CLIPBOARD_PROMPT_EVENT, payload) {
-      eprintln!("TinyBu could not emit clipboard prompt event: {error}");
+      if let Err(error) = app.emit_to("pet", CLIPBOARD_PROMPT_EVENT, payload) {
+        eprintln!("TinyBu could not emit clipboard prompt event: {error}");
+      }
     }
 
     let _ = write_http_json(&mut stream, 200, &serde_json::json!({ "ok": true }));

@@ -7,4 +7,6 @@ dist/
 src-tauri/target/
 src-tauri/target-check/
 src-tauri/gen/
+src-tauri/bin/tinybu-notch-*
+src-tauri/swift-build/
 *.log

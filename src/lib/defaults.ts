@@ -29,7 +29,8 @@ export const defaultSettings: AppSettings = {
   deepSeekBaseUrl: "https://api.deepseek.com",
   openRouterBaseUrl: "https://openrouter.ai/api/v1",
   cloudProxyUrl: "http://127.0.0.1:8787/v1/tinybu/task",
-  apiKeySaved: false
+  apiKeySaved: false,
+  desktopCompanionMode: "pet"
 };
 
 export const defaultAppState: AppStateRecord = {

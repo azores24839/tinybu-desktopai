@@ -11,6 +11,7 @@ import {
 } from "./petTypes";
 
 type UsePetClipboardCaptureArgs = {
+  active: boolean;
   closePetMenu: () => void;
   setActivity: (activity: PetActivity | ((currentActivity: PetActivity) => PetActivity)) => void;
   setCount: (count: number | ((currentCount: number) => number)) => void;
@@ -18,6 +19,7 @@ type UsePetClipboardCaptureArgs = {
 };
 
 export function usePetClipboardCapture({
+  active,
   closePetMenu,
   setActivity,
   setCount,
@@ -35,18 +37,18 @@ export function usePetClipboardCapture({
 
   useEffect(() => {
     if (!isRunningInTauri()) return;
+    if (!active) {
+      void suspendClipboardCapture();
+      return;
+    }
     if (window.localStorage.getItem(CLIPBOARD_SHORTCUT_STORAGE_KEY) !== "true") return;
 
-    void enableClipboardShortcut(false);
+    void enableClipboardShortcut(false, true);
 
     return () => {
-      if (!shortcutRegistered.current) return;
-      shortcutRegistered.current = false;
-      void unregister(CLIPBOARD_SHORTCUT).catch((error) => {
-        console.warn("Unable to unregister clipboard shortcut", error);
-      });
+      void suspendClipboardCapture();
     };
-  }, []);
+  }, [active]);
 
   useEffect(() => {
     return () => {
@@ -193,20 +195,22 @@ export function usePetClipboardCapture({
       });
 
       shortcutRegistered.current = true;
+      return true;
     } catch (error) {
       shortcutRegistered.current = false;
       console.warn("Clipboard shortcut fallback unavailable", error);
+      return false;
     }
   }
 
-  async function enableClipboardShortcut(showMessage = true) {
+  async function enableClipboardShortcut(showMessage = true, preservePreferenceOnFailure = false) {
     if (!isRunningInTauri()) return;
 
     try {
       lastClipboardText.current = normalizeClipboardSignal(await readText());
       lastPromptedClipboardText.current = lastClipboardText.current;
       startClipboardWatcher();
-      await registerShortcutFallback();
+      if (!(await registerShortcutFallback())) throw new Error("Clipboard shortcut registration failed.");
 
       setShortcutEnabled(true);
       window.localStorage.setItem(CLIPBOARD_SHORTCUT_STORAGE_KEY, "true");
@@ -216,25 +220,29 @@ export function usePetClipboardCapture({
       shortcutRegistered.current = false;
       setShortcutEnabled(false);
       stopClipboardWatcher();
-      window.localStorage.removeItem(CLIPBOARD_SHORTCUT_STORAGE_KEY);
-      showShortcutMessage("复制捕捉失败");
+      if (!preservePreferenceOnFailure) window.localStorage.removeItem(CLIPBOARD_SHORTCUT_STORAGE_KEY);
+      if (showMessage) showShortcutMessage("复制捕捉失败");
     }
   }
 
-  async function disableClipboardShortcut() {
+  async function suspendClipboardCapture() {
     try {
       if (shortcutRegistered.current || (await isRegistered(CLIPBOARD_SHORTCUT))) {
         await unregister(CLIPBOARD_SHORTCUT);
       }
     } catch (error) {
-      console.warn("Unable to unregister clipboard shortcut", error);
+      console.warn("Unable to suspend clipboard shortcut", error);
     } finally {
       shortcutRegistered.current = false;
       setShortcutEnabled(false);
       stopClipboardWatcher();
-      window.localStorage.removeItem(CLIPBOARD_SHORTCUT_STORAGE_KEY);
-      showShortcutMessage("复制捕捉已关闭");
     }
+  }
+
+  async function disableClipboardShortcut() {
+    await suspendClipboardCapture();
+    window.localStorage.removeItem(CLIPBOARD_SHORTCUT_STORAGE_KEY);
+    showShortcutMessage("复制捕捉已关闭");
   }
 
   async function toggleClipboardShortcut() {
