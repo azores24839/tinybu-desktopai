@@ -138,8 +138,13 @@ export async function answerScreenshotQuestion(args: {
   question: string;
   screenshot: ScreenshotQuestionSource;
   appState: AppStateRecord;
+  forceImage?: boolean;
+  requireAI?: boolean;
 }): Promise<ScreenshotQuestionOutput> {
   if (args.appState.settings.aiProviderMode === "rules") {
+    if (args.requireAI) {
+      throw new Error("Set up AI in TinyBu Settings to ask about screenshots.");
+    }
     return {
       answer: `我先根据截图文字回答：${args.screenshot.sourceText.slice(0, 220)}`,
       quotedText: args.screenshot.sourceText.slice(0, 120),

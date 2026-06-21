@@ -4,6 +4,13 @@
     "beforeBuildCommand": "npm run swift:notch:release && npm run build"
   },
   "bundle": {
-    "externalBin": ["bin/tinybu-notch"]
+    "externalBin": ["bin/tinybu-notch"],
+    "macOS": {
+      "entitlements": "Entitlements.plist"
+    },
+    "resources": {
+      "../native/notch-prototype/Assets/islandpet.png": "islandpet.png",
+      "../native/notch-prototype/Assets/loading.gif": "loading.gif"
+    }
   }
 }

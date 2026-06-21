@@ -157,6 +157,11 @@ export function SettingsPage({
             API key
             <input type="password" value={apiKeyDraft} onChange={(event) => setApiKeyDraft(event.target.value)} placeholder={draft.settings.apiKeySaved ? "Saved" : "Paste key"} />
           </label>
+          <p className="settings-note">
+            {isChinese
+              ? "仅保存到这台 Mac 的系统钥匙串，不会写入项目文件或随 Git 上传。"
+              : "Saved only in this Mac’s Keychain. It is not written to project files or uploaded with Git."}
+          </p>
           {apiKeyStatus && <p className="settings-note">{apiKeyStatus}</p>}
           <div className="button-row">
             <button className="secondary" onClick={checkUserKey}>

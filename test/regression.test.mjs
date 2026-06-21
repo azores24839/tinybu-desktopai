@@ -135,8 +135,59 @@ test("desktop companion mode defaults to pet and bundles only the native Swift n
     ["main", "pet"]
   );
   assert.deepEqual(macConfig.bundle.externalBin, ["bin/tinybu-notch"]);
+  assert.equal(macConfig.bundle.resources["../native/notch-prototype/Assets/islandpet.png"], "islandpet.png");
+  assert.equal(macConfig.bundle.resources["../native/notch-prototype/Assets/loading.gif"], "loading.gif");
   assert.match(settingsSource, /\["pet", "swift-notch"\]/);
   assert.doesNotMatch(settingsSource, /view=notch|NotchApp/);
+});
+
+test("Swift notch visual questions use correlated sidecar IPC and native permissions", async () => {
+  const swiftSource = await readFile(
+    resolve(root, "native/notch-prototype/Sources/TinyBuNotchPrototype/main.swift"),
+    "utf8"
+  );
+  const rustSource = await readFile(resolve(root, "src-tauri/src/lib.rs"), "utf8");
+  const appSource = await readFile(resolve(root, "src/App.tsx"), "utf8");
+  const captureFlowSource = await readFile(resolve(root, "src/features/screenshots/useScreenshotCaptureFlow.ts"), "utf8");
+  const secureKeySource = await readFile(resolve(root, "src/lib/secureKey.ts"), "utf8");
+  const infoPlist = await readFile(resolve(root, "src-tauri/Info.plist"), "utf8");
+  const entitlements = await readFile(resolve(root, "src-tauri/Entitlements.plist"), "utf8");
+
+  assert.match(swiftSource, /HandlerButton\(title: "TinyBu"/);
+  assert.match(swiftSource, /HandlerButton\(title: "Tray"/);
+  assert.match(swiftSource, /let detailInset = expanded \? 70\.0 : 30\.0/);
+  assert.match(swiftSource, /guard let hitView = super\.hitTest\(point\)/);
+  assert.match(swiftSource, /final class PassthroughContainerView: NSView/);
+  assert.match(swiftSource, /final class PassthroughStackView: NSStackView/);
+  assert.match(swiftSource, /return containsInteractionShape\(point\) \? self : nil/);
+  assert.doesNotMatch(swiftSource, /let localPoint = convert\(point, from: superview\)/);
+  assert.match(swiftSource, /if !expanded \{\s+onToggle\?\(\)/);
+  assert.match(swiftSource, /shapeRect\(expanded: false\)\.insetBy\(dx: -8, dy: -8\)/);
+  assert.match(swiftSource, /"captureCurrentDisplay"/);
+  assert.match(swiftSource, /"screenshotCaptured"/);
+  assert.match(swiftSource, /VNRecognizeTextRequest/);
+  assert.match(swiftSource, /"ocrCompleted"/);
+  assert.match(swiftSource, /tinyBuOCRScrollView/);
+  assert.match(swiftSource, /tinyBuProgress\.style = \.bar/);
+  assert.match(swiftSource, /"saveClipboard"/);
+  assert.match(swiftSource, /clipboardPromptGeneration/);
+  assert.match(swiftSource, /HoverThumbnailView/);
+  assert.match(swiftSource, /HandlerButton\(title: "×"/);
+  assert.match(swiftSource, /dismissTinyBuResult/);
+  assert.match(swiftSource, /islandPetView\.animates = true/);
+  assert.match(swiftSource, /showStaticPet\(\)/);
+  assert.match(swiftSource, /"askScreenshot"/);
+  assert.match(rustSource, /SWIFT_NOTCH_IPC_PREFIX/);
+  assert.match(rustSource, /active_jobs: HashSet<String>/);
+  assert.match(rustSource, /local_ocr: Option<LocalOcrPayload>/);
+  assert.match(rustSource, /sync_swift_notch_tray/);
+  assert.match(rustSource, /SWIFT_NOTCH_CLIPBOARD_SAVE_EVENT/);
+  assert.match(appSource, /navigateAfter: false/);
+  assert.match(captureFlowSource, /createLocalOcrScreenshotCapture/);
+  assert.doesNotMatch(secureKeySource, /localStorage\.setItem/);
+  assert.match(infoPlist, /NSSpeechRecognitionUsageDescription/);
+  assert.match(infoPlist, /NSMicrophoneUsageDescription/);
+  assert.match(entitlements, /com\.apple\.security\.device\.audio-input/);
 });
 
 test("provider routing keeps MiniMax on Anthropic-compatible when user token exists", () => {
@@ -293,6 +344,55 @@ test("screenshot confirmation is only available while image data and OCR text ar
   assert.equal(canConfirmScreenshotText(capture), true);
   assert.equal(canConfirmScreenshotText({ screenshot: { visibleText: ["Hello"] } }), false);
   assert.equal(canConfirmScreenshotText({ screenshot: { imageDataUrl: "data:image/png;base64,abc", visibleText: [] } }), false);
+});
+
+test("local OCR captures expose readable text instead of a line-count status", async () => {
+  const { createLocalOcrScreenshotCapture } = await loadTsModule("src/features/screenshots/screenshotCaptureRecords.ts");
+  const capture = createLocalOcrScreenshotCapture({
+    imageDataUrl: "data:image/jpeg;base64,abc",
+    width: 1200,
+    height: 800,
+    capturedAt: "2026-06-21T00:00:00.000Z",
+    localOcr: {
+      text: "TinyBu settings\nAPI key is stored in Keychain",
+      lines: ["TinyBu settings", "API key is stored in Keychain"],
+      language: "en",
+      truncated: false
+    }
+  });
+
+  assert.equal(capture.sourceText, "TinyBu settings\nAPI key is stored in Keychain");
+  assert.match(capture.summary, /TinyBu settings/);
+  assert.doesNotMatch(capture.summary, /Recognized \d+ text lines/);
+  assert.equal(capture.screenshot.ocrTruncated, false);
+});
+
+test("each explicit clipboard save creates an independent Inbox capture", async () => {
+  const { createClipboardCaptureRecord } = await loadTsModule("src/features/captures/clipboardCaptureRecord.ts");
+  const first = createClipboardCaptureRecord("Same copied text");
+  const second = createClipboardCaptureRecord("Same copied text");
+  const formatted = createClipboardCaptureRecord("\n  Keep this spacing  \n");
+
+  assert.notEqual(first.id, second.id);
+  assert.equal(first.sourceKind, "selection");
+  assert.equal(first.sourceText, "Same copied text");
+  assert.equal(first.fragments[0].text, "Same copied text");
+  assert.equal(formatted.sourceText, "\n  Keep this spacing  \n");
+  assert.equal(formatted.summary, "Keep this spacing");
+});
+
+test("Swift notch clipboard IPC preserves the complete copied text", async () => {
+  const rustSource = await readFile(resolve(root, "src-tauri/src/lib.rs"), "utf8");
+  const handlerStart = rustSource.indexOf("fn handle_swift_notch_command(");
+  const saveStart = rustSource.indexOf("SwiftNotchCommand::SaveClipboard", handlerStart);
+  const saveBranch = rustSource.slice(
+    saveStart,
+    rustSource.indexOf("SwiftNotchCommand::DeleteTrayCapture", saveStart)
+  );
+
+  assert.match(saveBranch, /if text\.trim\(\)\.is_empty\(\)/);
+  assert.doesNotMatch(saveBranch, /let text = text\.trim\(\)\.to_string\(\)/);
+  assert.match(saveBranch, /SwiftNotchClipboardSaveRequest \{ job_id, text \}/);
 });
 
 test("extension content bridge loads before the content script", async () => {

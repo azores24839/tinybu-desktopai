@@ -10,8 +10,13 @@ import type {
   Screen,
   ScreenshotCapturePayload
 } from "../../types";
-import { createScreenshotDiagnosticCapture, createScreenshotPreviewCapture } from "./screenshotCaptureRecords";
+import {
+  createLocalOcrScreenshotCapture,
+  createScreenshotDiagnosticCapture,
+  createScreenshotPreviewCapture
+} from "./screenshotCaptureRecords";
 import { canConfirmScreenshotText } from "./screenshotUtils";
+import { optimizeScreenshotForAI } from "./optimizeScreenshotForAI";
 
 type CreateCaptureRecord = (args: {
   title: string;
@@ -52,9 +57,27 @@ export function useScreenshotCaptureFlow({
   setScreenshotQuestionInput,
   setScreenshotQuestionBusy
 }: ScreenshotCaptureFlowArgs) {
-  async function importScreenshotCapture(payload: ScreenshotCapturePayload) {
+  async function importScreenshotCapture(
+    payload: ScreenshotCapturePayload,
+    options: { navigateAfter?: boolean; forceRecognition?: boolean } = {}
+  ): Promise<CaptureItem> {
+    const navigateAfter = options.navigateAfter !== false;
+    if (payload.localOcr) {
+      const capture = createLocalOcrScreenshotCapture(payload);
+      await db.captures.put(capture);
+      setCaptures((items) => [capture, ...items]);
+      await persistState({
+        ...appState,
+        onboarded: true,
+        companionReady: true,
+        activeCaptureId: capture.id
+      });
+      if (navigateAfter) navigate("inbox");
+      return capture;
+    }
+
     const previewCapture = createScreenshotPreviewCapture(payload);
-    if (!appState.settings.screenshotRecognitionEnabled) {
+    if (!appState.settings.screenshotRecognitionEnabled && !options.forceRecognition) {
       await db.captures.put(previewCapture);
       setCaptures((items) => [previewCapture, ...items]);
       await persistState({
@@ -63,8 +86,8 @@ export function useScreenshotCaptureFlow({
         companionReady: true,
         activeCaptureId: previewCapture.id
       });
-      navigate("inbox");
-      return;
+      if (navigateAfter) navigate("inbox");
+      return previewCapture;
     }
 
     setBusyLabel("Recognizing screenshot");
@@ -105,7 +128,8 @@ export function useScreenshotCaptureFlow({
         companionReady: true,
         activeCaptureId: capture.id
       });
-      navigate("home");
+      if (navigateAfter) navigate("home");
+      return capture;
     } catch (error) {
       const diagnosticCapture = createScreenshotDiagnosticCapture(
         payload,
@@ -119,7 +143,8 @@ export function useScreenshotCaptureFlow({
         companionReady: true,
         activeCaptureId: diagnosticCapture.id
       });
-      navigate("inbox");
+      if (navigateAfter) navigate("inbox");
+      return diagnosticCapture;
     } finally {
       setBusyLabel("");
       setCompanionState("idle");
@@ -136,16 +161,29 @@ export function useScreenshotCaptureFlow({
   }
 
   async function askAboutScreenshot(capture: CaptureItem, question: string) {
+    return runScreenshotQuestion(capture, question, true);
+  }
+
+  async function askAboutScreenshotFromNotch(capture: CaptureItem, question: string) {
+    return runScreenshotQuestion(capture, question, false);
+  }
+
+  async function runScreenshotQuestion(capture: CaptureItem, question: string, manageUiState: boolean) {
     const text = question.trim();
-    if (!text || screenshotQuestionBusy || !capture.screenshot) return;
-    setScreenshotQuestionInput("");
-    setScreenshotQuestionBusy(true);
-    setCompanionState("thinking");
+    if (!text || (manageUiState && screenshotQuestionBusy) || !capture.screenshot) return;
+    if (manageUiState) {
+      setScreenshotQuestionInput("");
+      setScreenshotQuestionBusy(true);
+      setCompanionState("thinking");
+    }
     try {
+      const imageDataUrl = manageUiState
+        ? capture.screenshot.imageDataUrl
+        : await optimizeScreenshotForAI(capture.screenshot.imageDataUrl ?? "");
       const output = await answerScreenshotQuestion({
         question: text,
         screenshot: {
-          imageDataUrl: capture.screenshot.imageDataUrl,
+          imageDataUrl,
           title: capture.title,
           sourceText: getCaptureText(capture),
           summary: capture.summary,
@@ -154,7 +192,9 @@ export function useScreenshotCaptureFlow({
           errorMessages: capture.screenshot.errorMessages,
           interactiveElements: capture.screenshot.interactiveElements
         },
-        appState
+        appState,
+        forceImage: !manageUiState,
+        requireAI: !manageUiState
       });
       const answer = {
         id: uid("screenshot-answer"),
@@ -171,15 +211,17 @@ export function useScreenshotCaptureFlow({
           questionAnswers: [answer, ...(capture.screenshot.questionAnswers ?? [])]
         }
       });
-      setCompanionState("encouraging");
+      if (manageUiState) setCompanionState("encouraging");
+      return answer;
     } finally {
-      setScreenshotQuestionBusy(false);
+      if (manageUiState) setScreenshotQuestionBusy(false);
     }
   }
 
   return {
     importScreenshotCapture,
     confirmScreenshotText,
-    askAboutScreenshot
+    askAboutScreenshot,
+    askAboutScreenshotFromNotch
   };
 }

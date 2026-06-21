@@ -1,12 +1,400 @@
 import AppKit
+import AVFoundation
 import Carbon.HIToolbox
 import Darwin
+import ImageIO
+import Speech
+import Vision
 
-private let panelSize = NSSize(width: 680, height: 176)
+private let panelSize = NSSize(width: 820, height: 176)
 private let collapsedIslandSize = NSSize(width: 357, height: 36)
 private let expandedIslandSize = NSSize(width: 620, height: 154)
 private let notchReservedWidth: CGFloat = 190.0
 private let hotKeySignature = fourCharCode("TBU1")
+private let ipcPrefix = "TINYBU_IPC "
+private let islandPetImage: NSImage? = {
+  let arguments = CommandLine.arguments
+  if
+    let flagIndex = arguments.firstIndex(of: "--island-pet-path"),
+    arguments.indices.contains(flagIndex + 1),
+    let image = NSImage(contentsOfFile: arguments[flagIndex + 1])
+  {
+    return image
+  }
+
+  let sourceAsset = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()
+    .deletingLastPathComponent()
+    .deletingLastPathComponent()
+    .appendingPathComponent("Assets/islandpet.png")
+  return NSImage(contentsOf: sourceAsset)
+}()
+private let islandPetLoadingImage: NSImage? = {
+  let arguments = CommandLine.arguments
+  if
+    let flagIndex = arguments.firstIndex(of: "--island-pet-loading-path"),
+    arguments.indices.contains(flagIndex + 1),
+    let image = NSImage(contentsOfFile: arguments[flagIndex + 1])
+  {
+    return image
+  }
+
+  let sourceAsset = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()
+    .deletingLastPathComponent()
+    .deletingLastPathComponent()
+    .appendingPathComponent("Assets/loading.gif")
+  return NSImage(contentsOf: sourceAsset)
+}()
+
+private func notchLog(_ message: String) {
+  FileHandle.standardError.write(Data("\(message)\n".utf8))
+}
+
+final class NotchIPC {
+  var onMessage: (([String: Any]) -> Void)?
+  private var inputBuffer = Data()
+
+  init() {
+    FileHandle.standardInput.readabilityHandler = { [weak self] handle in
+      let data = handle.availableData
+      guard !data.isEmpty else { return }
+      DispatchQueue.main.async {
+        self?.consume(data)
+      }
+    }
+  }
+
+  deinit {
+    FileHandle.standardInput.readabilityHandler = nil
+  }
+
+  func send(type: String, fields: [String: Any]) {
+    var payload = fields
+    payload["type"] = type
+    guard
+      JSONSerialization.isValidJSONObject(payload),
+      let data = try? JSONSerialization.data(withJSONObject: payload),
+      let json = String(data: data, encoding: .utf8)
+    else {
+      notchLog("TinyBuNotch could not encode IPC message")
+      return
+    }
+    FileHandle.standardOutput.write(Data("\(ipcPrefix)\(json)\n".utf8))
+  }
+
+  private func consume(_ data: Data) {
+    inputBuffer.append(data)
+    while let newline = inputBuffer.firstIndex(of: 0x0A) {
+      let lineData = inputBuffer[..<newline]
+      inputBuffer.removeSubrange(...newline)
+      guard
+        !lineData.isEmpty,
+        let object = try? JSONSerialization.jsonObject(with: Data(lineData)) as? [String: Any]
+      else { continue }
+      onMessage?(object)
+    }
+  }
+}
+
+final class SpeechInputController {
+  var onText: ((String) -> Void)?
+  var onRecordingChanged: ((Bool) -> Void)?
+  var onError: ((String) -> Void)?
+
+  private let audioEngine = AVAudioEngine()
+  private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+  private var recognitionTask: SFSpeechRecognitionTask?
+  private(set) var isRecording = false
+
+  func toggle() {
+    isRecording ? stop() : requestAccessAndStart()
+  }
+
+  func stop() {
+    guard isRecording else { return }
+    isRecording = false
+    audioEngine.stop()
+    audioEngine.inputNode.removeTap(onBus: 0)
+    recognitionRequest?.endAudio()
+    onRecordingChanged?(false)
+  }
+
+  private func requestAccessAndStart() {
+    SFSpeechRecognizer.requestAuthorization { [weak self] speechStatus in
+      guard speechStatus == .authorized else {
+        DispatchQueue.main.async { self?.onError?("Allow Speech Recognition in System Settings") }
+        return
+      }
+      AVCaptureDevice.requestAccess(for: .audio) { granted in
+        DispatchQueue.main.async {
+          guard granted else {
+            self?.onError?("Allow Microphone access in System Settings")
+            return
+          }
+          self?.start()
+        }
+      }
+    }
+  }
+
+  private func start() {
+    recognitionTask?.cancel()
+    recognitionTask = nil
+
+    let locale = currentInputLocale()
+    guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
+      onError?("Speech recognition is unavailable for \(locale.localizedString(forIdentifier: locale.identifier) ?? locale.identifier)")
+      return
+    }
+
+    let request = SFSpeechAudioBufferRecognitionRequest()
+    request.shouldReportPartialResults = true
+    request.taskHint = .dictation
+    recognitionRequest = request
+
+    let inputNode = audioEngine.inputNode
+    let format = inputNode.outputFormat(forBus: 0)
+    inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+      request.append(buffer)
+    }
+
+    recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+      DispatchQueue.main.async {
+        if let result {
+          self?.onText?(result.bestTranscription.formattedString)
+        }
+        if error != nil || result?.isFinal == true {
+          self?.finishRecognition()
+        }
+      }
+    }
+
+    do {
+      audioEngine.prepare()
+      try audioEngine.start()
+      isRecording = true
+      onRecordingChanged?(true)
+    } catch {
+      inputNode.removeTap(onBus: 0)
+      recognitionRequest = nil
+      recognitionTask = nil
+      onError?("Microphone could not start")
+    }
+  }
+
+  private func finishRecognition() {
+    if isRecording {
+      audioEngine.stop()
+      audioEngine.inputNode.removeTap(onBus: 0)
+    }
+    isRecording = false
+    recognitionRequest = nil
+    recognitionTask = nil
+    onRecordingChanged?(false)
+  }
+
+  private func currentInputLocale() -> Locale {
+    let inputSource = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
+    if
+      let property = TISGetInputSourceProperty(inputSource, kTISPropertyInputSourceLanguages),
+      let languages = Unmanaged<CFArray>.fromOpaque(property).takeUnretainedValue() as? [String],
+      let language = languages.first
+    {
+      if language.lowercased().hasPrefix("zh") {
+        return Locale(identifier: language.contains("TW") || language.contains("Hant") ? "zh-TW" : "zh-CN")
+      }
+      if language.lowercased().hasPrefix("en") {
+        return Locale(identifier: language.contains("GB") ? "en-GB" : "en-US")
+      }
+    }
+    return Locale.current
+  }
+}
+
+private struct LocalOCRResult {
+  let text: String
+  let lines: [String]
+  let language: String
+  let truncated: Bool
+  let error: String?
+}
+
+private final class LocalOCRController {
+  typealias PreviewHandler = (NSImage) -> Void
+  typealias CompletionHandler = (LocalOCRResult) -> Void
+
+  private let queue = DispatchQueue(label: "com.tinybu.notch.ocr", qos: .userInitiated)
+  private let lock = NSLock()
+  private var activeJobID: String?
+  private var activeRequest: VNRecognizeTextRequest?
+  private var timeoutWorkItem: DispatchWorkItem?
+
+  func recognize(
+    imageAt path: String,
+    jobID: String,
+    onPreview: @escaping PreviewHandler,
+    completion: @escaping CompletionHandler
+  ) {
+    cancel()
+    lock.lock()
+    activeJobID = jobID
+    lock.unlock()
+
+    let timeout = DispatchWorkItem { [weak self] in
+      self?.finish(
+        jobID: jobID,
+        result: LocalOCRResult(text: "", lines: [], language: "unknown", truncated: false, error: "OCR timed out"),
+        completion: completion
+      )
+    }
+    lock.lock()
+    timeoutWorkItem = timeout
+    lock.unlock()
+    DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: timeout)
+
+    queue.async { [weak self] in
+      guard let self else { return }
+      do {
+        let data = try Data(contentsOf: URL(fileURLWithPath: path), options: .mappedIfSafe)
+        guard
+          let source = CGImageSourceCreateWithData(data as CFData, nil),
+          let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
+        else {
+          throw NSError(domain: "TinyBuOCR", code: 1, userInfo: [NSLocalizedDescriptionKey: "Screenshot could not be decoded"])
+        }
+
+        if let preview = NSImage(data: data) {
+          DispatchQueue.main.async {
+            guard self.isActive(jobID) else { return }
+            onPreview(preview)
+          }
+        }
+
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = true
+        request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"]
+        if #available(macOS 13.0, *) {
+          request.automaticallyDetectsLanguage = true
+        }
+
+        self.lock.lock()
+        guard self.activeJobID == jobID else {
+          self.lock.unlock()
+          return
+        }
+        self.activeRequest = request
+        self.lock.unlock()
+
+        try VNImageRequestHandler(cgImage: cgImage, orientation: .up).perform([request])
+        let result = Self.normalizedResult(from: request.results ?? [])
+        self.finish(jobID: jobID, result: result, completion: completion)
+      } catch {
+        self.finish(
+          jobID: jobID,
+          result: LocalOCRResult(
+            text: "",
+            lines: [],
+            language: "unknown",
+            truncated: false,
+            error: error.localizedDescription
+          ),
+          completion: completion
+        )
+      }
+    }
+  }
+
+  func cancel() {
+    lock.lock()
+    activeJobID = nil
+    activeRequest?.cancel()
+    activeRequest = nil
+    timeoutWorkItem?.cancel()
+    timeoutWorkItem = nil
+    lock.unlock()
+  }
+
+  private func isActive(_ jobID: String) -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return activeJobID == jobID
+  }
+
+  private func finish(jobID: String, result: LocalOCRResult, completion: @escaping CompletionHandler) {
+    lock.lock()
+    guard activeJobID == jobID else {
+      lock.unlock()
+      return
+    }
+    activeJobID = nil
+    activeRequest?.cancel()
+    activeRequest = nil
+    timeoutWorkItem?.cancel()
+    timeoutWorkItem = nil
+    lock.unlock()
+
+    DispatchQueue.main.async {
+      completion(result)
+    }
+  }
+
+  private static func normalizedResult(from observations: [VNRecognizedTextObservation]) -> LocalOCRResult {
+    let sorted = observations.sorted { lhs, rhs in
+      let verticalDifference = lhs.boundingBox.midY - rhs.boundingBox.midY
+      if abs(verticalDifference) > 0.015 {
+        return verticalDifference > 0
+      }
+      return lhs.boundingBox.minX < rhs.boundingBox.minX
+    }
+
+    var lines: [String] = []
+    var seen = Set<String>()
+    var byteCount = 0
+    var truncated = false
+    for observation in sorted {
+      guard let candidate = observation.topCandidates(1).first else { continue }
+      let line = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !line.isEmpty, seen.insert(line).inserted else { continue }
+      let lineBytes = line.lengthOfBytes(using: .utf8) + (lines.isEmpty ? 0 : 1)
+      if lines.count >= 1_000 || byteCount + lineBytes > 50_000 {
+        truncated = true
+        break
+      }
+      lines.append(line)
+      byteCount += lineBytes
+    }
+
+    let text = lines.joined(separator: "\n")
+    return LocalOCRResult(
+      text: text,
+      lines: lines,
+      language: languageHint(for: text),
+      truncated: truncated,
+      error: text.isEmpty ? "No readable text was found" : nil
+    )
+  }
+
+  private static func languageHint(for text: String) -> String {
+    var cjkCount = 0
+    var latinCount = 0
+    for scalar in text.unicodeScalars {
+      switch scalar.value {
+      case 0x3400...0x9FFF:
+        cjkCount += 1
+      case 0x0041...0x005A, 0x0061...0x007A:
+        latinCount += 1
+      default:
+        break
+      }
+    }
+    if cjkCount > 0, latinCount > 0 { return "mixed" }
+    if cjkCount > 0 { return "zh" }
+    if latinCount > 0 { return "en" }
+    return "unknown"
+  }
+}
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
   private var controller: NotchPanelController?
@@ -131,16 +519,45 @@ final class NotchPanel: NSPanel {
   override var canBecomeMain: Bool { false }
 }
 
+final class PassthroughImageView: NSImageView {
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    nil
+  }
+}
+
+final class PassthroughContainerView: NSView {
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    let hitView = super.hitTest(point)
+    return hitView === self ? nil : hitView
+  }
+}
+
+final class PassthroughStackView: NSStackView {
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    let hitView = super.hitTest(point)
+    return hitView === self ? nil : hitView
+  }
+}
+
+private enum NotchTab: Int {
+  case tinyBu = 0
+  case tray = 1
+}
+
 final class NotchView: NSView {
   var onToggle: (() -> Void)?
   var onExpand: (() -> Void)?
   var onCollapse: (() -> Void)?
 
   private let island = BlackIslandView(frame: .zero)
-  private let topRow = NSView()
-  private let leftCluster = NSStackView()
-  private let rightCluster = NSStackView()
-  private let detailArea = NSStackView()
+  private let islandPetView = PassthroughImageView(frame: .zero)
+  private let clipboardSaveButton = HoverHandlerButton(title: "Save?", target: nil, action: nil)
+  private let topRow = PassthroughContainerView()
+  private let leftCluster = PassthroughStackView()
+  private let tabBar = NSStackView()
+  private let tinyBuTabButton = HandlerButton(title: "TinyBu", target: nil, action: nil)
+  private let trayTabButton = HandlerButton(title: "Tray", target: nil, action: nil)
+  private let detailArea = NSView()
   private let trayEmptyLabel = NSTextField(labelWithString: "No screenshots collected today")
   private let thumbnailStrip = NSStackView()
   private let previewContainer = NSView()
@@ -152,16 +569,54 @@ final class NotchView: NSView {
   private let askProgress = NSProgressIndicator()
   private let titleIconView = NSImageView()
   private let brandLabel = NSTextField(labelWithString: "Tray")
-  private let statusLabel = NSTextField(labelWithString: "")
   private let countBadge = NSTextField(labelWithString: "0")
   private let voiceStatus = NSTextField(labelWithString: "Voice shortcut")
   private let dropStatus = NSTextField(labelWithString: "Drag text, images, or links here")
+  private let tinyBuPanel = NSView()
+  private let tinyBuPreviewImageView = NSImageView()
+  private let askPageButton = HandlerButton(title: "Ask about this page", target: nil, action: nil)
+  private let tinyBuStatusLabel = NSTextField(labelWithString: "")
+  private let tinyBuAnswerLabel = NSTextField(wrappingLabelWithString: "")
+  private let tinyBuQuestionContainer = NSView()
+  private let tinyBuQuestionInput = NSTextField(string: "")
+  private let tinyBuMicButton = HandlerButton(frame: .zero)
+  private let tinyBuSendButton = HandlerButton(frame: .zero)
+  private let tinyBuCloseButton = HandlerButton(title: "×", target: nil, action: nil)
+  private let tinyBuBackButton = HandlerButton(title: "Back", target: nil, action: nil)
+  private let tinyBuProgress = NSProgressIndicator()
+  private let tinyBuOCRScrollView = NSScrollView()
+  private let tinyBuOCRTextView = NSTextView()
+  private let ipc = NotchIPC()
+  private let speechInput = SpeechInputController()
+  private let localOCR = LocalOCRController()
   private weak var trayBox: DashedTrayBox?
   private var capturedImages: [NSImage] = []
+  private var capturedCaptureIDs: [String?] = []
+  private var capturedOCRTexts: [String?] = []
+  private var capturedSummaries: [String] = []
+  private var capturedOCRTruncation: [Bool] = []
+  private var capturedPreviewPaths: [String?] = []
   private var selectedImageIndex: Int?
   private var askWorkItem: DispatchWorkItem?
+  private var activeCaptureJobID: String?
+  private var activeQuestionJobID: String?
+  private var activeClipboardJobID: String?
+  private var activeTrayOCRJobID: String?
+  private var pendingTrayOCRIndex: Int?
+  private var pendingTrayOCRResult: LocalOCRResult?
+  private var tinyBuCaptureID: String?
+  private var tinyBuOCRText = ""
+  private var tinyBuSummary = ""
+  private var tinyBuOCRTruncated = false
+  private var speechPrefix = ""
   private var expanded = false
   private var count = 0
+  private var clipboardTimer: Timer?
+  private var clipboardPromptGeneration = 0
+  private var clipboardJobGeneration: Int?
+  private var lastPasteboardChangeCount = NSPasteboard.general.changeCount
+  private var pendingClipboardText = ""
+  private var trayDeletionInProgress = false
 
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
@@ -169,10 +624,16 @@ final class NotchView: NSView {
     layer?.backgroundColor = NSColor.clear.cgColor
     registerForDraggedTypes([.fileURL, .string, .URL, .tiff, .png])
     buildView()
+    configureIPCAndSpeech()
+    startClipboardObservation()
   }
 
   required init?(coder: NSCoder) {
     fatalError("init(coder:) has not been implemented")
+  }
+
+  deinit {
+    clipboardTimer?.invalidate()
   }
 
   func setExpanded(_ nextExpanded: Bool) {
@@ -181,13 +642,17 @@ final class NotchView: NSView {
       askWorkItem?.cancel()
       selectedImageIndex = nil
       refreshTray()
+    } else {
+      hideClipboardPrompt()
     }
     detailArea.isHidden = !nextExpanded
-    brandLabel.isHidden = !nextExpanded
+    leftCluster.isHidden = nextExpanded
+    tabBar.isHidden = !nextExpanded
     countBadge.isHidden = nextExpanded
-    rightCluster.isHidden = !nextExpanded
-    statusLabel.stringValue = ""
     updateTitleState()
+    if nextExpanded {
+      selectTab(.tinyBu)
+    }
     animateIsland(to: nextExpanded)
   }
 
@@ -209,6 +674,28 @@ final class NotchView: NSView {
     }
     addSubview(island)
 
+    islandPetView.image = islandPetImage
+    islandPetView.imageAlignment = .alignCenter
+    islandPetView.imageScaling = .scaleProportionallyUpOrDown
+    islandPetView.animates = false
+    islandPetView.isHidden = islandPetImage == nil
+    addSubview(islandPetView, positioned: .above, relativeTo: island)
+
+    clipboardSaveButton.isBordered = false
+    clipboardSaveButton.font = .systemFont(ofSize: 12, weight: .semibold)
+    clipboardSaveButton.contentTintColor = .white
+    clipboardSaveButton.wantsLayer = true
+    clipboardSaveButton.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.14).cgColor
+    clipboardSaveButton.layer?.cornerRadius = 12
+    clipboardSaveButton.layer?.cornerCurve = .continuous
+    clipboardSaveButton.toolTip = "Save copied text to TinyBu Inbox"
+    clipboardSaveButton.setAccessibilityLabel("Save copied text")
+    clipboardSaveButton.handler = { [weak self] in self?.savePendingClipboardText() }
+    clipboardSaveButton.target = clipboardSaveButton
+    clipboardSaveButton.action = #selector(HandlerButton.invoke)
+    clipboardSaveButton.isHidden = true
+    addSubview(clipboardSaveButton, positioned: .above, relativeTo: islandPetView)
+
     topRow.wantsLayer = true
     topRow.layer?.backgroundColor = NSColor.clear.cgColor
     topRow.frame = NSRect(x: 0, y: island.bounds.height - 58, width: island.bounds.width, height: 50)
@@ -221,13 +708,16 @@ final class NotchView: NSView {
     leftCluster.frame = NSRect(x: 24, y: 7, width: 210, height: 36)
     topRow.addSubview(leftCluster)
 
-    rightCluster.orientation = .horizontal
-    rightCluster.alignment = .centerY
-    rightCluster.spacing = 8
-    rightCluster.translatesAutoresizingMaskIntoConstraints = true
-    rightCluster.frame = NSRect(x: topRow.bounds.width - 154, y: 7, width: 130, height: 36)
-    rightCluster.isHidden = true
-    topRow.addSubview(rightCluster)
+    tabBar.orientation = .horizontal
+    tabBar.alignment = .centerY
+    tabBar.spacing = 8
+    tabBar.translatesAutoresizingMaskIntoConstraints = true
+    configureTabButton(tinyBuTabButton, title: "TinyBu", symbol: "sparkles", tab: .tinyBu)
+    configureTabButton(trayTabButton, title: "Tray", symbol: "tray.fill", tab: .tray)
+    tabBar.addArrangedSubview(tinyBuTabButton)
+    tabBar.addArrangedSubview(trayTabButton)
+    tabBar.isHidden = true
+    topRow.addSubview(tabBar)
 
     configureTitleIcon("tray.fill")
     let brandGroup = NSStackView(views: [titleIconView, brandLabel, countBadge])
@@ -242,10 +732,6 @@ final class NotchView: NSView {
     brandLabel.font = .systemFont(ofSize: 17, weight: .bold)
     brandLabel.textColor = .white
     brandLabel.isHidden = true
-    statusLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-    statusLabel.textColor = NSColor.white.withAlphaComponent(0.68)
-    statusLabel.lineBreakMode = .byTruncatingTail
-
     countBadge.font = .systemFont(ofSize: 15, weight: .bold)
     countBadge.textColor = .white
     countBadge.alignment = .center
@@ -256,25 +742,15 @@ final class NotchView: NSView {
 
     leftCluster.addArrangedSubview(brandGroup)
 
-    rightCluster.addArrangedSubview(actionButton(symbolName: "mic.fill", title: "Voice") { [weak self] in
-      self?.flash("Listening placeholder")
-    })
-    rightCluster.addArrangedSubview(actionButton(symbolName: "scissors", title: "Screenshot") { [weak self] in
-      self?.flash("Screenshot action")
-    })
-    rightCluster.addArrangedSubview(statusLabel)
-    statusLabel.isHidden = true
-
-    detailArea.orientation = .vertical
-    detailArea.alignment = .width
-    detailArea.distribution = .fill
-    detailArea.spacing = 12
-    detailArea.edgeInsets = NSEdgeInsets(top: 0, left: 22, bottom: 18, right: 22)
     detailArea.translatesAutoresizingMaskIntoConstraints = true
+    detailArea.wantsLayer = true
+    detailArea.layer?.masksToBounds = true
     detailArea.isHidden = true
     island.addSubview(detailArea)
 
-    detailArea.addArrangedSubview(trayEmptyState())
+    detailArea.addSubview(buildTinyBuPanel())
+    detailArea.addSubview(trayEmptyState())
+    selectTab(.tinyBu)
 
     layoutIslandContent(expanded: false)
   }
@@ -290,29 +766,63 @@ final class NotchView: NSView {
 
   private func animateIsland(to nextExpanded: Bool) {
     island.setExpanded(nextExpanded, animated: true)
-    layoutIslandContent(expanded: nextExpanded)
+    layoutIslandContent(expanded: nextExpanded, animated: true)
   }
 
-  private func layoutIslandContent(expanded: Bool) {
+  private func layoutIslandContent(expanded: Bool, animated: Bool = false) {
     let shapeRect = island.shapeRect(expanded: expanded)
     topRow.frame = NSRect(x: shapeRect.minX, y: shapeRect.maxY - (expanded ? 54 : 34), width: shapeRect.width, height: expanded ? 40 : 30)
-    detailArea.frame = NSRect(x: shapeRect.minX + 30, y: shapeRect.minY + 16, width: shapeRect.width - 60, height: max(0, shapeRect.height - 70))
+    let detailInset = expanded ? 70.0 : 30.0
+    detailArea.frame = NSRect(
+      x: shapeRect.minX + detailInset,
+      y: shapeRect.minY + 16,
+      width: max(0, shapeRect.width - detailInset * 2),
+      height: max(0, shapeRect.height - 70)
+    )
+    tinyBuPanel.frame = detailArea.bounds
+    trayBox?.frame = detailArea.bounds
     let sideInset = expanded ? 70.0 : 30.0
-    let rightWidth = 74.0
     let clusterY = expanded ? 5.0 : 2.0
     let clusterHeight = expanded ? 30.0 : 26.0
     leftCluster.frame = NSRect(x: sideInset, y: clusterY, width: max(96, (shapeRect.width - notchReservedWidth) / 2 - 24), height: clusterHeight)
-    rightCluster.frame = NSRect(
-      x: shapeRect.width - sideInset - rightWidth,
-      y: clusterY,
-      width: rightWidth,
-      height: clusterHeight
+    tabBar.frame = NSRect(x: sideInset, y: clusterY, width: 176, height: clusterHeight)
+
+    let petSize = expanded
+      ? NSSize(width: 108, height: 48)
+      : NSSize(width: 53, height: 24)
+    let collapsedShapeRect = island.shapeRect(expanded: false)
+    let promptShift: CGFloat = !expanded && !clipboardSaveButton.isHidden ? 72 : 0
+    let petAnchorX = island.frame.minX + collapsedShapeRect.maxX - 30 - 53 - promptShift
+    let petAnchorTop = island.frame.minY + collapsedShapeRect.maxY
+
+    let petFrame = NSRect(
+      x: petAnchorX,
+      y: petAnchorTop - petSize.height,
+      width: petSize.width,
+      height: petSize.height
     )
-    rightCluster.isHidden = !expanded
-    statusLabel.isHidden = true
+    if animated {
+      NSAnimationContext.runAnimationGroup { context in
+        context.duration = 0.34
+        context.timingFunction = CAMediaTimingFunction(controlPoints: 0.18, 0.84, 0.24, 1.0)
+        islandPetView.animator().frame = petFrame
+      }
+    } else {
+      islandPetView.frame = petFrame
+    }
+    clipboardSaveButton.frame = NSRect(
+      x: petFrame.maxX + 4,
+      y: petFrame.minY - 2,
+      width: 68,
+      height: 28
+    )
   }
 
   @objc private func backToTrayFromTitle() {
+    if !expanded {
+      onToggle?()
+      return
+    }
     guard selectedImageIndex != nil else { return }
     selectedImageIndex = nil
     refreshTray()
@@ -344,15 +854,15 @@ final class NotchView: NSView {
   }
 
   private func handleDraggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-    print("TinyBuNotch drag entered:", sender.draggingPasteboard.types?.map(\.rawValue) ?? [])
+    notchLog("TinyBuNotch drag entered: \(sender.draggingPasteboard.types?.map(\.rawValue) ?? [])")
     onExpand?()
     guard canReadImage(from: sender.draggingPasteboard) else {
       trayEmptyLabel.stringValue = "Drop an image"
-      print("TinyBuNotch drag rejected: no readable image")
+      notchLog("TinyBuNotch drag rejected: no readable image")
       return []
     }
     trayEmptyLabel.stringValue = "Drop to collect"
-    print("TinyBuNotch drag accepted")
+    notchLog("TinyBuNotch drag accepted")
     return .copy
   }
 
@@ -364,16 +874,21 @@ final class NotchView: NSView {
     let images = readImages(from: sender.draggingPasteboard)
     guard !images.isEmpty else {
       trayEmptyLabel.stringValue = "No image found"
-      print("TinyBuNotch drop failed: no image found")
+      notchLog("TinyBuNotch drop failed: no image found")
       return false
     }
 
     capturedImages.append(contentsOf: images)
+    capturedCaptureIDs.append(contentsOf: Array(repeating: nil, count: images.count))
+    capturedOCRTexts.append(contentsOf: Array(repeating: nil, count: images.count))
+    capturedSummaries.append(contentsOf: Array(repeating: "", count: images.count))
+    capturedOCRTruncation.append(contentsOf: Array(repeating: false, count: images.count))
+    capturedPreviewPaths.append(contentsOf: Array(repeating: nil, count: images.count))
     count = capturedImages.count
     countBadge.stringValue = String(count)
     selectedImageIndex = nil
     refreshTray()
-    print("TinyBuNotch drop stored images:", images.count)
+    notchLog("TinyBuNotch drop stored images: \(images.count)")
     return true
   }
 
@@ -385,8 +900,655 @@ final class NotchView: NSView {
     }
   }
 
+  private func buildTinyBuPanel() -> NSView {
+    tinyBuPanel.translatesAutoresizingMaskIntoConstraints = true
+
+    tinyBuPreviewImageView.imageScaling = .scaleProportionallyUpOrDown
+    tinyBuPreviewImageView.wantsLayer = true
+    tinyBuPreviewImageView.layer?.cornerRadius = 8
+    tinyBuPreviewImageView.layer?.cornerCurve = .continuous
+    tinyBuPreviewImageView.layer?.masksToBounds = true
+    tinyBuPreviewImageView.translatesAutoresizingMaskIntoConstraints = false
+    tinyBuPanel.addSubview(tinyBuPreviewImageView)
+
+    askPageButton.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Ask about this page")
+    askPageButton.imagePosition = .imageLeading
+    askPageButton.imageHugsTitle = true
+    askPageButton.isBordered = false
+    askPageButton.font = .systemFont(ofSize: 13, weight: .semibold)
+    askPageButton.contentTintColor = NSColor.black.withAlphaComponent(0.86)
+    askPageButton.wantsLayer = true
+    askPageButton.layer?.backgroundColor = NSColor.systemYellow.cgColor
+    askPageButton.layer?.cornerRadius = 14
+    askPageButton.layer?.cornerCurve = .continuous
+    askPageButton.handler = { [weak self] in self?.beginPageCapture() }
+    askPageButton.target = askPageButton
+    askPageButton.action = #selector(HandlerButton.invoke)
+    askPageButton.translatesAutoresizingMaskIntoConstraints = false
+    tinyBuPanel.addSubview(askPageButton)
+
+    tinyBuProgress.style = .bar
+    tinyBuProgress.isIndeterminate = true
+    tinyBuProgress.isDisplayedWhenStopped = false
+    tinyBuProgress.translatesAutoresizingMaskIntoConstraints = false
+    tinyBuPanel.addSubview(tinyBuProgress)
+
+    tinyBuBackButton.isBordered = false
+    tinyBuBackButton.image = NSImage(systemSymbolName: "chevron.left", accessibilityDescription: "Back to screenshot")
+    tinyBuBackButton.imagePosition = .imageLeading
+    tinyBuBackButton.imageHugsTitle = true
+    tinyBuBackButton.font = .systemFont(ofSize: 12, weight: .semibold)
+    tinyBuBackButton.contentTintColor = NSColor.white.withAlphaComponent(0.82)
+    tinyBuBackButton.toolTip = "Back to screenshot"
+    tinyBuBackButton.handler = { [weak self] in self?.showTinyBuQuestionState() }
+    tinyBuBackButton.target = tinyBuBackButton
+    tinyBuBackButton.action = #selector(HandlerButton.invoke)
+    tinyBuBackButton.translatesAutoresizingMaskIntoConstraints = false
+    tinyBuPanel.addSubview(tinyBuBackButton)
+
+    tinyBuOCRScrollView.drawsBackground = false
+    tinyBuOCRScrollView.borderType = .noBorder
+    tinyBuOCRScrollView.hasVerticalScroller = true
+    tinyBuOCRScrollView.autohidesScrollers = true
+    tinyBuOCRScrollView.translatesAutoresizingMaskIntoConstraints = false
+    tinyBuPanel.addSubview(tinyBuOCRScrollView)
+
+    tinyBuOCRTextView.isEditable = false
+    tinyBuOCRTextView.isSelectable = true
+    tinyBuOCRTextView.drawsBackground = false
+    tinyBuOCRTextView.textColor = NSColor.white.withAlphaComponent(0.9)
+    tinyBuOCRTextView.font = .systemFont(ofSize: 12, weight: .regular)
+    tinyBuOCRTextView.textContainerInset = NSSize(width: 4, height: 4)
+    tinyBuOCRTextView.isVerticallyResizable = true
+    tinyBuOCRTextView.isHorizontallyResizable = false
+    tinyBuOCRTextView.autoresizingMask = [.width]
+    tinyBuOCRTextView.textContainer?.widthTracksTextView = true
+    tinyBuOCRTextView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
+    tinyBuOCRScrollView.documentView = tinyBuOCRTextView
+
+    tinyBuCloseButton.isBordered = false
+    tinyBuCloseButton.attributedTitle = NSAttributedString(
+      string: "×",
+      attributes: [
+        .font: NSFont.systemFont(ofSize: 19, weight: .medium),
+        .foregroundColor: NSColor.white.withAlphaComponent(0.72)
+      ]
+    )
+    tinyBuCloseButton.toolTip = "Back to Ask about this page"
+    tinyBuCloseButton.wantsLayer = true
+    tinyBuCloseButton.layer?.zPosition = 10
+    tinyBuCloseButton.handler = { [weak self] in self?.dismissTinyBuResult() }
+    tinyBuCloseButton.target = tinyBuCloseButton
+    tinyBuCloseButton.action = #selector(HandlerButton.invoke)
+    tinyBuCloseButton.translatesAutoresizingMaskIntoConstraints = false
+    tinyBuPanel.addSubview(tinyBuCloseButton)
+
+    tinyBuStatusLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+    tinyBuStatusLabel.textColor = NSColor.white.withAlphaComponent(0.6)
+    tinyBuStatusLabel.lineBreakMode = .byTruncatingTail
+    tinyBuStatusLabel.translatesAutoresizingMaskIntoConstraints = false
+    tinyBuPanel.addSubview(tinyBuStatusLabel)
+
+    tinyBuAnswerLabel.font = .systemFont(ofSize: 12, weight: .medium)
+    tinyBuAnswerLabel.textColor = NSColor.white.withAlphaComponent(0.88)
+    tinyBuAnswerLabel.maximumNumberOfLines = 2
+    tinyBuAnswerLabel.lineBreakMode = .byWordWrapping
+    tinyBuAnswerLabel.translatesAutoresizingMaskIntoConstraints = false
+    tinyBuPanel.addSubview(tinyBuAnswerLabel)
+
+    tinyBuQuestionContainer.wantsLayer = true
+    tinyBuQuestionContainer.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.09).cgColor
+    tinyBuQuestionContainer.layer?.cornerRadius = 12
+    tinyBuQuestionContainer.layer?.cornerCurve = .continuous
+    tinyBuQuestionContainer.translatesAutoresizingMaskIntoConstraints = false
+    tinyBuPanel.addSubview(tinyBuQuestionContainer)
+
+    tinyBuQuestionInput.font = .systemFont(ofSize: 13, weight: .medium)
+    tinyBuQuestionInput.textColor = .white
+    tinyBuQuestionInput.placeholderString = "Ask about this page..."
+    tinyBuQuestionInput.backgroundColor = .clear
+    tinyBuQuestionInput.focusRingType = .none
+    tinyBuQuestionInput.isBezeled = false
+    tinyBuQuestionInput.target = self
+    tinyBuQuestionInput.action = #selector(submitTinyBuQuestion)
+    tinyBuQuestionInput.translatesAutoresizingMaskIntoConstraints = false
+    tinyBuQuestionContainer.addSubview(tinyBuQuestionInput)
+
+    tinyBuMicButton.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Dictate question")
+    tinyBuMicButton.isBordered = false
+    tinyBuMicButton.contentTintColor = NSColor.white.withAlphaComponent(0.72)
+    tinyBuMicButton.toolTip = "Dictate question (F5 also uses macOS Dictation)"
+    tinyBuMicButton.handler = { [weak self] in self?.toggleSpeechInput() }
+    tinyBuMicButton.target = tinyBuMicButton
+    tinyBuMicButton.action = #selector(HandlerButton.invoke)
+    tinyBuMicButton.translatesAutoresizingMaskIntoConstraints = false
+    tinyBuQuestionContainer.addSubview(tinyBuMicButton)
+
+    tinyBuSendButton.image = NSImage(systemSymbolName: "paperplane.fill", accessibilityDescription: "Send")
+    tinyBuSendButton.isBordered = false
+    tinyBuSendButton.contentTintColor = NSColor.white.withAlphaComponent(0.72)
+    tinyBuSendButton.handler = { [weak self] in self?.submitTinyBuQuestion() }
+    tinyBuSendButton.target = tinyBuSendButton
+    tinyBuSendButton.action = #selector(HandlerButton.invoke)
+    tinyBuSendButton.translatesAutoresizingMaskIntoConstraints = false
+    tinyBuQuestionContainer.addSubview(tinyBuSendButton)
+
+    NSLayoutConstraint.activate([
+      askPageButton.centerXAnchor.constraint(equalTo: tinyBuPanel.centerXAnchor),
+      askPageButton.centerYAnchor.constraint(equalTo: tinyBuPanel.centerYAnchor),
+      askPageButton.widthAnchor.constraint(equalToConstant: 178),
+      askPageButton.heightAnchor.constraint(equalToConstant: 30),
+
+      tinyBuPreviewImageView.leadingAnchor.constraint(equalTo: tinyBuPanel.leadingAnchor),
+      tinyBuPreviewImageView.centerYAnchor.constraint(equalTo: tinyBuPanel.centerYAnchor),
+      tinyBuPreviewImageView.widthAnchor.constraint(equalToConstant: 96),
+      tinyBuPreviewImageView.heightAnchor.constraint(equalToConstant: 62),
+
+      tinyBuProgress.leadingAnchor.constraint(equalTo: tinyBuPanel.leadingAnchor),
+      tinyBuProgress.topAnchor.constraint(equalTo: tinyBuPanel.topAnchor, constant: 5),
+      tinyBuProgress.widthAnchor.constraint(equalToConstant: 150),
+      tinyBuProgress.heightAnchor.constraint(equalToConstant: 6),
+      tinyBuCloseButton.trailingAnchor.constraint(equalTo: tinyBuPanel.trailingAnchor),
+      tinyBuCloseButton.centerYAnchor.constraint(equalTo: tinyBuStatusLabel.centerYAnchor),
+      tinyBuCloseButton.widthAnchor.constraint(equalToConstant: 24),
+      tinyBuCloseButton.heightAnchor.constraint(equalToConstant: 24),
+      tinyBuStatusLabel.leadingAnchor.constraint(equalTo: tinyBuProgress.trailingAnchor, constant: 7),
+      tinyBuStatusLabel.trailingAnchor.constraint(equalTo: tinyBuCloseButton.leadingAnchor, constant: -6),
+      tinyBuStatusLabel.centerYAnchor.constraint(equalTo: tinyBuProgress.centerYAnchor),
+
+      tinyBuBackButton.leadingAnchor.constraint(equalTo: tinyBuPanel.leadingAnchor),
+      tinyBuBackButton.topAnchor.constraint(equalTo: tinyBuPanel.topAnchor, constant: -4),
+      tinyBuBackButton.widthAnchor.constraint(equalToConstant: 72),
+      tinyBuBackButton.heightAnchor.constraint(equalToConstant: 24),
+
+      tinyBuOCRScrollView.leadingAnchor.constraint(equalTo: tinyBuPanel.leadingAnchor),
+      tinyBuOCRScrollView.trailingAnchor.constraint(equalTo: tinyBuPanel.trailingAnchor),
+      tinyBuOCRScrollView.topAnchor.constraint(equalTo: tinyBuBackButton.bottomAnchor, constant: 1),
+      tinyBuOCRScrollView.bottomAnchor.constraint(equalTo: tinyBuPanel.bottomAnchor),
+
+      tinyBuAnswerLabel.leadingAnchor.constraint(equalTo: tinyBuPreviewImageView.trailingAnchor, constant: 14),
+      tinyBuAnswerLabel.trailingAnchor.constraint(equalTo: tinyBuPanel.trailingAnchor),
+      tinyBuAnswerLabel.topAnchor.constraint(equalTo: tinyBuStatusLabel.bottomAnchor, constant: 2),
+      tinyBuAnswerLabel.heightAnchor.constraint(equalToConstant: 30),
+      tinyBuAnswerLabel.bottomAnchor.constraint(lessThanOrEqualTo: tinyBuQuestionContainer.topAnchor, constant: -2),
+
+      tinyBuQuestionContainer.leadingAnchor.constraint(equalTo: tinyBuPreviewImageView.trailingAnchor, constant: 14),
+      tinyBuQuestionContainer.trailingAnchor.constraint(equalTo: tinyBuPanel.trailingAnchor),
+      tinyBuQuestionContainer.bottomAnchor.constraint(equalTo: tinyBuPanel.bottomAnchor),
+      tinyBuQuestionContainer.heightAnchor.constraint(equalToConstant: 31),
+      tinyBuQuestionInput.leadingAnchor.constraint(equalTo: tinyBuQuestionContainer.leadingAnchor, constant: 10),
+      tinyBuQuestionInput.trailingAnchor.constraint(equalTo: tinyBuMicButton.leadingAnchor, constant: -4),
+      tinyBuQuestionInput.centerYAnchor.constraint(equalTo: tinyBuQuestionContainer.centerYAnchor),
+      tinyBuMicButton.trailingAnchor.constraint(equalTo: tinyBuSendButton.leadingAnchor, constant: -2),
+      tinyBuMicButton.centerYAnchor.constraint(equalTo: tinyBuQuestionContainer.centerYAnchor),
+      tinyBuMicButton.widthAnchor.constraint(equalToConstant: 26),
+      tinyBuMicButton.heightAnchor.constraint(equalToConstant: 26),
+      tinyBuSendButton.trailingAnchor.constraint(equalTo: tinyBuQuestionContainer.trailingAnchor, constant: -3),
+      tinyBuSendButton.centerYAnchor.constraint(equalTo: tinyBuQuestionContainer.centerYAnchor),
+      tinyBuSendButton.widthAnchor.constraint(equalToConstant: 26),
+      tinyBuSendButton.heightAnchor.constraint(equalToConstant: 26)
+    ])
+
+    showTinyBuInitialState()
+    return tinyBuPanel
+  }
+
+  private func configureIPCAndSpeech() {
+    ipc.onMessage = { [weak self] message in
+      self?.handleIPCMessage(message)
+    }
+    speechInput.onText = { [weak self] transcription in
+      guard let self else { return }
+      let separator = self.speechPrefix.isEmpty || transcription.isEmpty ? "" : " "
+      self.tinyBuQuestionInput.stringValue = self.speechPrefix + separator + transcription
+    }
+    speechInput.onRecordingChanged = { [weak self] recording in
+      self?.tinyBuMicButton.contentTintColor = recording ? .systemRed : NSColor.white.withAlphaComponent(0.72)
+      self?.tinyBuStatusLabel.stringValue = recording ? "Listening… click the mic to stop" : "Screenshot ready"
+    }
+    speechInput.onError = { [weak self] message in
+      self?.tinyBuStatusLabel.stringValue = message
+      self?.tinyBuMicButton.contentTintColor = NSColor.white.withAlphaComponent(0.72)
+    }
+  }
+
+  private func configureTabButton(_ button: HandlerButton, title: String, symbol: String, tab: NotchTab) {
+    button.title = title
+    button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
+    button.imagePosition = .imageLeading
+    button.imageHugsTitle = true
+    button.isBordered = false
+    button.font = .systemFont(ofSize: 13, weight: .semibold)
+    button.contentTintColor = .white
+    button.wantsLayer = true
+    button.layer?.cornerRadius = 12
+    button.layer?.cornerCurve = .continuous
+    button.widthAnchor.constraint(equalToConstant: tab == .tinyBu ? 88 : 68).isActive = true
+    button.heightAnchor.constraint(equalToConstant: 26).isActive = true
+    button.handler = { [weak self] in self?.selectTab(tab) }
+    button.target = button
+    button.action = #selector(HandlerButton.invoke)
+  }
+
+  private func selectTab(_ tab: NotchTab) {
+    if tab == .tray, selectedImageIndex != nil {
+      selectedImageIndex = nil
+      refreshTray()
+    }
+    tinyBuPanel.isHidden = tab != .tinyBu
+    trayBox?.isHidden = tab != .tray
+    tinyBuTabButton.layer?.backgroundColor = tab == .tinyBu
+      ? NSColor.white.withAlphaComponent(0.18).cgColor
+      : NSColor.clear.cgColor
+    trayTabButton.layer?.backgroundColor = tab == .tray
+      ? NSColor.white.withAlphaComponent(0.18).cgColor
+      : NSColor.clear.cgColor
+  }
+
+  private func showTinyBuInitialState() {
+    askPageButton.isHidden = false
+    tinyBuPreviewImageView.isHidden = true
+    tinyBuPreviewImageView.image = nil
+    tinyBuProgress.stopAnimation(nil)
+    tinyBuProgress.isHidden = true
+    tinyBuStatusLabel.isHidden = true
+    tinyBuAnswerLabel.isHidden = true
+    tinyBuQuestionContainer.isHidden = true
+    tinyBuCloseButton.isHidden = true
+    tinyBuBackButton.isHidden = true
+    tinyBuOCRScrollView.isHidden = true
+  }
+
+  private func showTinyBuOCRState() {
+    askPageButton.isHidden = true
+    tinyBuPreviewImageView.isHidden = true
+    tinyBuProgress.stopAnimation(nil)
+    tinyBuProgress.isHidden = true
+    tinyBuStatusLabel.isHidden = true
+    tinyBuAnswerLabel.isHidden = true
+    tinyBuQuestionContainer.isHidden = true
+    tinyBuBackButton.isHidden = false
+    tinyBuCloseButton.isHidden = false
+    tinyBuOCRTextView.string = tinyBuOCRText.isEmpty ? "No readable text was found in this screenshot." : tinyBuOCRText
+    if tinyBuOCRTruncated {
+      tinyBuOCRTextView.string += "\n\n— OCR text was shortened to keep TinyBu responsive. —"
+    }
+    tinyBuOCRScrollView.isHidden = false
+    tinyBuOCRTextView.scrollToBeginningOfDocument(nil)
+    selectTab(.tinyBu)
+    onExpand?()
+  }
+
+  private func showTinyBuQuestionState() {
+    guard tinyBuCaptureID != nil else { return }
+    askPageButton.isHidden = true
+    tinyBuBackButton.isHidden = true
+    tinyBuOCRScrollView.isHidden = true
+    tinyBuProgress.stopAnimation(nil)
+    tinyBuProgress.isHidden = true
+    tinyBuPreviewImageView.isHidden = tinyBuPreviewImageView.image == nil
+    tinyBuStatusLabel.stringValue = "Screenshot ready"
+    tinyBuStatusLabel.isHidden = false
+    tinyBuAnswerLabel.stringValue = tinyBuSummary
+    tinyBuAnswerLabel.isHidden = tinyBuSummary.isEmpty
+    tinyBuQuestionContainer.isHidden = false
+    tinyBuCloseButton.isHidden = false
+    tinyBuSendButton.isEnabled = true
+    selectTab(.tinyBu)
+    onExpand?()
+    window?.makeFirstResponder(tinyBuQuestionInput)
+  }
+
+  private func dismissTinyBuResult() {
+    speechInput.stop()
+    localOCR.cancel()
+    if let activeQuestionJobID {
+      ipc.send(type: "cancelJob", fields: ["jobId": activeQuestionJobID])
+    }
+    if let activeTrayOCRJobID {
+      ipc.send(type: "cancelJob", fields: ["jobId": activeTrayOCRJobID])
+    }
+    activeQuestionJobID = nil
+    activeTrayOCRJobID = nil
+    pendingTrayOCRIndex = nil
+    pendingTrayOCRResult = nil
+    tinyBuCaptureID = nil
+    tinyBuOCRText = ""
+    tinyBuSummary = ""
+    tinyBuOCRTruncated = false
+    selectedImageIndex = nil
+    refreshTray()
+    tinyBuQuestionInput.stringValue = ""
+    tinyBuSendButton.isEnabled = true
+    showTinyBuInitialState()
+  }
+
+  private func beginPageCapture() {
+    speechInput.stop()
+    localOCR.cancel()
+    showLoadingPet()
+    if let activeCaptureJobID {
+      ipc.send(type: "cancelJob", fields: ["jobId": activeCaptureJobID])
+    }
+    let jobID = UUID().uuidString
+    activeCaptureJobID = jobID
+    tinyBuCaptureID = nil
+    askPageButton.isHidden = true
+    tinyBuCloseButton.isHidden = true
+    tinyBuBackButton.isHidden = true
+    tinyBuOCRScrollView.isHidden = true
+    tinyBuPreviewImageView.isHidden = true
+    tinyBuPreviewImageView.image = nil
+    tinyBuAnswerLabel.isHidden = true
+    tinyBuQuestionContainer.isHidden = true
+    tinyBuStatusLabel.stringValue = "Preparing screenshot…"
+    tinyBuStatusLabel.isHidden = false
+    tinyBuProgress.isHidden = false
+    tinyBuProgress.startAnimation(nil)
+    onCollapse?()
+
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) { [weak self] in
+      guard let self, self.activeCaptureJobID == jobID else { return }
+      let key = NSDeviceDescriptionKey("NSScreenNumber")
+      let displayID = (self.window?.screen?.deviceDescription[key] as? NSNumber)?.uint32Value ?? CGMainDisplayID()
+      self.ipc.send(type: "captureCurrentDisplay", fields: ["jobId": jobID, "displayId": displayID])
+    }
+  }
+
+  private func showCapturedPreview(_ image: NSImage) {
+    if tinyBuPreviewImageView.image == nil {
+      capturedImages.append(image)
+      capturedCaptureIDs.append(nil)
+      capturedOCRTexts.append(nil)
+      capturedSummaries.append("")
+      capturedOCRTruncation.append(false)
+      capturedPreviewPaths.append(nil)
+      count = capturedImages.count
+      countBadge.stringValue = String(count)
+      refreshTray()
+    }
+    tinyBuPreviewImageView.image = image
+    tinyBuPreviewImageView.isHidden = false
+  }
+
+  private func startLocalOCR(at path: String, jobID: String) {
+    localOCR.recognize(
+      imageAt: path,
+      jobID: jobID,
+      onPreview: { [weak self] image in
+        guard let self, self.activeCaptureJobID == jobID else { return }
+        self.showCapturedPreview(image)
+      },
+      completion: { [weak self] result in
+        guard let self, self.activeCaptureJobID == jobID else { return }
+        var fields: [String: Any] = [
+          "jobId": jobID,
+          "text": result.text,
+          "lines": result.lines,
+          "language": result.language,
+          "truncated": result.truncated
+        ]
+        if let error = result.error {
+          fields["error"] = error
+        }
+        self.tinyBuStatusLabel.stringValue = result.error == nil ? "Saving to Tray…" : "Saving screenshot…"
+        self.ipc.send(type: "ocrCompleted", fields: fields)
+      }
+    )
+  }
+
+  private func showLoadingPet() {
+    guard let islandPetLoadingImage else { return }
+    islandPetView.image = islandPetLoadingImage
+    islandPetView.animates = true
+  }
+
+  private func showStaticPet() {
+    islandPetView.animates = false
+    islandPetView.image = islandPetImage
+  }
+
+  private func startClipboardObservation() {
+    let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
+      self?.checkPasteboardForCopiedText()
+    }
+    clipboardTimer = timer
+    RunLoop.main.add(timer, forMode: .common)
+  }
+
+  private func checkPasteboardForCopiedText() {
+    let pasteboard = NSPasteboard.general
+    let changeCount = pasteboard.changeCount
+    guard changeCount != lastPasteboardChangeCount else { return }
+    lastPasteboardChangeCount = changeCount
+    guard let text = pasteboard.string(forType: .string), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      return
+    }
+    notchLog("TinyBuNotch detected copied text")
+    if expanded {
+      onCollapse?()
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) { [weak self] in
+        self?.showClipboardPrompt(text)
+      }
+    } else {
+      showClipboardPrompt(text)
+    }
+  }
+
+  private func showClipboardPrompt(_ text: String) {
+    clipboardPromptGeneration += 1
+    pendingClipboardText = text
+    clipboardSaveButton.title = "Save?"
+    clipboardSaveButton.isEnabled = true
+    clipboardSaveButton.isHidden = false
+    layoutIslandContent(expanded: false, animated: true)
+    let generation = clipboardPromptGeneration
+    DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+      guard let self, self.clipboardPromptGeneration == generation, self.activeClipboardJobID == nil else { return }
+      self.hideClipboardPrompt()
+    }
+  }
+
+  private func hideClipboardPrompt() {
+    clipboardPromptGeneration += 1
+    pendingClipboardText = ""
+    clipboardSaveButton.isHidden = true
+    clipboardSaveButton.isEnabled = true
+    clipboardSaveButton.title = "Save?"
+    layoutIslandContent(expanded: expanded, animated: true)
+  }
+
+  private func savePendingClipboardText() {
+    let text = pendingClipboardText
+    guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, activeClipboardJobID == nil else { return }
+    let jobID = UUID().uuidString
+    activeClipboardJobID = jobID
+    clipboardJobGeneration = clipboardPromptGeneration
+    clipboardSaveButton.title = "Saving…"
+    clipboardSaveButton.isEnabled = false
+    ipc.send(type: "saveClipboard", fields: ["jobId": jobID, "text": text])
+  }
+
+  private func applyTraySnapshot(_ message: [String: Any]) {
+    guard let records = message["records"] as? [[String: Any]] else { return }
+    var images: [NSImage] = []
+    var captureIDs: [String?] = []
+    var ocrTexts: [String?] = []
+    var summaries: [String] = []
+    var truncation: [Bool] = []
+    var previewPaths: [String?] = []
+    for record in records {
+      guard
+        let captureID = record["captureId"] as? String,
+        let previewPath = record["previewPath"] as? String,
+        let image = NSImage(contentsOfFile: previewPath)
+      else { continue }
+      images.append(image)
+      captureIDs.append(captureID)
+      let text = record["ocrText"] as? String ?? ""
+      ocrTexts.append(text.isEmpty ? nil : text)
+      summaries.append(record["summary"] as? String ?? "")
+      truncation.append(record["ocrTruncated"] as? Bool ?? false)
+      previewPaths.append(previewPath)
+    }
+    capturedImages = images
+    capturedCaptureIDs = captureIDs
+    capturedOCRTexts = ocrTexts
+    capturedSummaries = summaries
+    capturedOCRTruncation = truncation
+    capturedPreviewPaths = previewPaths
+    count = images.count
+    countBadge.stringValue = String(count)
+    if let selectedImageIndex, !images.indices.contains(selectedImageIndex) {
+      self.selectedImageIndex = nil
+    }
+    refreshTray()
+  }
+
+  private func handleIPCMessage(_ message: [String: Any]) {
+    guard let type = message["type"] as? String else { return }
+    if type == "traySnapshot" {
+      applyTraySnapshot(message)
+      return
+    }
+    guard let jobID = message["jobId"] as? String else { return }
+    switch type {
+    case "captureStarted":
+      guard jobID == activeCaptureJobID else { return }
+      tinyBuStatusLabel.stringValue = "Reading this page…"
+    case "screenshotCaptured":
+      guard jobID == activeCaptureJobID else { return }
+      if let previewPath = message["previewPath"] as? String {
+        startLocalOCR(at: previewPath, jobID: jobID)
+      }
+      tinyBuStatusLabel.stringValue = "Reading this page…"
+      tinyBuStatusLabel.isHidden = false
+      tinyBuProgress.isHidden = false
+      tinyBuProgress.startAnimation(nil)
+      tinyBuAnswerLabel.isHidden = true
+      tinyBuQuestionContainer.isHidden = true
+      selectTab(.tinyBu)
+      onExpand?()
+    case "screenshotReady":
+      guard jobID == activeCaptureJobID, let captureID = message["captureId"] as? String else { return }
+      showStaticPet()
+      activeCaptureJobID = nil
+      tinyBuCaptureID = captureID
+      tinyBuOCRText = message["ocrText"] as? String ?? ""
+      tinyBuSummary = message["summary"] as? String ?? ""
+      tinyBuOCRTruncated = message["ocrTruncated"] as? Bool ?? false
+      localOCR.cancel()
+      showTinyBuOCRState()
+    case "answerReady":
+      guard jobID == activeQuestionJobID else { return }
+      activeQuestionJobID = nil
+      tinyBuProgress.stopAnimation(nil)
+      tinyBuProgress.isHidden = true
+      tinyBuStatusLabel.stringValue = "TinyBu"
+      tinyBuAnswerLabel.stringValue = message["answer"] as? String ?? ""
+      tinyBuAnswerLabel.isHidden = false
+      tinyBuQuestionContainer.isHidden = false
+      tinyBuBackButton.isHidden = true
+      tinyBuOCRScrollView.isHidden = true
+      tinyBuCloseButton.isHidden = false
+      tinyBuSendButton.isEnabled = true
+      window?.makeFirstResponder(tinyBuQuestionInput)
+    case "clipboardSaved":
+      guard jobID == activeClipboardJobID else { return }
+      activeClipboardJobID = nil
+      clipboardSaveButton.isEnabled = true
+      guard clipboardJobGeneration == clipboardPromptGeneration else {
+        clipboardSaveButton.title = "Save?"
+        return
+      }
+      clipboardSaveButton.title = "Saved ✓"
+      let generation = clipboardPromptGeneration
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+        guard let self, self.clipboardPromptGeneration == generation else { return }
+        self.hideClipboardPrompt()
+      }
+    case "trayOcrSaved":
+      guard
+        jobID == activeTrayOCRJobID,
+        let index = pendingTrayOCRIndex,
+        capturedImages.indices.contains(index),
+        let result = pendingTrayOCRResult
+      else { return }
+      activeTrayOCRJobID = nil
+      pendingTrayOCRIndex = nil
+      pendingTrayOCRResult = nil
+      capturedOCRTexts[index] = result.text.isEmpty ? nil : result.text
+      capturedSummaries[index] = result.text.replacingOccurrences(of: "\n", with: " ").prefix(160).description
+      capturedOCRTruncation[index] = result.truncated
+      tinyBuCaptureID = capturedCaptureIDs[index]
+      tinyBuPreviewImageView.image = capturedImages[index]
+      tinyBuOCRText = result.text
+      tinyBuSummary = capturedSummaries[index]
+      tinyBuOCRTruncated = result.truncated
+      showStaticPet()
+      showTinyBuOCRState()
+    case "failed":
+      if jobID == activeClipboardJobID {
+        activeClipboardJobID = nil
+        clipboardSaveButton.title = "Try again"
+        clipboardSaveButton.isEnabled = true
+        return
+      }
+      guard jobID == activeCaptureJobID || jobID == activeQuestionJobID || jobID == activeTrayOCRJobID else { return }
+      localOCR.cancel()
+      showStaticPet()
+      if jobID == activeCaptureJobID { activeCaptureJobID = nil }
+      if jobID == activeQuestionJobID { activeQuestionJobID = nil }
+      if jobID == activeTrayOCRJobID {
+        activeTrayOCRJobID = nil
+        pendingTrayOCRIndex = nil
+        pendingTrayOCRResult = nil
+      }
+      tinyBuProgress.stopAnimation(nil)
+      tinyBuProgress.isHidden = true
+      tinyBuStatusLabel.stringValue = "Couldn’t complete that"
+      tinyBuStatusLabel.isHidden = false
+      tinyBuAnswerLabel.stringValue = message["message"] as? String ?? "Please try again."
+      tinyBuAnswerLabel.isHidden = false
+      tinyBuQuestionContainer.isHidden = tinyBuCaptureID == nil
+      tinyBuCloseButton.isHidden = false
+      tinyBuSendButton.isEnabled = true
+      selectTab(.tinyBu)
+      onExpand?()
+    default:
+      break
+    }
+  }
+
+  @objc private func submitTinyBuQuestion() {
+    let question = tinyBuQuestionInput.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !question.isEmpty, let captureID = tinyBuCaptureID, activeQuestionJobID == nil else { return }
+    speechInput.stop()
+    let jobID = UUID().uuidString
+    activeQuestionJobID = jobID
+    tinyBuProgress.isHidden = false
+    tinyBuProgress.startAnimation(nil)
+    tinyBuStatusLabel.stringValue = "TinyBu is thinking…"
+    tinyBuStatusLabel.isHidden = false
+    tinyBuAnswerLabel.isHidden = true
+    tinyBuSendButton.isEnabled = false
+    ipc.send(
+      type: "askScreenshot",
+      fields: ["jobId": jobID, "captureId": captureID, "question": question]
+    )
+  }
+
+  private func toggleSpeechInput() {
+    guard tinyBuCaptureID != nil else { return }
+    if !speechInput.isRecording {
+      speechPrefix = tinyBuQuestionInput.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    speechInput.toggle()
+  }
+
   private func trayEmptyState() -> NSView {
     let box = DashedTrayBox(frame: NSRect(x: 0, y: 0, width: 1, height: 84))
+    box.translatesAutoresizingMaskIntoConstraints = true
     trayBox = box
     trayEmptyLabel.font = .systemFont(ofSize: 13, weight: .semibold)
     trayEmptyLabel.textColor = NSColor.white.withAlphaComponent(0.58)
@@ -400,7 +1562,6 @@ final class NotchView: NSView {
     box.addSubview(thumbnailStrip)
     setupPreviewState(in: box)
     NSLayoutConstraint.activate([
-      box.heightAnchor.constraint(equalToConstant: 84),
       trayEmptyLabel.centerXAnchor.constraint(equalTo: box.centerXAnchor),
       trayEmptyLabel.centerYAnchor.constraint(equalTo: box.centerYAnchor),
       trayEmptyLabel.leadingAnchor.constraint(greaterThanOrEqualTo: box.leadingAnchor, constant: 18),
@@ -448,6 +1609,8 @@ final class NotchView: NSView {
   }
 
   private func thumbnailView(for image: NSImage, index: Int) -> NSView {
+    let card = HoverThumbnailView(frame: .zero)
+    card.translatesAutoresizingMaskIntoConstraints = false
     let button = HandlerButton(image: image, target: nil, action: nil)
     button.isBordered = false
     button.imagePosition = .imageOnly
@@ -457,17 +1620,35 @@ final class NotchView: NSView {
     button.layer?.cornerRadius = 6
     button.layer?.cornerCurve = .continuous
     button.layer?.masksToBounds = true
-    button.translatesAutoresizingMaskIntoConstraints = false
+    button.frame = NSRect(x: 0, y: 0, width: 78, height: 58)
+    button.autoresizingMask = [.width, .height]
     button.handler = { [weak self] in
       self?.selectImage(at: index)
     }
     button.target = button
     button.action = #selector(HandlerButton.invoke)
+    card.addSubview(button)
+
+    let deleteButton = HandlerButton(title: "×", target: nil, action: nil)
+    deleteButton.isBordered = false
+    deleteButton.font = .systemFont(ofSize: 13, weight: .bold)
+    deleteButton.contentTintColor = .white
+    deleteButton.wantsLayer = true
+    deleteButton.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.72).cgColor
+    deleteButton.layer?.cornerRadius = 9
+    deleteButton.toolTip = "Delete screenshot"
+    deleteButton.setAccessibilityLabel("Delete screenshot")
+    deleteButton.handler = { [weak self] in self?.deleteImage(at: index) }
+    deleteButton.target = deleteButton
+    deleteButton.action = #selector(HandlerButton.invoke)
+    deleteButton.frame = NSRect(x: 56, y: 38, width: 22, height: 22)
+    card.addSubview(deleteButton)
+    card.hoverControl = deleteButton
     NSLayoutConstraint.activate([
-      button.widthAnchor.constraint(equalToConstant: 78),
-      button.heightAnchor.constraint(equalToConstant: 58)
+      card.widthAnchor.constraint(equalToConstant: 78),
+      card.heightAnchor.constraint(equalToConstant: 58)
     ])
-    return button
+    return card
   }
 
   private func setupPreviewState(in box: NSView) {
@@ -576,6 +1757,21 @@ final class NotchView: NSView {
   private func selectImage(at index: Int) {
     guard capturedImages.indices.contains(index) else { return }
     selectedImageIndex = index
+    if let captureID = capturedCaptureIDs[index] {
+      tinyBuCaptureID = captureID
+      tinyBuPreviewImageView.image = capturedImages[index]
+      tinyBuSummary = capturedSummaries[index]
+      tinyBuOCRTruncated = capturedOCRTruncation[index]
+      if let text = capturedOCRTexts[index], !text.isEmpty {
+        tinyBuOCRText = text
+        showTinyBuOCRState()
+        return
+      }
+      if let previewPath = capturedPreviewPaths[index] {
+        startTrayOCR(at: previewPath, index: index, captureID: captureID)
+        return
+      }
+    }
     showPreview(for: index)
   }
 
@@ -597,11 +1793,88 @@ final class NotchView: NSView {
 
   private func deleteSelectedImage() {
     guard let selectedImageIndex, capturedImages.indices.contains(selectedImageIndex) else { return }
-    capturedImages.remove(at: selectedImageIndex)
-    self.selectedImageIndex = nil
+    deleteImage(at: selectedImageIndex)
+  }
+
+  private func deleteImage(at index: Int) {
+    guard capturedImages.indices.contains(index), !trayDeletionInProgress else { return }
+    trayDeletionInProgress = true
+    NSAnimationContext.runAnimationGroup { context in
+      context.duration = 0.1
+      thumbnailStrip.animator().alphaValue = 0
+    } completionHandler: { [weak self] in
+      self?.finishDeletingImage(at: index)
+    }
+  }
+
+  private func finishDeletingImage(at index: Int) {
+    guard capturedImages.indices.contains(index) else {
+      trayDeletionInProgress = false
+      thumbnailStrip.alphaValue = 1
+      return
+    }
+    let captureID = capturedCaptureIDs[index]
+    capturedImages.remove(at: index)
+    capturedCaptureIDs.remove(at: index)
+    capturedOCRTexts.remove(at: index)
+    capturedSummaries.remove(at: index)
+    capturedOCRTruncation.remove(at: index)
+    capturedPreviewPaths.remove(at: index)
+    selectedImageIndex = nil
     count = capturedImages.count
     countBadge.stringValue = String(count)
     refreshTray()
+    thumbnailStrip.alphaValue = 0
+    NSAnimationContext.runAnimationGroup { context in
+      context.duration = 0.14
+      thumbnailStrip.animator().alphaValue = 1
+    } completionHandler: { [weak self] in
+      self?.trayDeletionInProgress = false
+    }
+    if let captureID {
+      ipc.send(type: "deleteTrayCapture", fields: ["captureId": captureID])
+    }
+  }
+
+  private func startTrayOCR(at path: String, index: Int, captureID: String) {
+    guard activeTrayOCRJobID == nil else { return }
+    let jobID = UUID().uuidString
+    activeTrayOCRJobID = jobID
+    pendingTrayOCRIndex = index
+    pendingTrayOCRResult = nil
+    showLoadingPet()
+    askPageButton.isHidden = true
+    tinyBuBackButton.isHidden = true
+    tinyBuOCRScrollView.isHidden = true
+    tinyBuPreviewImageView.isHidden = true
+    tinyBuAnswerLabel.isHidden = true
+    tinyBuQuestionContainer.isHidden = true
+    tinyBuCloseButton.isHidden = false
+    tinyBuStatusLabel.stringValue = "Reading this screenshot…"
+    tinyBuStatusLabel.isHidden = false
+    tinyBuProgress.isHidden = false
+    tinyBuProgress.startAnimation(nil)
+    selectTab(.tinyBu)
+    localOCR.recognize(
+      imageAt: path,
+      jobID: jobID,
+      onPreview: { _ in },
+      completion: { [weak self] result in
+        guard let self, self.activeTrayOCRJobID == jobID else { return }
+        self.pendingTrayOCRResult = result
+        var fields: [String: Any] = [
+          "jobId": jobID,
+          "captureId": captureID,
+          "text": result.text,
+          "lines": result.lines,
+          "language": result.language,
+          "truncated": result.truncated
+        ]
+        if let error = result.error { fields["error"] = error }
+        self.tinyBuStatusLabel.stringValue = "Saving to Tray…"
+        self.ipc.send(type: "trayOcrCompleted", fields: fields)
+      }
+    )
   }
 
   private func beginAskFlow() {
@@ -809,20 +2082,18 @@ final class BlackIslandView: NSView {
     Self.path(in: shapeRect(expanded: expanded), expanded: expanded).contains(point)
   }
 
-  override func hitTest(_ point: NSPoint) -> NSView? {
-    guard !isHidden, alphaValue > 0, bounds.contains(point) else { return nil }
-    guard containsVisibleShape(point) else { return nil }
-
-    for subview in subviews.reversed() {
-      let convertedPoint = subview.convert(point, from: self)
-      guard let hitView = subview.hitTest(convertedPoint) else { continue }
-      if hitView.isInteractiveHitTarget {
-        return hitView
-      }
-      return self
+  private func containsInteractionShape(_ point: NSPoint) -> Bool {
+    if !expanded {
+      return shapeRect(expanded: false).insetBy(dx: -8, dy: -8).contains(point)
     }
+    return containsVisibleShape(point)
+  }
 
-    return self
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    guard let hitView = super.hitTest(point) else { return nil }
+    guard hitView === self else { return hitView }
+
+    return containsInteractionShape(point) ? self : nil
   }
 
   override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
@@ -988,18 +2259,6 @@ private extension NSSize {
   }
 }
 
-private extension NSView {
-  var isInteractiveHitTarget: Bool {
-    if self is NSButton || self is NSTextView {
-      return true
-    }
-    if let textField = self as? NSTextField {
-      return textField.isEditable || textField.isSelectable
-    }
-    return false
-  }
-}
-
 final class DashedTrayBox: NSView {
   var showsBorder = true {
     didSet {
@@ -1030,11 +2289,71 @@ final class DashedTrayBox: NSView {
   }
 }
 
-final class HandlerButton: NSButton {
+class HandlerButton: NSButton {
   var handler: (() -> Void)?
 
   @objc func invoke() {
     handler?()
+  }
+}
+
+final class HoverHandlerButton: HandlerButton {
+  private var trackingAreaReference: NSTrackingArea?
+
+  override func updateTrackingAreas() {
+    super.updateTrackingAreas()
+    if let trackingAreaReference {
+      removeTrackingArea(trackingAreaReference)
+    }
+    let trackingArea = NSTrackingArea(
+      rect: bounds,
+      options: [.activeAlways, .mouseEnteredAndExited, .inVisibleRect],
+      owner: self,
+      userInfo: nil
+    )
+    addTrackingArea(trackingArea)
+    trackingAreaReference = trackingArea
+  }
+
+  override func mouseEntered(with event: NSEvent) {
+    layer?.backgroundColor = NSColor.white.withAlphaComponent(0.24).cgColor
+  }
+
+  override func mouseExited(with event: NSEvent) {
+    layer?.backgroundColor = NSColor.white.withAlphaComponent(0.14).cgColor
+  }
+}
+
+final class HoverThumbnailView: NSView {
+  weak var hoverControl: NSView? {
+    didSet { hoverControl?.isHidden = true }
+  }
+  private var trackingAreaReference: NSTrackingArea?
+
+  override func updateTrackingAreas() {
+    super.updateTrackingAreas()
+    if let trackingAreaReference {
+      removeTrackingArea(trackingAreaReference)
+    }
+    let trackingArea = NSTrackingArea(
+      rect: bounds,
+      options: [.activeAlways, .mouseEnteredAndExited, .inVisibleRect],
+      owner: self,
+      userInfo: nil
+    )
+    addTrackingArea(trackingArea)
+    trackingAreaReference = trackingArea
+  }
+
+  override func mouseEntered(with event: NSEvent) {
+    hoverControl?.isHidden = false
+  }
+
+  override func mouseExited(with event: NSEvent) {
+    let localPoint = convert(event.locationInWindow, from: nil)
+    if !bounds.contains(localPoint) {
+      hoverControl?.isHidden = true
+    }
   }
 }
 

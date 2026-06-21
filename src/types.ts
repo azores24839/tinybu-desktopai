@@ -204,6 +204,7 @@ export interface ScreenshotCaptureRecord {
   errorMessages: string[];
   interactiveElements: string[];
   questionAnswers: ScreenshotQuestionAnswer[];
+  ocrTruncated?: boolean;
 }
 
 export interface ScreenshotQuestionAnswer {
@@ -213,6 +214,32 @@ export interface ScreenshotQuestionAnswer {
   quotedText: string;
   nextAction: string;
   createdAt: string;
+}
+
+export interface SwiftNotchCaptureRequest {
+  jobId: string;
+  screenshot: ScreenshotCapturePayload;
+}
+
+export interface SwiftNotchQuestionRequest {
+  jobId: string;
+  captureId: string;
+  question: string;
+}
+
+export interface SwiftNotchClipboardSaveRequest {
+  jobId: string;
+  text: string;
+}
+
+export interface SwiftNotchTrayOcrRequest {
+  jobId: string;
+  captureId: string;
+  text: string;
+  lines: string[];
+  language: string;
+  truncated: boolean;
+  error?: string;
 }
 
 export interface ExpressionRecord {
@@ -270,6 +297,13 @@ export interface ScreenshotCapturePayload {
     y: number;
     width: number;
     height: number;
+  };
+  localOcr?: {
+    text: string;
+    lines: string[];
+    language: string;
+    truncated: boolean;
+    error?: string;
   };
 }
 

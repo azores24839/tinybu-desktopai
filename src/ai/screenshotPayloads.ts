@@ -35,6 +35,7 @@ export function buildScreenshotQuestionPayload(args: {
   question: string;
   screenshot: ScreenshotQuestionSource;
   appState: AppStateRecord;
+  forceImage?: boolean;
 }) {
   const visualQuestion = isVisualScreenshotQuestion(args.question);
   return {
@@ -46,7 +47,7 @@ export function buildScreenshotQuestionPayload(args: {
     visibleText: args.screenshot.visibleText ?? [],
     errorMessages: args.screenshot.errorMessages ?? [],
     interactiveElements: args.screenshot.interactiveElements ?? [],
-    imageDataUrl: visualQuestion ? args.screenshot.imageDataUrl : undefined,
+    imageDataUrl: visualQuestion || args.forceImage ? args.screenshot.imageDataUrl : undefined,
     nativeLanguage: args.appState.profile.nativeLanguage,
     targetLanguage: args.appState.profile.targetLanguage
   };

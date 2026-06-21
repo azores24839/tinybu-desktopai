@@ -4,5 +4,7 @@
 <dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>TinyBu needs microphone access to let you practice speaking with Bu.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>TinyBu uses speech recognition to place your spoken question into the input field.</string>
 </dict>
 </plist>

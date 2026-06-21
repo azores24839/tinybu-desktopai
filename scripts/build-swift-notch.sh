@@ -43,4 +43,12 @@ binary_dir="$(swift build --package-path "$package_path" --scratch-path "$scratc
 
 mkdir -p "$output_dir"
 install -m 755 "$binary_dir/TinyBuNotchPrototype" "$output_path"
+
+# Tauri dev can reuse its previously copied external binary when Rust sources
+# have not changed. Keep that executable in sync so native-only edits load on
+# the next dev launch without requiring a cargo clean.
+if [[ "$configuration" == "debug" && -d "$project_root/src-tauri/target/debug" ]]; then
+  install -m 755 "$output_path" "$project_root/src-tauri/target/debug/tinybu-notch"
+fi
+
 echo "Swift notch sidecar ready: $output_path"

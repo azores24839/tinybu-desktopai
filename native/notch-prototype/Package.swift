@@ -14,7 +14,11 @@ let package = Package(
       name: "TinyBuNotchPrototype",
       linkerSettings: [
         .linkedFramework("AppKit"),
-        .linkedFramework("Carbon")
+        .linkedFramework("AVFoundation"),
+        .linkedFramework("Carbon"),
+        .linkedFramework("ImageIO"),
+        .linkedFramework("Speech"),
+        .linkedFramework("Vision")
       ]
     )
   ]

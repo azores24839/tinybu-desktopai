@@ -8,12 +8,13 @@ import { ToastContainer } from "./components/ToastContainer";
 import { clearLearningData, db, saveAppState } from "./lib/db";
 import { clearUserApiKey, loadUserApiKey, saveUserApiKey } from "./lib/secureKey";
 import { showToast } from "./lib/toast";
-import { defaultAppState, nowIso } from "./lib/defaults";
-import { applyDesktopCompanionMode, listenTauri } from "./lib/tauriBridge";
+import { defaultAppState, nowIso, uid } from "./lib/defaults";
+import { applyDesktopCompanionMode, invokeTauri, listenTauri } from "./lib/tauriBridge";
 import {
   captureText,
 } from "./features/captures/captureUtils";
 import { useCaptures } from "./features/captures/useCaptures";
+import { createClipboardCaptureRecord } from "./features/captures/clipboardCaptureRecord";
 import { saveExpressionFromCapture } from "./features/captures/saveExpression";
 import { topicCaptures } from "./features/topics/topicUtils";
 import { useTopics } from "./features/topics/useTopics";
@@ -27,6 +28,10 @@ import type {
   MemoryItem,
   CompanionState,
   Screen,
+  SwiftNotchCaptureRequest,
+  SwiftNotchClipboardSaveRequest,
+  SwiftNotchQuestionRequest,
+  SwiftNotchTrayOcrRequest,
   TopicItem,
   UserProfile
 } from "./types";
@@ -72,7 +77,12 @@ export default function App() {
       captures[0],
     [activeTopic, appState.activeCaptureId, captures]
   );
-  const { importScreenshotCapture, confirmScreenshotText, askAboutScreenshot } = useScreenshotCaptureFlow({
+  const {
+    importScreenshotCapture,
+    confirmScreenshotText,
+    askAboutScreenshot,
+    askAboutScreenshotFromNotch
+  } = useScreenshotCaptureFlow({
     appState,
     screenshotQuestionBusy,
     createCaptureRecord,
@@ -86,6 +96,8 @@ export default function App() {
     setScreenshotQuestionInput,
     setScreenshotQuestionBusy
   });
+  const notchCaptureFlowRef = useRef({ importScreenshotCapture, askAboutScreenshotFromNotch });
+  notchCaptureFlowRef.current = { importScreenshotCapture, askAboutScreenshotFromNotch };
 
   const {
     practicePlan,
@@ -135,8 +147,187 @@ export default function App() {
     persistState,
     navigate,
     setBusyLabel,
-    importScreenshotCapture
+    importScreenshotCapture: async (payload) => {
+      await importScreenshotCapture(payload);
+    }
   });
+
+  useEffect(() => {
+    let active = true;
+    let unlistenCapture = () => {};
+    let unlistenQuestion = () => {};
+    let unlistenClipboardSave = () => {};
+
+    void listenTauri<SwiftNotchCaptureRequest>("tinybu-notch-capture-requested", async (event) => {
+      const { jobId, screenshot } = event.payload;
+      try {
+        const capture = await notchCaptureFlowRef.current.importScreenshotCapture(
+          { ...screenshot, capturedAt: screenshot.capturedAt || nowIso() },
+          { navigateAfter: false }
+        );
+        if (!active) return;
+        await invokeTauri("complete_swift_notch_capture", {
+          payload: {
+            jobId,
+            captureId: capture.id,
+            title: capture.title,
+            summary: capture.summary || capture.sourceText || "Screenshot ready",
+            ocrText: capture.sourceText || capture.screenshot?.visibleText.join("\n") || "",
+            ocrTruncated: capture.screenshot?.ocrTruncated ?? false
+          }
+        });
+      } catch (error) {
+        await invokeTauri("fail_swift_notch_job", {
+          jobId,
+          message: error instanceof Error ? error.message : "Screenshot recognition failed"
+        });
+      }
+    }).then((cleanup) => {
+      if (active) unlistenCapture = cleanup;
+      else cleanup();
+    });
+
+    void listenTauri<SwiftNotchClipboardSaveRequest>("tinybu-notch-clipboard-save-requested", async (event) => {
+      const { jobId, text } = event.payload;
+      try {
+        const capture = createClipboardCaptureRecord(text);
+        await db.captures.put(capture);
+        setCaptures((items) => [capture, ...items]);
+        await persistState({
+          ...appStateRef.current,
+          onboarded: true,
+          companionReady: true,
+          activeCaptureId: capture.id
+        });
+        if (!active) return;
+        await invokeTauri("complete_swift_notch_clipboard_save", { payload: { jobId } });
+      } catch (error) {
+        await invokeTauri("fail_swift_notch_job", {
+          jobId,
+          message: error instanceof Error ? error.message : "TinyBu could not save this copied text."
+        });
+      }
+    }).then((cleanup) => {
+      if (active) unlistenClipboardSave = cleanup;
+      else cleanup();
+    });
+
+    void listenTauri<SwiftNotchQuestionRequest>("tinybu-notch-question-requested", async (event) => {
+      const { jobId, captureId, question } = event.payload;
+      try {
+        const capture = await db.captures.get(captureId);
+        if (!capture) throw new Error("The screenshot is no longer available in Tray.");
+        const answer = await notchCaptureFlowRef.current.askAboutScreenshotFromNotch(capture, question);
+        if (!answer) throw new Error("TinyBu could not answer this screenshot question.");
+        if (!active) return;
+        await invokeTauri("complete_swift_notch_question", {
+          payload: { jobId, answer: answer.answer }
+        });
+      } catch (error) {
+        await invokeTauri("fail_swift_notch_job", {
+          jobId,
+          message: error instanceof Error ? error.message : "TinyBu could not answer this question."
+        });
+      }
+    }).then((cleanup) => {
+      if (active) unlistenQuestion = cleanup;
+      else cleanup();
+    });
+
+    return () => {
+      active = false;
+      unlistenCapture();
+      unlistenQuestion();
+      unlistenClipboardSave();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!bootstrapped || appState.settings.desktopCompanionMode !== "swift-notch") return;
+    const records = captures
+      .filter((capture) => capture.sourceKind === "screenshot" && capture.screenshot?.imageDataUrl)
+      .slice(0, 5)
+      .map((capture) => {
+        const ocrText = capture.sourceText || capture.screenshot?.visibleText.join("\n") || "";
+        const legacyCountSummary = /^Recognized \d+ text lines locally\.?$/i.test(capture.summary || "");
+        return {
+          captureId: capture.id,
+          imageDataUrl: capture.screenshot?.imageDataUrl ?? "",
+          ocrText,
+          summary: legacyCountSummary ? ocrText.replace(/\s+/g, " ").slice(0, 160) : capture.summary || "",
+          ocrTruncated: capture.screenshot?.ocrTruncated ?? false
+        };
+      });
+    void invokeTauri("sync_swift_notch_tray", { records });
+  }, [appState.settings.desktopCompanionMode, bootstrapped, captures]);
+
+  useEffect(() => {
+    if (!bootstrapped) return;
+    void loadUserApiKey().catch((error) => {
+      console.warn("TinyBu could not migrate the saved key to macOS Keychain.", error);
+    });
+  }, [bootstrapped]);
+
+  useEffect(() => {
+    let active = true;
+    let unlistenDelete = () => {};
+    let unlistenTrayOcr = () => {};
+
+    void listenTauri<string>("tinybu-notch-tray-delete-requested", (event) => {
+      if (!active) return;
+      void deleteCaptureAndSyncTopics(event.payload);
+    }).then((cleanup) => {
+      if (active) unlistenDelete = cleanup;
+      else cleanup();
+    });
+
+    void listenTauri<SwiftNotchTrayOcrRequest>("tinybu-notch-tray-ocr-requested", async (event) => {
+      const { jobId, captureId, text, lines, language, truncated, error } = event.payload;
+      try {
+        const capture = await db.captures.get(captureId);
+        if (!capture?.screenshot) throw new Error("The screenshot is no longer available in Tray.");
+        const sourceText = text.trim() || error || "No readable text was found in this screenshot.";
+        const updated = {
+          ...capture,
+          sourceText,
+          summary: text.trim() ? text.replace(/\s+/g, " ").slice(0, 160) : sourceText,
+          fragments: (lines.length ? lines : [sourceText]).slice(0, 100).map((line, index) => ({
+            id: uid("fragment"),
+            text: line,
+            selected: true,
+            recommended: true,
+            sourceIndex: index
+          })),
+          screenshot: {
+            ...capture.screenshot,
+            language,
+            contextNote: "Recognized locally with Apple Vision.",
+            visibleText: lines,
+            errorMessages: error ? [error] : [],
+            ocrTruncated: truncated
+          }
+        };
+        await db.captures.put(updated);
+        setCaptures((items) => items.map((item) => (item.id === captureId ? updated : item)));
+        if (!active) return;
+        await invokeTauri("complete_swift_notch_tray_ocr", { payload: { jobId } });
+      } catch (saveError) {
+        await invokeTauri("fail_swift_notch_job", {
+          jobId,
+          message: saveError instanceof Error ? saveError.message : "TinyBu could not save the recognized text."
+        });
+      }
+    }).then((cleanup) => {
+      if (active) unlistenTrayOcr = cleanup;
+      else cleanup();
+    });
+
+    return () => {
+      active = false;
+      unlistenDelete();
+      unlistenTrayOcr();
+    };
+  }, []);
 
   async function persistState(nextState: AppStateRecord) {
     await saveAppState(nextState);
@@ -305,6 +496,7 @@ export default function App() {
       }
     } catch (error) {
       console.error("deleteCaptureAndSyncTopics failed", error);
+      setCaptures((items) => [...items]);
       showToast("Failed to delete capture. Please try again.");
     }
   }
@@ -444,7 +636,9 @@ export default function App() {
         markTopicStudied={markTopicStudied}
         persistState={persistState}
         confirmScreenshotText={confirmScreenshotText}
-        askAboutScreenshot={askAboutScreenshot}
+        askAboutScreenshot={async (capture, question) => {
+          await askAboutScreenshot(capture, question);
+        }}
         setScreenshotQuestionInput={setScreenshotQuestionInput}
         saveExpressionFromCapture={(capture, expression) => saveExpressionFromCapture(capture, expression, setExpressions)}
         updateExpression={updateExpression}
