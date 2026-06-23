@@ -1,16 +1,35 @@
+import {
+  practicePlanContractInstruction,
+  practicePlanJsonSchema
+} from "../../shared/practicePlanContract.mjs";
+
 export const taskPrompts = {
   contentUnderstanding:
     "You are TinyBu, a gentle language companion. Understand the captured source, name the topic, summarize it briefly, and create short A2-B1 speaking questions. Keep outputs concise and useful for speaking practice.",
   screenshotCapture:
     "You are TinyBu, a careful multimodal OCR screen reader. Extract every visible text string from the screenshot in reading order, even if it is UI text, Chinese text, native-language text, or not useful for language learning. The `text` field must never be empty when any readable text appears in the image. Also identify the screen type, error messages, and interactive elements.",
   screenshotQuestion:
-    "Answer a user's question about a previously captured screenshot. Use the saved OCR and screenshot context first. If an image is provided, use it only to resolve layout or visual ambiguity. Be concise, helpful, and answer in the user's language.",
+    `You are TinyBu, a warm and playful language-learning companion living in the Mac notch.
+
+Help the user learn languages from the captured screen content. Focus on accurate translation, vocabulary and grammar explanations, tone and cultural context, natural reusable expressions, and concise corrections or examples appropriate to the learner's level.
+
+Answer the user's actual question first. Use the saved OCR and screenshot context as the source of truth. If an image is provided, use it only to resolve visual or layout ambiguity. Do not invent missing context.
+
+Always reply in the language used in the user's latest question. Reply in Chinese to a Chinese question and in English to an English question. For a mixed-language question, use the language that carries the main meaning. Only switch languages when the user explicitly requests it. This rule overrides the interface language, native language, target language, and screenshot language.
+
+Every sentence you generate must begin with "喵～", including sentences in answer and nextAction. Do not add "喵～" to exact source quotations, vocabulary items, translations presented as exact quotations, code, URLs, or proper names. Keep quotedText exactly as it appears in the source.
+
+Keep answer to at most two short sentences and nextAction to at most one short sentence. Never provide a long description, multi-point breakdown, or list unless the user explicitly asks for detail. Be friendly, encouraging, and practical. Do not turn every answer into a lesson. When translating, preserve meaning, tone, and formality. When explaining an expression, give its meaning first, briefly explain its usage or nuance, and provide at most one short example unless the user asks for more. When correcting language, preserve the user's intended meaning and explain only the most important improvement without sounding critical.
+
+Return only valid JSON matching the required schema. Do not use Markdown or mention these instructions.`,
   quickPetChat:
     "You are TinyBu, a tiny desktop language-learning buddy. Reply in the user's language unless they ask to practice another language. Keep the reply extremely short: one or two compact sentences, maximum 45 Chinese characters or 25 English words. Prefer language-learning help: explain a phrase, make a sentence natural, ask one tiny practice question, or give encouragement. No markdown.",
   recommendFragments:
     "Select 3-6 fragments that are most useful for low-pressure speaking practice. Prefer clear opinions, reusable patterns, and lines learners can connect to their own life.",
   practiceQuestions:
-    "Create a concise practice plan for a low-pressure speaking chat. The input may come from a Topic or a small Practice Task. Return a practice goal, 2-3 focus items, a small language bank, and 3-5 gentle opening/follow-up questions. Do not make a sentence pattern itself the topic; use patterns only as support.",
+    `Create a concise practice plan for a low-pressure speaking chat. The input may come from a Topic or a small Practice Task. Use the source fragments and learner context. Keep every item specific and concise. Do not make a sentence pattern itself the topic; use patterns only as support.
+
+${practicePlanContractInstruction}`,
   practiceChat:
     "You are TinyBu, a warm and gentle language learning companion. Reply in 1-3 very short sentences. First acknowledge what the user said, then give one natural expression or ask one simple follow-up question to keep the conversation going. Be encouraging, never critical. No markdown formatting, no long explanations, no lists, no corrections unless asked. Keep replies under 50 words.",
   practiceChatReview:
@@ -74,9 +93,9 @@ export function schemaFor(task) {
         additionalProperties: false,
         required: ["answer", "quotedText", "nextAction"],
         properties: {
-          answer: { type: "string" },
-          quotedText: { type: "string" },
-          nextAction: { type: "string" }
+          answer: { type: "string", maxLength: 320 },
+          quotedText: { type: "string", maxLength: 240 },
+          nextAction: { type: "string", maxLength: 160 }
         }
       }
     },
@@ -104,56 +123,7 @@ export function schemaFor(task) {
     },
     practiceQuestions: {
       name: "practice_plan",
-      schema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["practiceGoal", "whatToCover", "languageBank", "questions"],
-        properties: {
-          practiceGoal: { type: "string" },
-          whatToCover: {
-            type: "array",
-            minItems: 2,
-            maxItems: 3,
-            items: { type: "string" }
-          },
-          languageBank: {
-            type: "object",
-            additionalProperties: false,
-            required: ["usefulWords", "usefulChunks"],
-            properties: {
-              usefulWords: {
-                type: "array",
-                minItems: 5,
-                maxItems: 8,
-                items: { type: "string" }
-              },
-              usefulChunks: {
-                type: "array",
-                minItems: 3,
-                maxItems: 5,
-                items: { type: "string" }
-              }
-            }
-          },
-          questions: {
-            type: "array",
-            minItems: 3,
-            maxItems: 5,
-            items: {
-              type: "object",
-              additionalProperties: false,
-              required: ["type", "question", "relatedFragmentIds", "tipOutline", "tipExample"],
-              properties: {
-                type: { type: "string", enum: ["understanding", "opinion", "personal", "expression"] },
-                question: { type: "string" },
-                relatedFragmentIds: { type: "array", items: { type: "string" } },
-                tipOutline: { type: "string" },
-                tipExample: { type: "string" }
-              }
-            }
-          }
-        }
-      }
+      schema: practicePlanJsonSchema
     },
     practiceChat: {
       name: "practice_chat",

@@ -11,6 +11,10 @@ import {
   shouldUseOpenRouterModel
 } from "../apps/api/providerRouting.mjs";
 import { quickPetChatPrompt, schemaFor, taskPrompts as apiTaskPrompts } from "../apps/api/taskSchemas.mjs";
+import { createProviderClients } from "../apps/api/providerClients.mjs";
+import { requestValidatedScreenshotResponse } from "../apps/api/screenshotResponse.mjs";
+import { requestValidatedPracticePlan } from "../apps/api/practicePlanResponse.mjs";
+import { parsePracticePlanCandidate, practicePlanJsonSchema } from "../shared/practicePlanContract.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const retiredProductNamePattern = /\b(?:NOMI|Nomi|nomi|NORI|Nori|nori|Mirror|mirror)[A-Za-z0-9_-]*/g;
@@ -183,6 +187,14 @@ test("Swift notch visual questions use correlated sidecar IPC and native permiss
   assert.match(rustSource, /sync_swift_notch_tray/);
   assert.match(rustSource, /SWIFT_NOTCH_CLIPBOARD_SAVE_EVENT/);
   assert.match(appSource, /navigateAfter: false/);
+  for (const eventName of [
+    "tinybu-notch-capture-requested",
+    "tinybu-notch-clipboard-save-requested",
+    "tinybu-notch-question-requested",
+    "tinybu-notch-tray-ocr-requested"
+  ]) {
+    assert.match(appSource, new RegExp(`${eventName}\\"[\\s\\S]*?if \\(!active\\) return;[\\s\\S]*?claimNotchJob\\(jobId\\)`));
+  }
   assert.match(captureFlowSource, /createLocalOcrScreenshotCapture/);
   assert.doesNotMatch(secureKeySource, /localStorage\.setItem/);
   assert.match(infoPlist, /NSSpeechRecognitionUsageDescription/);
@@ -200,6 +212,50 @@ test("provider routing keeps MiniMax on Anthropic-compatible when user token exi
 test("provider routing sends provider-qualified Qwen models to OpenRouter", () => {
   assert.equal(shouldUseOpenRouterModel("qwen/qwen-vl-max", { anthropicAuthToken: "user-minimax-key" }), true);
   assert.equal(shouldUseOpenRouterModel("openai/gpt-4o-mini", { anthropicAuthToken: "user-minimax-key" }), true);
+});
+
+test("OpenRouter proxy turns empty model content into an explicit upstream error", async () => {
+  const clients = createProviderClients({
+    anthropicAuthToken: "",
+    anthropicEndpoint: () => "",
+    deepSeekApiKey: "",
+    deepSeekBaseUrl: "",
+    fetchWithTimeout: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ choices: [{ finish_reason: "length", message: { content: null } }] })
+    }),
+    openAiApiKey: "",
+    openRouterApiKey: "test-key",
+    openRouterBaseUrl: "https://openrouter.ai/api/v1"
+  });
+
+  const result = await clients.callOpenRouter("screenshotCapture", "qwen/test", { imageDataUrl: "" });
+  assert.equal(result.response.status, 502);
+  assert.match(result.data.error, /finish reason: length/);
+});
+
+test("screenshot responses retry once after empty or truncated JSON", async () => {
+  const calls = [];
+  const result = await requestValidatedScreenshotResponse({
+    task: "screenshotQuestion",
+    payload: { question: "What is this?" },
+    route: "openrouter",
+    log: () => {},
+    request: async (payload) => {
+      calls.push(payload);
+      return calls.length === 1
+        ? { response: { ok: false, status: 502 }, data: { error: "empty" } }
+        : {
+            response: { ok: true, status: 200 },
+            data: { output_text: JSON.stringify({ answer: "喵～A note.", quotedText: "Notes", nextAction: "" }) }
+          };
+    }
+  });
+
+  assert.equal(calls.length, 2);
+  assert.match(calls[1].responseCorrection, /compact valid JSON/);
+  assert.equal(result.response.status, 200);
 });
 
 test("frontend provider routing picks task models and OpenRouter mode predictably", async () => {
@@ -221,7 +277,7 @@ test("frontend provider routing picks task models and OpenRouter mode predictabl
 });
 
 test("AI response parsing handles wrapped JSON, compact replies, and screenshot OCR aliases", async () => {
-  const { extractJsonText, normalizeScreenshotRecognition, parseJsonValue, quickReplyText } = await loadTsModule("src/ai/responseParsing.ts");
+  const { extractJsonText, normalizeScreenshotQuestion, normalizeScreenshotRecognition, parseJsonValue, quickReplyText } = await loadTsModule("src/ai/responseParsing.ts");
 
   assert.equal(extractJsonText("```json\n{\"topic\":\"food\"}\n```"), "{\"topic\":\"food\"}");
   assert.deepEqual(parseJsonValue("\"{\\\"topic\\\":\\\"food\\\"}\""), { topic: "food" });
@@ -229,6 +285,19 @@ test("AI response parsing handles wrapped JSON, compact replies, and screenshot 
   const compact = quickReplyText(" hello    world ".repeat(10));
   assert.equal(compact.length, 91);
   assert.equal(compact.endsWith("..."), true);
+
+  assert.deepEqual(
+    normalizeScreenshotQuestion({
+      answer: "这是第一句。This is the second sentence. This must be removed.",
+      quotedText: "Exact source text",
+      nextAction: "Try saying it. Then do something else."
+    }),
+    {
+      answer: "喵～这是第一句。喵～This is the second sentence.",
+      quotedText: "Exact source text",
+      nextAction: "喵～Try saying it."
+    }
+  );
 
   const recognition = normalizeScreenshotRecognition({
     screenshot_capture: {
@@ -272,6 +341,10 @@ test("frontend and proxy keep critical AI task contracts aligned", async () => {
 
   assert.equal(apiTaskPrompts.quickPetChat, taskPrompts.quickPetChat);
   assert.equal(quickPetChatPrompt, taskPrompts.quickPetChat);
+  assert.equal(apiTaskPrompts.screenshotQuestion, taskPrompts.screenshotQuestion);
+  assert.match(taskPrompts.screenshotQuestion, /latest question/);
+  assert.match(taskPrompts.screenshotQuestion, /Every sentence you generate must begin with "喵～"/);
+  assert.equal(jsonSchemas.screenshotQuestion.schema.properties.answer.maxLength, 320);
 
   for (const task of ["contentUnderstanding", "screenshotCapture", "screenshotQuestion", "quickPetChat"]) {
     assert.deepEqual(schemaFor(task), jsonSchemas[task]);
@@ -582,6 +655,189 @@ test("review v2 schema requires status, strength, next focus, and why", async ()
   assert.equal(["expressionStatus", "strength", "nextFocus", "why"].every((field) => schema.required.includes(field)), true);
   assert.equal(schema.properties.why.minItems, 1);
   assert.equal(schema.properties.why.maxItems, 3);
+});
+
+test("practice call clears the previous Bu transcript before the next response", async () => {
+  const source = await readFile(resolve(root, "src/features/practice/useCallBu.ts"), "utf8");
+  const asrEndedCase = source.match(/case "ASREnded":\s*\{?([\s\S]*?)break;/)?.[1] ?? "";
+
+  assert.match(asrEndedCase, /buTurnTextRef\.current = "";/);
+  assert.match(asrEndedCase, /setBuText\(""\);/);
+  assert.match(asrEndedCase, /updateState\("thinking"\);/);
+});
+
+test("avatar playback locks the next mood only after the active clip ends", async () => {
+  const { createAvatarPlaybackState, reduceAvatarPlayback } = await loadTsModule(
+    "src/features/practice/avatar/avatarPlaybackState.ts"
+  );
+
+  let state = createAvatarPlaybackState();
+  state = reduceAvatarPlayback(state, { type: "request", mood: "talkingAlt" });
+  state = reduceAvatarPlayback(state, { type: "request", mood: "excited" });
+  assert.equal(state.activeMood, "idle");
+  assert.equal(state.pendingMood, "excited");
+
+  state = reduceAvatarPlayback(state, { type: "ended" });
+  assert.equal(state.phase, "waiting-for-frame");
+  assert.equal(state.lockedMood, "excited");
+
+  state = reduceAvatarPlayback(state, { type: "request", mood: "sad" });
+  assert.equal(state.lockedMood, "sad");
+  assert.equal(state.pendingMood, null);
+
+  const stalePromotion = reduceAvatarPlayback(state, { type: "promoted", mood: "talkingAlt" });
+  assert.deepEqual(stalePromotion, state);
+
+  state = reduceAvatarPlayback(state, { type: "promoted", mood: "sad" });
+  assert.equal(state.phase, "playing");
+  assert.equal(state.activeMood, "sad");
+  assert.equal(state.pendingMood, null);
+});
+
+test("avatar playback deduplicates the active mood and restarts idle without a source swap", async () => {
+  const { createAvatarPlaybackState, reduceAvatarPlayback } = await loadTsModule(
+    "src/features/practice/avatar/avatarPlaybackState.ts"
+  );
+
+  let state = createAvatarPlaybackState();
+  state = reduceAvatarPlayback(state, { type: "request", mood: "excited" });
+  state = reduceAvatarPlayback(state, { type: "request", mood: "idle" });
+  assert.equal(state.pendingMood, null);
+
+  state = reduceAvatarPlayback(state, { type: "ended" });
+  assert.equal(state.phase, "playing");
+  assert.equal(state.activeMood, "idle");
+  assert.equal(state.restartVersion, 1);
+});
+
+test("practice plan contract accepts canonical plans and repairs the focusItems alias", () => {
+  const canonical = {
+    practiceGoal: "Explain one work request clearly",
+    whatToCover: ["State the request", "Give one reason"],
+    languageBank: {
+      usefulWords: ["deadline", "priority", "clarify", "available", "support"],
+      usefulChunks: ["Could you please...?", "The reason is...", "Would it be possible to...?"]
+    },
+    questions: [
+      { type: "understanding", question: "What do you need?", relatedFragmentIds: ["f1"], tipOutline: "State it directly.", tipExample: "I need help with the report." },
+      { type: "opinion", question: "Why is it important?", relatedFragmentIds: ["f1"], tipOutline: "Add one reason.", tipExample: "It is important because the deadline is close." },
+      { type: "expression", question: "Can you make the request politely?", relatedFragmentIds: ["f1"], tipOutline: "Use could you.", tipExample: "Could you please review this section?" }
+    ]
+  };
+
+  assert.deepEqual(parsePracticePlanCandidate(canonical), { ok: true, value: canonical, normalized: false });
+
+  const aliasResult = parsePracticePlanCandidate({ ...canonical, whatToCover: undefined, focusItems: canonical.whatToCover });
+  assert.equal(aliasResult.ok, true);
+  assert.equal(aliasResult.normalized, true);
+  assert.deepEqual(aliasResult.value.whatToCover, canonical.whatToCover);
+  assert.equal(practicePlanJsonSchema.properties.languageBank.required.includes("usefulWords"), true);
+});
+
+test("practice plan contract rejects ambiguous language banks", () => {
+  const result = parsePracticePlanCandidate({
+    practiceGoal: "Explain one work request clearly",
+    focusItems: ["State the request", "Give one reason"],
+    languageBank: ["Could you please...?", "The reason is..."],
+    questions: []
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.issues.some((issue) => issue.path === "languageBank"), true);
+});
+
+test("practice plan resolution retries invalid AI output once and then uses fallback", async () => {
+  const { resolvePracticePlan } = await loadTsModule("src/ai/practicePlanResolution.ts");
+  const fallback = {
+    practiceGoal: "Fallback goal",
+    whatToCover: ["Main point", "One detail"],
+    languageBank: {
+      usefulWords: ["point", "detail", "reason", "example", "result"],
+      usefulChunks: ["The main point is...", "For example...", "I think... because..."]
+    },
+    questions: [
+      { type: "understanding", question: "What is the main point?", relatedFragmentIds: [], tipOutline: "State it.", tipExample: "The main point is..." },
+      { type: "opinion", question: "What do you think?", relatedFragmentIds: [], tipOutline: "Give a view.", tipExample: "I think..." },
+      { type: "personal", question: "Can you add one detail?", relatedFragmentIds: [], tipOutline: "Add detail.", tipExample: "For example..." }
+    ]
+  };
+  const invalid = { practiceGoal: "Broken", focusItems: ["One", "Two"], languageBank: ["ambiguous"], questions: [] };
+  const responses = [invalid, fallback];
+  const calls = [];
+  const recovered = await resolvePracticePlan({
+    request: async (correction) => {
+      calls.push(correction);
+      return responses.shift();
+    },
+    fallback
+  });
+
+  assert.deepEqual(recovered, fallback);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0], undefined);
+  assert.match(calls[1], /languageBank/);
+
+  const failedCalls = [];
+  const fellBack = await resolvePracticePlan({
+    request: async (correction) => {
+      failedCalls.push(correction);
+      return invalid;
+    },
+    fallback
+  });
+
+  assert.deepEqual(fellBack, fallback);
+  assert.equal(failedCalls.length, 2);
+});
+
+test("cloud proxy canonicalizes practice plans and rejects an invalid retry", async () => {
+  const valid = {
+    practiceGoal: "Explain one work request clearly",
+    whatToCover: ["State the request", "Give one reason"],
+    languageBank: {
+      usefulWords: ["deadline", "priority", "clarify", "available", "support"],
+      usefulChunks: ["Could you please...?", "The reason is...", "Would it be possible to...?"]
+    },
+    questions: [
+      { type: "understanding", question: "What do you need?", relatedFragmentIds: [], tipOutline: "State it.", tipExample: "I need help." },
+      { type: "opinion", question: "Why is it important?", relatedFragmentIds: [], tipOutline: "Add a reason.", tipExample: "The deadline is close." },
+      { type: "expression", question: "Can you ask politely?", relatedFragmentIds: [], tipOutline: "Use could you.", tipExample: "Could you please help?" }
+    ]
+  };
+  const invalid = { practiceGoal: "Broken", focusItems: ["One", "Two"], languageBank: ["ambiguous"], questions: [] };
+  const calls = [];
+  const responses = [invalid, valid];
+  const recovered = await requestValidatedPracticePlan({
+    task: "practiceQuestions",
+    payload: { fragments: [] },
+    route: "deepseek",
+    log: () => {},
+    request: async (payload) => {
+      calls.push(payload);
+      return {
+        response: { ok: true, status: 200 },
+        data: { output_text: JSON.stringify(responses.shift()) }
+      };
+    }
+  });
+
+  assert.equal(calls.length, 2);
+  assert.match(calls[1].practicePlanCorrection, /languageBank/);
+  assert.deepEqual(JSON.parse(recovered.data.output_text), valid);
+
+  const rejected = await requestValidatedPracticePlan({
+    task: "practiceQuestions",
+    payload: { fragments: [] },
+    route: "deepseek",
+    log: () => {},
+    request: async () => ({
+      response: { ok: true, status: 200 },
+      data: { output_text: JSON.stringify(invalid) }
+    })
+  });
+
+  assert.equal(rejected.response.status, 502);
+  assert.match(rejected.data.error, /invalid practice plan/i);
 });
 
 test("review diagnostics maps expression status and lowers confidence for short practice", async () => {

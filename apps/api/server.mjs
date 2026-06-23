@@ -18,6 +18,8 @@ import {
   sendJson
 } from "./httpUtils.mjs";
 import { attachVolcWsProxy } from "./volcWsProxy.mjs";
+import { requestValidatedPracticePlan } from "./practicePlanResponse.mjs";
+import { requestValidatedScreenshotResponse } from "./screenshotResponse.mjs";
 
 const port = Number(process.env.PORT ?? 8787);
 const openAiApiKey = process.env.OPENAI_API_KEY;
@@ -66,6 +68,13 @@ const {
   callOpenRouter
 } = clients;
 
+function requestValidatedTask(args) {
+  if (args.task === "screenshotCapture" || args.task === "screenshotQuestion") {
+    return requestValidatedScreenshotResponse(args);
+  }
+  return requestValidatedPracticePlan(args);
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     sendJson(res, 200, { ok: true });
@@ -112,7 +121,13 @@ const server = http.createServer(async (req, res) => {
 
     if (deepSeekApiKey && isDeepSeekModel(model)) {
       log("REQ", `task=${task} route=deepseek model=${model}`);
-      const { response, data } = await callDeepSeek(task, model, payload);
+      const { response, data } = await requestValidatedTask({
+        task,
+        payload,
+        route: "deepseek",
+        log,
+        request: (requestPayload) => callDeepSeek(task, model, requestPayload)
+      });
       logRes(`task=${task} route=deepseek`, response.status, data);
       sendJson(res, response.status, data);
       return;
@@ -126,6 +141,21 @@ const server = http.createServer(async (req, res) => {
 
     if (anthropicAuthToken && isAnthropicCompatibleModel(model)) {
       log("REQ", `task=${task} route=anthropic model=${normalizeAnthropicModel(model)}`);
+      if (task === "practiceQuestions") {
+        const { response, data } = await requestValidatedTask({
+          task,
+          payload,
+          route: "anthropic",
+          log,
+          request: async (requestPayload) => ({
+            response: { ok: true, status: 200 },
+            data: { output_text: JSON.stringify(await callAnthropic(task, normalizeAnthropicModel(model), requestPayload)) }
+          })
+        });
+        logRes(`task=${task} route=anthropic`, response.status, data);
+        sendJson(res, response.status, data);
+        return;
+      }
       const output = await callAnthropic(task, normalizeAnthropicModel(model), payload);
       log("RES", `task=${task} route=anthropic`, `output keys=[${Object.keys(output || {}).join(",")}]`);
       sendJson(res, 200, { output_text: JSON.stringify(output) });
@@ -134,7 +164,13 @@ const server = http.createServer(async (req, res) => {
 
     if (openRouterApiKey && shouldUseOpenRouterModel(model, { anthropicAuthToken })) {
       log("REQ", `task=${task} route=openrouter model=${model}`);
-      const { response, data } = await callOpenRouter(task, model, payload);
+      const { response, data } = await requestValidatedTask({
+        task,
+        payload,
+        route: "openrouter",
+        log,
+        request: (requestPayload) => callOpenRouter(task, model, requestPayload)
+      });
       logRes(`task=${task} route=openrouter`, response.status, data);
       sendJson(res, response.status, data);
       return;
@@ -153,7 +189,13 @@ const server = http.createServer(async (req, res) => {
     }
 
     log("REQ", `task=${task} route=openai model=${model}`);
-    const { response, data } = await callOpenAi(task, model, payload);
+    const { response, data } = await requestValidatedTask({
+      task,
+      payload,
+      route: "openai",
+      log,
+      request: (requestPayload) => callOpenAi(task, model, requestPayload)
+    });
     logRes(`task=${task} route=openai`, response.status, data);
     sendJson(res, response.status, data);
   } catch (error) {

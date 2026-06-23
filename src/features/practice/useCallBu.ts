@@ -215,6 +215,7 @@ export function useCallBu(topic: { title: string; summary: string }, targetLangu
 
       case "ASREnded":
         buTurnTextRef.current = "";
+        setBuText("");
         updateState("thinking");
         break;
 

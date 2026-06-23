@@ -36,6 +36,18 @@ import type {
   UserProfile
 } from "./types";
 
+const handledNotchJobs = new Set<string>();
+
+function claimNotchJob(jobId: string) {
+  if (handledNotchJobs.has(jobId)) return false;
+  if (handledNotchJobs.size >= 100) {
+    const oldestJobId = handledNotchJobs.values().next().value;
+    if (oldestJobId) handledNotchJobs.delete(oldestJobId);
+  }
+  handledNotchJobs.add(jobId);
+  return true;
+}
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>("welcome");
   const [appState, setAppState] = useState<AppStateRecord>(defaultAppState);
@@ -159,7 +171,9 @@ export default function App() {
     let unlistenClipboardSave = () => {};
 
     void listenTauri<SwiftNotchCaptureRequest>("tinybu-notch-capture-requested", async (event) => {
+      if (!active) return;
       const { jobId, screenshot } = event.payload;
+      if (!claimNotchJob(jobId)) return;
       try {
         const capture = await notchCaptureFlowRef.current.importScreenshotCapture(
           { ...screenshot, capturedAt: screenshot.capturedAt || nowIso() },
@@ -188,7 +202,9 @@ export default function App() {
     });
 
     void listenTauri<SwiftNotchClipboardSaveRequest>("tinybu-notch-clipboard-save-requested", async (event) => {
+      if (!active) return;
       const { jobId, text } = event.payload;
+      if (!claimNotchJob(jobId)) return;
       try {
         const capture = createClipboardCaptureRecord(text);
         await db.captures.put(capture);
@@ -213,7 +229,9 @@ export default function App() {
     });
 
     void listenTauri<SwiftNotchQuestionRequest>("tinybu-notch-question-requested", async (event) => {
+      if (!active) return;
       const { jobId, captureId, question } = event.payload;
+      if (!claimNotchJob(jobId)) return;
       try {
         const capture = await db.captures.get(captureId);
         if (!capture) throw new Error("The screenshot is no longer available in Tray.");
@@ -282,7 +300,9 @@ export default function App() {
     });
 
     void listenTauri<SwiftNotchTrayOcrRequest>("tinybu-notch-tray-ocr-requested", async (event) => {
+      if (!active) return;
       const { jobId, captureId, text, lines, language, truncated, error } = event.payload;
+      if (!claimNotchJob(jobId)) return;
       try {
         const capture = await db.captures.get(captureId);
         if (!capture?.screenshot) throw new Error("The screenshot is no longer available in Tray.");

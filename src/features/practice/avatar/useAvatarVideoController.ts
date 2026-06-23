@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CallBuState } from "../useCallBu";
-import { baselineMoodForCallState, classifySpeechMood, type AvatarVideoMood } from "./avatarVideos";
+import { classifySpeechMood, type AvatarVideoMood } from "./avatarVideos";
 
 const YAWN_AFTER_MS = 22000;
 
@@ -13,49 +13,29 @@ export function useAvatarVideoController({
   buText: string;
   userText: string;
 }) {
-  const [currentMood, setCurrentMood] = useState<AvatarVideoMood>("idle");
-  const currentMoodRef = useRef<AvatarVideoMood>("idle");
-  const pendingMoodRef = useRef<AvatarVideoMood | null>(null);
-  const baselineRef = useRef<AvatarVideoMood>("idle");
-  const lastSpeechCueRef = useRef("");
+  const [moodRequest, setMoodRequest] = useState<{ id: number; mood: AvatarVideoMood }>({ id: 0, mood: "idle" });
+  const requestIdRef = useRef(0);
+  const speechMoodRequestedRef = useRef(false);
   const useAltTalkingRef = useRef(false);
   const yawnTimerRef = useRef<number>(0);
 
-  const setMood = useCallback((mood: AvatarVideoMood) => {
-    currentMoodRef.current = mood;
-    setCurrentMood(mood);
+  const requestMood = useCallback((mood: AvatarVideoMood) => {
+    requestIdRef.current += 1;
+    setMoodRequest({ id: requestIdRef.current, mood });
   }, []);
 
-  const requestMood = useCallback((mood: AvatarVideoMood) => {
-    if (mood === currentMoodRef.current) return;
-    if (currentMoodRef.current === "idle") {
-      setMood(mood);
-      return;
-    }
-
-    pendingMoodRef.current = mood;
-  }, [setMood]);
-
   useEffect(() => {
-    const nextBaseline = baselineMoodForCallState(callState);
-    baselineRef.current = nextBaseline;
-
     if (callState === "speaking") {
       const speechCue = buText.trim();
-      if (speechCue && (!lastSpeechCueRef.current || lastSpeechCueRef.current === "__speaking__")) {
-        lastSpeechCueRef.current = speechCue;
-        useAltTalkingRef.current = !useAltTalkingRef.current;
-        requestMood(classifySpeechMood(speechCue, useAltTalkingRef.current));
-      } else if (!speechCue && lastSpeechCueRef.current !== "__speaking__") {
-        lastSpeechCueRef.current = "__speaking__";
-        useAltTalkingRef.current = !useAltTalkingRef.current;
-        requestMood(useAltTalkingRef.current ? "talkingAlt" : "talking");
-      }
+      if (!speechCue || speechMoodRequestedRef.current) return;
+      speechMoodRequestedRef.current = true;
+      useAltTalkingRef.current = !useAltTalkingRef.current;
+      requestMood(classifySpeechMood(speechCue, useAltTalkingRef.current));
       return;
     }
 
     if (callState === "listening" || callState === "idle" || callState === "ended" || callState === "error") {
-      lastSpeechCueRef.current = "";
+      speechMoodRequestedRef.current = false;
     }
   }, [buText, callState, requestMood]);
 
@@ -70,21 +50,5 @@ export function useAvatarVideoController({
     return () => window.clearTimeout(yawnTimerRef.current);
   }, [buText, callState, requestMood, userText]);
 
-  const handleVideoEnded = useCallback(() => {
-    const nextMood = pendingMoodRef.current;
-    if (nextMood) {
-      pendingMoodRef.current = null;
-      setMood(nextMood);
-      return true;
-    }
-
-    if (currentMoodRef.current !== baselineRef.current) {
-      setMood(baselineRef.current);
-      return true;
-    }
-
-    return false;
-  }, [setMood]);
-
-  return { currentMood, handleVideoEnded };
+  return { moodRequest };
 }

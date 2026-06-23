@@ -33,6 +33,14 @@
   pointer-events: none;
 }
 
+.practice-avatar-video.is-active {
+  opacity: 1;
+}
+
+.practice-avatar-video.is-standby {
+  opacity: 0;
+}
+
 .practice-call-stage {
   position: relative;
   z-index: 2;
@@ -610,4 +618,3 @@
     display: none;
   }
 }
-

@@ -149,11 +149,23 @@ export function createProviderClients({
     });
     const data = await response.json();
     if (!response.ok) return { response, data };
-    const outputText = data.choices?.[0]?.message?.content;
+    const choice = data.choices?.[0];
+    const content = choice?.message?.content;
+    const outputText = Array.isArray(content)
+      ? content.find((item) => item?.type === "text")?.text
+      : content;
+    if (typeof outputText !== "string" || !outputText.trim()) {
+      return {
+        response: { ok: false, status: 502 },
+        data: {
+          error: `OpenRouter returned no output text${choice?.finish_reason ? ` (finish reason: ${choice.finish_reason})` : ""}.`
+        }
+      };
+    }
     return {
       response,
       data: {
-        output_text: outputText
+        output_text: outputText.trim()
       }
     };
   }

@@ -29,7 +29,7 @@ import {
   type ProviderTaskName
 } from "./providerClients";
 import { isDeepSeekTask, isOpenRouterApiKey, shouldUseOpenRouter } from "./providerRouting";
-import { normalizeScreenshotRecognition } from "./responseParsing";
+import { normalizeScreenshotQuestion, normalizeScreenshotRecognition } from "./responseParsing";
 import {
   practiceChatReviewRules,
   practiceQuestionsRules,
@@ -39,6 +39,7 @@ import {
 } from "./rules";
 import { buildScreenshotCapturePayload, buildScreenshotQuestionPayload, type ScreenshotQuestionSource } from "./screenshotPayloads";
 import { buildContentUnderstandingPayload } from "./taskPayloads";
+import { resolvePracticePlan } from "./practicePlanResolution";
 
 type TaskName = ProviderTaskName;
 
@@ -154,9 +155,11 @@ export async function answerScreenshotQuestion(args: {
 
   const payload = buildScreenshotQuestionPayload(args);
 
-  return args.appState.settings.aiProviderMode === "cloud-proxy"
+  const output = await (args.appState.settings.aiProviderMode === "cloud-proxy"
     ? callCloudProxy("screenshotQuestion", payload, args.appState)
-    : callUserKey("screenshotQuestion", payload, args.appState);
+    : callUserKey("screenshotQuestion", payload, args.appState));
+
+  return normalizeScreenshotQuestion(output);
 }
 
 export async function recommendFragments(
@@ -199,13 +202,23 @@ export async function generatePracticeQuestions(args: {
       : undefined
   };
 
-  if (args.appState.settings.aiProviderMode === "rules") {
-    return practiceQuestionsRules(args);
-  }
+  const fallback = practiceQuestionsRules(args);
+  if (args.appState.settings.aiProviderMode === "rules") return fallback;
 
-  return args.appState.settings.aiProviderMode === "cloud-proxy"
-    ? callCloudProxy("practiceQuestions", payload, args.appState)
-    : callUserKey("practiceQuestions", payload, args.appState);
+  return resolvePracticePlan({
+    request: (correction) => {
+      const requestPayload = correction
+        ? {
+            ...payload,
+            practicePlanCorrection: `The previous response failed validation: ${correction}. Return the exact required structure.`
+          }
+        : payload;
+      return args.appState.settings.aiProviderMode === "cloud-proxy"
+        ? callCloudProxy("practiceQuestions", requestPayload, args.appState)
+        : callUserKey("practiceQuestions", requestPayload, args.appState);
+    },
+    fallback
+  });
 }
 
 export async function generateQuickPetChat(args: {

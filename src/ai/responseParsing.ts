@@ -1,4 +1,4 @@
-import type { ScreenshotRecognitionOutput } from "../types";
+import type { ScreenshotQuestionOutput, ScreenshotRecognitionOutput } from "../types";
 
 export function extractJsonText(text = "") {
   const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
@@ -83,6 +83,29 @@ export function quickReplyText(text: string) {
 export function asStringArray(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item ?? "").trim()).filter(Boolean);
+}
+
+function compactTinyBuSentences(value: unknown, limit: number) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  const sentences = text.match(/[^。！？.!?]+(?:[。！？.!?]+|$)/g) ?? [text];
+  const selected = sentences.slice(0, limit).map((sentence) => {
+    const trimmed = sentence.trim();
+    return trimmed.startsWith("喵～") ? trimmed : `喵～${trimmed}`;
+  });
+  return selected.join(/[\u3400-\u9fff]/.test(text) ? "" : " ");
+}
+
+export function normalizeScreenshotQuestion(value: unknown): ScreenshotQuestionOutput {
+  const record = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const answer = compactTinyBuSentences(record.answer, 2);
+  if (!answer) throw new Error("AI response did not contain a screenshot answer");
+
+  return {
+    answer,
+    quotedText: String(record.quotedText ?? ""),
+    nextAction: compactTinyBuSentences(record.nextAction, 1)
+  };
 }
 
 export function normalizeScreenshotRecognition(value: unknown): ScreenshotRecognitionOutput {
